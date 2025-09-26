@@ -1,0 +1,17 @@
+# 忽略所有 .log 文件（根目录及子目录）
+*.log
+
+# 忽略 backup 目录及其所有内容
+backup/
+
+# 忽略 model 目录及其所有内容
+model/
+
+# 忽略所有 Excel 文件
+*.xlsx
+
+# 忽略 Python 编译产生的缓存目录
+__pycache__/
+
+# 忽略虚拟环境目录（如 venv、.venv 等）
+.venv/

@@ -1,0 +1,19 @@
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy type check
+        entry: mypy
+        language: system
+        types: [python]
+        exclude: ^(.venv|venv|__pycache__|tests?/.*\.py$)
+        pass_filenames: true  # Let pre-commit pass only staged Python files
+
+      - id: pytest
+        name: pytest with coverage
+        entry: pytest
+        language: system
+        always_run: true      # Run even if no Python files staged
+        pass_filenames: false
+        args: ["--cov=.", "--cov-report=term-missing", "-v"]

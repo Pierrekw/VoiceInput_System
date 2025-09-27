@@ -3,13 +3,16 @@
 # Supports real-time voice recognition with pause/resume functionality
 # 支持实时语音识别，具备暂停/恢复功能
 
-import sys, os, json, threading, logging, re, gc
+import sys, os, io, json, threading, logging, re, gc
 from collections import deque
+from typing import List, Tuple, Optional, Callable, Deque, Any, Union
 import pyaudio
 import cn2an
 from vosk import Model, KaldiRecognizer
 import vosk
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------
 # 1️⃣ Audio Stream Context Manager / 音频流上下文管理器
@@ -44,31 +47,32 @@ try:
     from pynput import keyboard
     PYNPUT_AVAILABLE = True
 except ImportError as e:
+    # 此处保留 print，因为日志系统可能尚未配置
     print("⚠️ 警告: pynput 模块未安装，键盘快捷键将不可用")
     print("请执行: uv pip install pynput 或 pip install pynput 安装该模块")
     PYNPUT_AVAILABLE = False
-    keyboard = None
+    if PYNPUT_AVAILABLE:
+        from pynput import keyboard
+    else:
+        keyboard = None  # type: ignore[assignment]
+   
 
 
 # --------------------------------------------------------------
 # 3️⃣ Basic Configuration / 基础配置
 # Set up encoding and logging / 设置编码和日志
 # --------------------------------------------------------------
-sys.stdout.reconfigure(encoding="utf-8")
+if isinstance(sys.stdout, io.TextIOWrapper):
+    sys.stdout.reconfigure(encoding="utf-8")
 vosk.SetLogLevel(-1)  # Disable Vosk logs / 关闭 Vosk 日志
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("voice_input.log"), logging.StreamHandler()],
-)
 
 # --------------------------------------------------------------
 # 4️⃣ Voice Correction Dictionary / 语音纠错词典
 # Load voice error correction mappings from external file
 # 从外部文件加载语音纠错映射
 # --------------------------------------------------------------
-def load_voice_correction_dict(file_path="voice_correction_dict.txt"):
+def load_voice_correction_dict(file_path="voice_correction_dict.txt") -> dict[str, str]:
     """
     Load voice error correction dictionary from external file
     File format: one mapping per line, format "wrong_word=correct_word"
@@ -83,12 +87,12 @@ def load_voice_correction_dict(file_path="voice_correction_dict.txt"):
                 if line and '=' in line:
                     wrong, correct = line.split('=', 1)
                     correction_dict[wrong.strip()] = correct.strip()
-        print(f"✅ 成功加载 {len(correction_dict)} 个语音纠错规则")
+        logger.info(f"✅ 成功加载 {len(correction_dict)} 个语音纠错规则")
     except FileNotFoundError:
-        print(f"⚠️ 未找到词典文件 {file_path}，将使用空词典")
+        logger.warning(f"⚠️ 未找到词典文件 {file_path}，将使用空词典")
         correction_dict = {}
     except Exception as e:
-        print(f"❌ 加载词典文件出错: {e}，将使用空词典")
+        logger.error(f"❌ 加载词典文件出错: {e}，将使用空词典")
         correction_dict = {}
     
     return correction_dict
@@ -109,7 +113,7 @@ def correct_voice_errors(text: str) -> str:
 _NUM_PATTERN = re.compile(r"[零一二三四五六七八九十百千万点两\d\.]+")  # Chinese numbers + digits pattern / 中文数字+阿拉伯数字模式
 
 
-def extract_measurements(text):
+def extract_measurements(text: Any) -> List[float]:
     """
     Extract all possible numbers (Chinese or Arabic) from text and return as float list
     从文本中提取所有可能的数字（中文或阿拉伯），返回 float 列表。
@@ -151,35 +155,35 @@ class AudioCapture:
     def __init__(
         self,
         timeout_seconds=30,
-        excel_exporter=None,  # ← 这里注入 ExcelExporter（可为 None）
-        model_path="model/cn",  # ← 模型路径可配置：
+        excel_exporter: Optional['ExcelExporter'] = None,  # ← 这里注入 ExcelExporter（可为 None）
+        model_path: str = "model/cn",  # ← 模型路径可配置：
                                # model/cn - 中文数字识别标准模型
                                # model/cns - 中文数字识别小模型，加载快精度低
                                # model/us - 英文识别模型
                                # model/uss - 英文识别小模型
     ):
-        self.timeout_seconds = timeout_seconds
-        self.model_path = model_path        # 存储模型路径
+        self.timeout_seconds: int = timeout_seconds
+        self.model_path: str = model_path        # 存储模型路径
 
         # ---------- 统一状态管理 ----------
-        self.state = "idle"                # idle / recording / paused / stopped
-        self._pause_event = threading.Event()
+        self.state: str = "idle"                # idle / recording / paused / stopped
+        self._pause_event: threading.Event = threading.Event()
         self._pause_event.set()            # 初始为"未暂停"
 
         # ---------- 启动确认相关 ----------
-        self._start_event = threading.Event()  # 启动确认事件
+        self._start_event: threading.Event = threading.Event()  # 启动确认事件
         self._start_event.clear()          # 初始为未确认
 
-        self.callback_function = None
-        self.buffered_values = deque(maxlen=10000)  # 最近 10k 条记录
+        self.callback_function: Callable[[list[float]], None] | None = None
+        self.buffered_values: Deque[float] = deque(maxlen=10000)  # 最近 10k 条记录
 
         # ---------- Excel 导出器 ----------
-        self._exporter = excel_exporter   # 可能为 None，保持解耦
+        self._exporter: Optional['ExcelExporter'] = excel_exporter   # 可能为 None，保持解耦
 
     # ----------------------------------------------------------
     # 6.1 回调 & 过滤
     # ----------------------------------------------------------
-    def set_callback(self, callback):
+    def set_callback(self, callback: Callable[[List[float]], None]) -> None:
         """外部注册一个回调函数，收到数值时触发。"""
         self.callback_function = callback
 
@@ -196,33 +200,33 @@ class AudioCapture:
         # 启动命令
         if any(word in text_lower for word in ["开始录音", "启动", "开始", "start"]):
             if self.state == "idle":
-                print("🎤 语音命令：启动")
+                logger.info("🎤 语音命令：启动")
                 self.confirm_start_by_voice()
                 return True
 
         # 暂停命令
         elif any(word in text_lower for word in ["暂停录音", "暂停", "pause"]):
             if self.state == "recording":
-                print("🎤 语音命令：暂停")
+                logger.info("🎤 语音命令：暂停")
                 self.pause()
                 return True
 
         # 恢复命令
         elif any(word in text_lower for word in ["继续录音", "继续", "恢复", "resume"]):
             if self.state == "paused":
-                print("🎤 语音命令：恢复")
+                logger.info("🎤 语音命令：恢复")
                 self.resume()
                 return True
 
         # 停止命令
         elif any(word in text_lower for word in ["停止录音", "停止", "结束", "stop", "exit"]):
-            print("🎤 语音命令：停止")
+            logger.info("🎤 语音命令：停止")
             self.stop()
             return True
 
         return False  # 不是语音命令，需要继续处理
 
-    def filtered_callback(self, text: str):
+    def filtered_callback(self, text: str)-> None:
         """对识别文本进行过滤、提取数值并回调。"""
         if not isinstance(text, str):
             return
@@ -231,43 +235,43 @@ class AudioCapture:
             self.buffered_values.extend(nums)
             if self.callback_function:
                 self.callback_function(nums)
-            print(f"🗣️ 语音文本: {text}")
-            print(f"🔢 测量值: {nums}")
+            logger.info(f"🗣️ 语音文本: {text}")
+            logger.info(f"🔢 测量值: {nums}")
 
     # ----------------------------------------------------------
     # 6.2 启动确认接口（统一状态管理）
     # ----------------------------------------------------------
-    def confirm_start_by_space(self):
+    def confirm_start_by_space(self)-> None:
         """通过空格键确认启动"""
         if self.state == "idle":
             self._start_event.set()
-            print("✅ 空格键确认启动")
+            logger.info("✅ 空格键确认启动")
 
-    def confirm_start_by_voice(self):
+    def confirm_start_by_voice(self)-> None:
         """通过语音命令确认启动"""
         if self.state == "idle":
             self._start_event.set()
-            print("✅ 语音命令确认启动")
+            logger.info("✅ 语音命令确认启动")
 
-    def wait_for_start_confirmation(self, timeout=60):
+    def wait_for_start_confirmation(self)-> bool:
         """等待启动确认（空格键或语音命令）"""
-        print("🎤 等待启动确认...")
-        print("   按空格键 或 说'开始录音'/'启动'/'开始' 来启动系统")
+        logger.info("🎤 等待启动确认...")
+        logger.info("   按空格键 或 说'开始录音'/'启动'/'开始' 来启动系统")
 
         # 等待启动确认
-        if self._start_event.wait(timeout=timeout):
+        if self._start_event.wait(timeout=self.timeout_seconds):
             self.state = "recording"
-            print("🚀 系统已启动！")
+            logger.info("🚀 系统已启动！")
             return True
         else:
             self.state = "stopped"
-            print("⏰ 启动确认超时")
+            logger.info("⏰ 启动确认超时")
             return False
 
     # ----------------------------------------------------------
     # 6.3 控制接口（暂停/恢复/停止）
     # ----------------------------------------------------------
-    def pause(self):
+    def pause(self)-> None:
         """
         Pause real-time recognition and write buffer to Excel (if exporter is injected)
         暂停实时识别并把缓存写入 Excel（如果已注入 exporter）
@@ -276,35 +280,35 @@ class AudioCapture:
             return
         self.state = "paused"
         self._pause_event.clear()
-        print("⏸️ 已暂停识别")
+        logger.info("⏸️ 已暂停识别")
         self._save_buffer_to_excel()
 
-    def resume(self):
+    def resume(self)-> None:
         """恢复实时识别。"""
         if self.state != "paused":
             return
         self.state = "recording"
         self._pause_event.set()
-        print("▶️ 已恢复识别")
+        logger.info("▶️ 已恢复识别")
 
-    def stop(self):
+    def stop(self)-> None:
         """停止实时识别并写入缓存。"""
         if self.state == "stopped":
             return
         self.state = "stopped"
         self._pause_event.set()   # 防止在 pause 状态下卡死
-        print("🛑 已停止识别")
+        logger.info("🛑 已停止识别")
         self._save_buffer_to_excel()
 
     @property
-    def is_running(self):
+    def is_running(self)-> bool:
         """外部用于判断当前是"运行中"还是"已暂停"。"""
         return self.state == "recording"
 
     # ----------------------------------------------------------
     # 6.3 写入 Excel（内部私有）
     # ----------------------------------------------------------
-    def _save_buffer_to_excel(self):
+    def _save_buffer_to_excel(self) -> None:
         """
         Write buffered_values to Excel and clear the buffer
         把 buffered_values 写入 Excel 并清空缓存
@@ -323,17 +327,17 @@ class AudioCapture:
             if not values:
                 return  # 缓存为空，无需写入
             
-            print(f"📝 正在写入 {len(values)} 条数据到 Excel...")
+            logger.info(f"📝 正在写入 {len(values)} 条数据到 Excel...")
             # exporter 负责生成编号、时间戳等元信息
             result = self._exporter.append(values)
             if result:
-                print(f"✅ Excel 写入成功: {len(values)} 条数据")
+                logger.info(f"✅ Excel 写入成功: {len(values)} 条数据")
             else:
-                print(f"⚠️ Excel 写入返回失败，将重试")
+                logger.warning(f"⚠️ Excel 写入返回失败，将重试")
                 return  # 不清空缓存，以便重试
         except Exception as e:
-            print(f"❌ 写入 Excel 失败: {e}")
-            print(f"📊 失败数据: {values}")
+            logger.error(f"❌ 写入 Excel 失败: {e}")
+            logger.error(f"📊 失败数据: {values}")
             # 若写入失败，保留缓存，后续仍有机会再次写入
             return
 
@@ -343,7 +347,7 @@ class AudioCapture:
     # ----------------------------------------------------------
     # 6.4 实时 Vosk 监听（核心实现）
     # ----------------------------------------------------------
-    def listen_realtime_vosk(self):
+    def listen_realtime_vosk(self)-> dict[str, Union[str, List[float]]]:
         """
         Start real-time voice recognition, return final text and cached values list
         开启实时语音识别，返回最终文本与缓存的数值列表
@@ -356,23 +360,22 @@ class AudioCapture:
         self._pause_event.set()
 
         # ① 加载模型（使用完毕后手动置空，帮助内存释放）
-        print("📦 正在加载模型...")
+        logger.info("📦 正在加载模型...")
         try:
             model = Model(self.model_path)     # 使用可配置的模型路径
-            print("✅ 模型加载完成！")
+            logger.info("✅ 模型加载完成！")
         except Exception as e:
-            print(f"❌ 模型加载失败: {e}")
-            print(f"💡 请检查：")
-            print(f"   1. 模型路径是否正确: {self.model_path}")
-            print(f"   2. 模型文件是否存在且完整")
-            print(f"   3. 模型文件是否适用于当前VOSK版本")
-            logging.error(f"模型加载失败: {e}")
+            logger.error(f"❌ 模型加载失败: {e}")
+            logger.error("💡 请检查：")
+            logger.error(f"   1. 模型路径是否正确: {self.model_path}")
+            logger.error(f"   2. 模型文件是否存在且完整")
+            logger.error(f"   3. 模型文件是否适用于当前VOSK版本")
             return {"final": "", "buffered_values": []}
 
         recognizer = KaldiRecognizer(model, 16000)
         recognizer.SetWords(False)
 
-        print("✅ 系统已准备就绪！按空格键 或 说'开始录音'启动系统")
+        logger.info("✅ 系统已准备就绪！按空格键 或 说'开始录音'启动系统")
 
         try:
             with audio_stream() as stream:
@@ -393,7 +396,7 @@ class AudioCapture:
                     else:
                         partial = json.loads(recognizer.PartialResult()).get("partial") or ""
                         if partial:
-                            print(f"🗣️ 部分结果: {partial}", end="\r")
+                            logger.info(f"🗣️ 部分结果: {partial}")
 
                 # 识别结束后获取最终结果
                 final_text = json.loads(recognizer.FinalResult()).get("text", "")
@@ -403,7 +406,7 @@ class AudioCapture:
                 }
 
         except Exception as e:
-            logging.exception("实时识别异常")
+            logger.exception("实时识别异常")
             return {"final": "", "buffered_values": []}
         finally:
             # 释放模型对象，帮助内存释放（尤其在长时间运行的服务中）
@@ -414,14 +417,14 @@ class AudioCapture:
     # ----------------------------------------------------------
     # 6.5 测试入口（可直接运行）
     # ----------------------------------------------------------
-    def test_realtime_vosk(self):
+    def test_realtime_vosk(self)-> None:
         """简易测试入口，打印回调的数值。"""
-        self.set_callback(lambda nums: print(f"👂 回调数值: {nums}"))
+        self.set_callback(lambda nums: logger.info(f"👂 回调数值: {nums}"))
         try:
             result = self.listen_realtime_vosk()
-            print("\n✅ 实时测试完成，最终文本：", result["final"])
+            logger.info(f"\n✅ 实时测试完成，最终文本：{result['final']}")
         except Exception as e:
-            print("❌ 测试异常:", e)
+            logger.error(f"❌ 测试异常: {e}")
 
 
 # --------------------------------------------------------------
@@ -438,6 +441,7 @@ def start_keyboard_listener(capture: AudioCapture):
         ESC键 – 停止并退出程序
     """
     if not PYNPUT_AVAILABLE:
+        # 此处保留 print，因为日志系统可能尚未配置
         print("⚠️ 警告: 无法启动键盘监听器，pynput 模块未安装")
         return None
 
@@ -445,20 +449,20 @@ def start_keyboard_listener(capture: AudioCapture):
         try:
             if key == keyboard.Key.space:        # 空格键 - 启动/暂停/恢复
                 if capture.state == "idle":
-                    print("\n🚀 按下空格键 → 启动确认")
+                    logger.info("\n🚀 按下空格键 → 启动确认")
                     capture.confirm_start_by_space()
                 elif capture.state == "recording":
-                    print("\n⏸️ 按下空格键 → 暂停")
+                    logger.info("\n⏸️ 按下空格键 → 暂停")
                     capture.pause()
                 elif capture.state == "paused":
-                    print("\n▶️ 按下空格键 → 恢复")
+                    logger.info("\n▶️ 按下空格键 → 恢复")
                     capture.resume()
             elif key == keyboard.Key.esc:        # ESC键 - 停止
-                print("\n🛑 按下ESC键 → 停止并退出")
+                logger.info("\n🛑 按下ESC键 → 停止并退出")
                 capture.stop()
                 return False  # 停止监听器
         except Exception as exc:
-            logging.warning(f"键盘回调异常: {exc}")
+            logger.warning(f"键盘回调异常: {exc}")
 
     listener = keyboard.Listener(on_press=on_press)
     listener.start()
@@ -476,7 +480,7 @@ if __name__ == "__main__":
     cap = AudioCapture(excel_exporter=exporter)
     start_keyboard_listener(cap)
 
-    # 简化的交互式菜单（可自行扩展）
+    # 简化的交互式菜单（保留 print 用于用户提示）
     while True:
         print("\n=== AudioCapture 简易菜单 ===")
         print("1. 手动启动实时识别")

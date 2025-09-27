@@ -22,7 +22,7 @@ def test_main_initialization():
     # 验证系统组件
     assert system.audio_capture is not None, "AudioCapture 应该被创建"
     assert system.excel_exporter is not None, "ExcelExporter 应该被创建"
-    assert system.timeout_seconds == 30, "超时时间应该正确设置"
+    assert system.audio_capture.timeout_seconds == 30, "AudioCapture 的超时时间应该正确设置"
 
     # 验证增强功能集成
     assert hasattr(system.audio_capture, '_process_voice_commands'), "应该包含语音命令处理方法"
@@ -38,7 +38,10 @@ def test_callback_integration():
 
     system = VoiceInputSystem()
 
-    # 测试回调设置
+    # 测试回调设置 - 先设置回调函数
+    system.audio_capture.set_callback(system.on_data_detected)
+
+    # 测试回调功能
     test_values = [25.5, 30.2, 15.8]
     system.on_data_detected(test_values)
 

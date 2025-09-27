@@ -5,9 +5,13 @@ cn2an==0.5.23
 colorama==0.4.6
 et-xmlfile==2.0.0
 idna==3.10
+mypy==1.18.2
+mypy-extensions==1.1.0
 numpy==2.3.3
 openpyxl==3.1.5
 pandas==2.3.2
+pandas-stubs==2.3.2.250926
+pathspec==0.12.1
 proces==0.1.7
 pyaudio==0.2.14
 pycparser==2.23
@@ -19,9 +23,12 @@ six==1.17.0
 speechrecognition==3.14.3
 srt==3.5.3
 tqdm==4.67.1
+types-openpyxl==3.1.5.20250919
+types-pyaudio==0.2.16.20250801
+types-pynput==1.8.1.20250809
+types-pytz==2025.2.0.20250809
 typing-extensions==4.15.0
 tzdata==2025.2
 urllib3==2.5.0
 vosk==0.3.45
 websockets==15.0.1
-

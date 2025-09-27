@@ -6,12 +6,14 @@
 import logging
 import sys
 import os
+import io
 import threading
 from audio_capture_v import AudioCapture, start_keyboard_listener
 from excel_exporter import ExcelExporter
 
 # ---------- Basic Configuration / 基础配置 ----------
-sys.stdout.reconfigure(encoding='utf-8')
+if isinstance(sys.stdout, io.TextIOWrapper):
+    sys.stdout.reconfigure(encoding='utf-8')
 os.environ["VOSK_LOG_LEVEL"] = "-1"   # -1 = 完全静默
 
 logging.basicConfig(
@@ -20,6 +22,7 @@ logging.basicConfig(
     handlers=[logging.FileHandler('voice_input.log'), logging.StreamHandler()]  # Log to file and console / 输出到文件和控制台
 )
 
+logger = logging.getLogger(__name__)
 
 class VoiceInputSystem:
     """
@@ -37,12 +40,11 @@ class VoiceInputSystem:
             timeout_seconds=timeout_seconds,
             excel_exporter=self.excel_exporter,                  # 注入
         )
-        self.timeout_seconds = timeout_seconds
 
     # ------------------------------------------------------------------
     # 1️⃣ 回调：收到数值时直接打印（不再自行缓存）
     # ------------------------------------------------------------------
-    def on_data_detected(self, values):
+    def on_data_detected(self, values)  -> None:
         """
         Callback function: print values when detected (no longer maintains self.buffered_values)
         回调函数：收到数值时直接打印（不再自行缓存）
@@ -56,7 +58,7 @@ class VoiceInputSystem:
     # 2️⃣ Start Recognition / 启动识别
     # Keyboard controls available / 键盘控制可用（空格/ESC）
     # ------------------------------------------------------------------
-    def start_realtime_vosk(self):
+    def start_realtime_vosk(self) -> None:
         """
         Start real-time voice recognition system
         启动实时语音识别系统
@@ -80,11 +82,12 @@ class VoiceInputSystem:
         # 停止键盘监听器（如果存在）
         if keyboard_listener:
             keyboard_listener.stop()
+            keyboard_listener.join()  # ✅ 确保线程结束
 
     # ------------------------------------------------------------------
     # 3️⃣ 停止（若外部需要手动调用）
     # ------------------------------------------------------------------
-    def stop(self):
+    def stop(self) -> None:
         """
         Stop the system (if manual call is needed externally)
         停止系统（若外部需要手动调用）

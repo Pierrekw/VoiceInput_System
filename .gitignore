@@ -10,12 +10,17 @@ model/
 # 忽略所有 Excel 文件
 *.xlsx
 
-# 忽略所有test文件
-*text*
-
 # 忽略 Python 编译产生的缓存目录
 __pycache__/
 
+mypy_cache/
+
+pytest_cache/
+
 # 忽略虚拟环境目录（如 venv、.venv 等）
 .venv/
+
+# 忽略pytest-cov 的 coverage 临时文件（.coverage 缓存、htmlcov 目录等）
+.coverage
+htmlcov/
 

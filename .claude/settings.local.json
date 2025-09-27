@@ -3,7 +3,10 @@
     "allow": [
       "Bash(source:*)",
       "Bash(python:*)",
-      "Bash(uv:*)"
+      "Bash(uv:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(.venv/scripts/python:*)",
+      "Bash(.venv/scripts/pip:*)"
     ],
     "deny": []
   }

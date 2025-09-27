@@ -10,8 +10,12 @@ model/
 # 忽略所有 Excel 文件
 *.xlsx
 
+# 忽略所有test文件
+*text*
+
 # 忽略 Python 编译产生的缓存目录
 __pycache__/
 
 # 忽略虚拟环境目录（如 venv、.venv 等）
 .venv/
+

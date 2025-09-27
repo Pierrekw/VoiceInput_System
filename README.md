@@ -1,6 +1,6 @@
 # 🎤 Voice Input System
 
-A powerful real-time voice recognition system with pause/resume functionality and automatic Excel export capabilities.
+A powerful offline real-time voice recognition system with pause/resume functionality and automatic Excel export capabilities.
 
 ## 🌟 Features
 

@@ -1,7 +1,8 @@
 [project]
 name = "voice-input"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.1"
+description = "A powerful real-time voice recognition offline system with pause/resume functionality and automatic Excel export capabilities."
+authors = [{name = "Pierre.W", email = "xingw1013@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -18,7 +19,7 @@ dependencies = [
 	"proces==0.1.7",
 	"pyaudio==0.2.14",
 	"pycparser==2.23",
-	"pynput>=1.8.1",
+	"pynput==1.8.1",
 	"python-dateutil==2.9.0.post0",
 	"pytz==2025.2",
 	"requests==2.32.5",

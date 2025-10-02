@@ -1,0 +1,20 @@
+LICENSE
+README.md
+audio_capture_v.py
+excel_exporter.py
+main.py
+pyproject.toml
+backup/New_method.py
+backup/audio_capture_v - 副本.py
+backup/audio_capture_v.py
+backup/data_processing.py
+backup/excel_exporter.py
+backup/main.py
+tests/test.py
+tests/test_main_full_system.py
+tests/test_main_integration.py
+voice_input.egg-info/PKG-INFO
+voice_input.egg-info/SOURCES.txt
+voice_input.egg-info/dependency_links.txt
+voice_input.egg-info/requires.txt
+voice_input.egg-info/top_level.txt

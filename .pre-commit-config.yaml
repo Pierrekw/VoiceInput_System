@@ -16,4 +16,4 @@ repos:
         language: system
         always_run: true      # Run even if no Python files staged
         pass_filenames: false
-        args: ["--cov=.", "--cov-report=term-missing", "-v"]
+        args: ["--cov=.", "tests/", "--cov-report=term-missing", "-v"]        

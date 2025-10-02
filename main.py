@@ -11,6 +11,7 @@ import threading
 from audio_capture_v import AudioCapture, start_keyboard_listener
 from excel_exporter import ExcelExporter
 
+
 # ---------- Basic Configuration / 基础配置 ----------
 if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -19,7 +20,10 @@ os.environ["VOSK_LOG_LEVEL"] = "-1"   # -1 = 完全静默
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',  # Logging format / 日志格式
-    handlers=[logging.FileHandler('voice_input.log'), logging.StreamHandler()]  # Log to file and console / 输出到文件和控制台
+    handlers=[
+        logging.FileHandler('voice_input.log', encoding='utf-8'),
+        logging.StreamHandler(stream=sys.stdout)  # 确保使用已配置UTF-8的标准输出
+    ]
 )
 
 logger = logging.getLogger(__name__)
@@ -34,12 +38,19 @@ class VoiceInputSystem:
     启动/停止的流程控制。
     """
 
-    def __init__(self, timeout_seconds=30):
+    def __init__(self, timeout_seconds=300):
         self.excel_exporter = ExcelExporter()                     # 统一的 Excel 实例
         self.audio_capture = AudioCapture(
             timeout_seconds=timeout_seconds,
             excel_exporter=self.excel_exporter,                  # 注入
         )
+        
+        # 在Main函数运行时预加载模型
+        print("📦 正在预加载语音识别模型...")
+        if not self.audio_capture.load_model():
+            print("❌ 模型加载失败，系统可能无法正常工作")
+        else:
+            print("✅ 模型加载成功")
 
     # ------------------------------------------------------------------
     # 1️⃣ 回调：收到数值时直接打印（不再自行缓存）
@@ -48,12 +59,18 @@ class VoiceInputSystem:
         """
         Callback function: print values when detected (no longer maintains self.buffered_values)
         回调函数：收到数值时直接打印（不再自行缓存）
+        
+        注意：当前实现为空（pass），原有的打印逻辑已被注释掉，
+        以避免与AudioCapture类中输出的测量值信息重复。
+        如需恢复原有功能，请取消下面的注释。
+        
+        这里不再维护 self.buffered_values，交给 AudioCapture 处理
         """
-        if values:
-            clean = [str(v) for v in values if isinstance(v, (int, float))]
-            print(f"📦 实时测量值: {' '.join(clean)}")
-        # 这里不再维护 self.buffered_values，交给 AudioCapture 处理
-
+        # 以下代码已被注释掉，避免重复输出测量值
+        # if values:
+        #     clean = [str(v) for v in values if isinstance(v, (int, float))]
+        #     print(f"📦 实时测量值: {' '.join(clean)}")
+        pass
     # ------------------------------------------------------------------
     # 2️⃣ Start Recognition / 启动识别
     # Keyboard controls available / 键盘控制可用（空格/ESC）
@@ -72,12 +89,18 @@ class VoiceInputSystem:
         # 直接调用内部的实时监听（阻塞式），结束后会自动写入 Excel
         result = self.audio_capture.listen_realtime_vosk()
 
-        # 打印最终文本（可选）
-        final_text = result.get('final', '')
-        if final_text:
-            print("\n🛑 监听结束，最终文本：", final_text)
+        # 打印Excel数据存储状态和最终输入Excel的数字信息
+        buffered_values = result.get('buffered_values', [])
+        if buffered_values:
+            print(f"\n🛑 监听结束，共捕获 {len(buffered_values)} 个数值")
+            print(f"📊 输入Excel的数字信息：{buffered_values}")
+            # 检查Excel数据是否成功存储（通过检查原缓存是否已清空）
+            if len(self.audio_capture.buffered_values) == 0:
+                print("✅ Excel数据存储成功")
+            else:
+                print("⚠️ Excel数据存储可能未成功，缓存尚未清空")
         else:
-            print("\n🛑 监听结束，无有效文本")
+            print("\n🛑 监听结束，未捕获到数值")
             
         # 停止键盘监听器（如果存在）
         if keyboard_listener:
@@ -97,6 +120,7 @@ class VoiceInputSystem:
 
 
 if __name__ == "__main__":
-    system = VoiceInputSystem(timeout_seconds=30)
+    system = VoiceInputSystem(timeout_seconds=0)  # 0表示关闭超时功能
     system.start_realtime_vosk()
+    system.audio_capture.unload_model()  # 释放模型内存
     sys.exit(0)

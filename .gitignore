@@ -24,3 +24,6 @@ pytest_cache/
 .coverage
 htmlcov/
 
+tests/*.xlsx
+
+voice_input.egg-info/

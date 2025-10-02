@@ -1,0 +1,7 @@
+WaveOutput
+audio_capture_v
+backup
+claude
+excel_exporter
+main
+model

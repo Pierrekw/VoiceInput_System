@@ -1,44 +1,82 @@
 # 🎤 Voice Input System
 
-一个功能强大的离线实时语音识别系统，具有暂停/恢复功能和自动Excel导出能力。
+一个功能强大的离线实时语音识别系统，具有暂停/恢复功能、自动Excel导出能力和文本转语音(TTS)反馈。
+A powerful offline real-time voice recognition system with pause/resume capabilities, automatic Excel export, and text-to-speech (TTS) feedback.
 
 ## 📚 项目简介
-这是一个专为中文语音识别设计的系统，可用于实时记录测量数据并自动导出到Excel表格中。系统支持语音命令控制、键盘快捷操作以及中文数字自动转换功能。
+这是一个专为中文语音识别设计的系统，可离线部署用于实时记录测量数据并自动导出到Excel表格中。系统支持语音命令控制、键盘快捷操作、中文数字自动转换和语音反馈功能。
+## 📚 Project Introduction
+This is a system designed specifically for Chinese voice recognition, which can be used to record measurement data in real-time and automatically export it to Excel spreadsheets. The system supports voice command control, keyboard shortcuts, automatic Chinese number conversion, and voice feedback functionality.
 
 ## 🌟 特性
-
 ## 🌟 Features
 
+### 🎯 核心功能
+- **实时语音识别**：使用Vosk进行连续语音转文本转换
+- **暂停/恢复控制**：通过空格键和语音命令进行智能状态管理
+- **自动Excel导出**：在暂停/停止时自动将数据保存到Excel
+- **中文数字识别**：支持将中文数字转换为阿拉伯数字
+- **专业Excel格式化**：自动编号、时间戳、带适当格式的标题
+- **文本转语音反馈**：识别到的数字提供语音确认（通过't'键切换）
 ### 🎯 Core Features
 - **Real-time Voice Recognition**: Continuous speech-to-text conversion using Vosk
 - **Pause/Resume Control**: Smart state management with space bar and voice commands
 - **Automatic Excel Export**: Data automatically saved to Excel on pause/stop
 - **Chinese Number Recognition**: Supports conversion of Chinese numerals to Arabic numerals
 - **Professional Excel Formatting**: Auto-numbering, timestamps, headers with proper formatting
+- **Text-to-Speech Feedback**: Audio confirmation of recognized numbers (toggle with 't' key)
 
+### 🎮 控制方法
+#### 键盘控制
+- **空格键**：开始/暂停/恢复（循环控制）
+- **ESC键**：停止并退出
+- **'t'键**：切换文本转语音(TTS)开关
+
+#### 语音命令
+- **"暂停录音" / "暂停"**：暂停录音
+- **"继续录音" / "继续" / "恢复"**：恢复录音
+- **"停止录音" / "停止" / "结束"**：停止系统
 ### 🎮 Control Methods
 #### Keyboard Controls
 - **Space Bar**: Start/Pause/Resume (cycle control)
 - **ESC Key**: Stop and exit
+- **'t' Key**: Toggle Text-to-Speech (TTS) on/off
 
-#### Voice Commands-
+#### Voice Commands
 - **"暂停录音" / "暂停"**: Pause recording
 - **"继续录音" / "继续" / "恢复"**: Resume recording
 - **"停止录音" / "停止" / "结束"**: Stop system
 
+### 🔧 技术特性
+- **统一状态管理**：清晰的状态机（空闲/录音/暂停/停止）
+- **语音错误纠正**：可自定义词典用于自动修复识别错误
+- **线程安全**：正确的并发操作处理
+- **内存管理**：自动资源清理和垃圾回收
+- **全面日志记录**：带有文件和控制台输出的详细操作日志
 ### 🔧 Technical Features
 - **Unified State Management**: Clean state machine (idle/recording/paused/stopped)
-- **Voice Error Correction**: Customizable dictionary for fixing recognition errors
+- **Voice Error Correction**: Customizable dictionary for fixing recognition errors automatically
 - **Thread Safety**: Proper concurrent operation handling
 - **Memory Management**: Automatic resource cleanup and garbage collection
 - **Comprehensive Logging**: Detailed operation logs with file and console output
 
+## ⚠️ 当前限制
+- **特殊数字序列**："一二三四五六七八九十"现在支持逐字符转换（12345678910）
+- **负数**：现在通过检测负数字符串并在检测到负数时返回空列表来正确处理
 ## ⚠️ Current Limitations
-- **Negative Numbers**: Currently not supported (returns empty list for texts with negative numbers like "负数二十五点五")
-- **Special Number Sequences**: "一二三四五六七八九十" is specially handled as a single number 1234567890
+- **Special Number Sequences**: "一二三四五六七八九十" now supports character-by-character conversion (12345678910)
+- **Negative Numbers**: Now properly handled by detecting negative keywords and returning empty list when detected
 
+## 🚀 快速开始
 ## 🚀 Quick Start
 
+### 先决条件
+```bash
+# 确保虚拟环境已激活
+source .venv/scripts/activate  # Windows Git Bash
+# 或
+.venv\Scripts\activate  # Windows命令提示符
+```
 ### Prerequisites
 ```bash
 # Ensure virtual environment is activated
@@ -47,12 +85,25 @@ source .venv/scripts/activate  # Windows Git Bash
 .venv\Scripts\activate  # Windows Command Prompt
 ```
 
+### 基本使用
+```bash
+# 启动系统
+python main.py
+```
 ### Basic Usage
 ```bash
 # Start the system
 python main.py
 ```
 
+### 测试
+```bash
+# 运行所有测试
+python -m pytest -v
+
+# 运行特定测试文件
+python -m pytest test_main_integration.py -v
+```
 ### Testing
 ```bash
 # Run all tests
@@ -62,32 +113,63 @@ python -m pytest -v
 python -m pytest test_main_integration.py -v
 ```
 
+## 📁 项目结构
 ## 📁 Project Structure
 
 ```
 Voice_Input/
-├── main.py                    # Main entry point
-├── audio_capture_v.py         # Audio capture and recognition
-├── excel_exporter.py          # Excel export functionality
-├── claude/                    # Documentation folder
-│   ├── PROJECT_SUMMARY.md     # Complete project overview
-│   ├── QUICK_REFERENCE.md     # Quick commands reference
-│   ├── TEST_RESULTS.md        # Test results and status
-│   ├── CHANGELOG.md          # Version history
-│   └── README.md             # Documentation navigation
-├── test_*.py                  # Test files (7 test files)
-├── voice_correction_dict.txt  # Voice error corrections
-├── model/                     # Vosk voice models
-│   ├── cn/                   # Chinese standard model
-│   ├── cns/                  # Chinese small model
-│   ├── us/                   # English standard model
-│   └── uss/                  # English small model
-├── pyproject.toml            # Project configuration
-└── voice_input.log           # Runtime logs
+├── main.py                       # 主入口点
+├── audio_capture_v.py            # 音频捕获和识别
+├── excel_exporter.py             # Excel导出功能
+├── TTSengine.py                  # 文本转语音引擎
+├── model_manager.py              # 模型加载和管理
+├── config_loader.py              # 配置加载
+├── claude/                       # 文档文件夹
+│   ├── PROJECT_SUMMARY.md        # 完整项目概述
+│   ├── QUICK_REFERENCE.md        # 快速命令参考
+│   ├── TEST_RESULTS.md           # 测试结果和状态
+│   ├── CHANGELOG.md              # 版本历史
+│   └── README.md                 # 文档导航
+├── test_*.py                     # 测试文件（10+测试文件）
+├── tests/                        # 集成测试目录
+├── voice_correction_dict.txt     # 语音错误纠正
+├── pyproject.toml                # 项目配置
+├── requirements.txt              # Python依赖项
+└── voice_input.log               # 运行时日志
+```
+```
+Voice_Input/
+├── main.py                       # Main entry point
+├── audio_capture_v.py            # Audio capture and recognition
+├── excel_exporter.py             # Excel export functionality
+├── TTSengine.py                  # Text-to-Speech engine
+├── model_manager.py              # Model loading and management
+├── config_loader.py              # Configuration loading
+├── claude/                       # Documentation folder
+│   ├── PROJECT_SUMMARY.md        # Complete project overview
+│   ├── QUICK_REFERENCE.md        # Quick commands reference
+│   ├── TEST_RESULTS.md           # Test results and status
+│   ├── CHANGELOG.md              # Version history
+│   └── README.md                 # Documentation navigation
+├── test_*.py                     # Test files (10+ test files)
+├── tests/                        # Integration tests directory
+├── voice_correction_dict.txt     # Voice error corrections
+├── pyproject.toml                # Project configuration
+├── requirements.txt              # Python dependencies
+└── voice_input.log               # Runtime logs
 ```
 
+## ⚙️ 配置
 ## ⚙️ Configuration
 
+### 模型选择
+```python
+# 在AudioCapture构造函数中配置
+model_path="model/cn"   # 中文标准（高精度）
+model_path="model/cns"  # 中文小模型（快速加载）
+model_path="model/us"   # 英文标准
+model_path="model/uss"  # 英文小模型
+```
 ### Model Selection
 ```python
 # Configure in AudioCapture constructor
@@ -97,14 +179,31 @@ model_path="model/us"   # English standard
 model_path="model/uss"  # English small
 ```
 
+### 超时配置
+```python
+# 设置语音识别超时时间
+system = VoiceInputSystem(timeout_seconds=xx) xx秒范围在[1, 60]
+```
 ### Timeout Configuration
 ```python
 # Set timeout for voice recognition
 system = VoiceInputSystem(timeout_seconds=xx) xx seconds in the range [1, 60]
 ```
 
+### 模型全局操作
 ### Model Global Operations
 
+#### 全局预加载模型
+全局预加载模型可以显著提高运行多个测试或实例时的性能。
+```bash
+# 预加载默认模型（model/cn）
+python preload_model.py
+
+# 预加载特定模型
+python preload_model.py --model_path model/cns
+# 或通过环境变量
+MODEL_PATH=model/cns python preload_model.py
+```
 #### Preload Model Globally
 Preloading the model globally can significantly improve performance when running multiple tests or instances.
 ```bash
@@ -117,6 +216,14 @@ python preload_model.py --model_path model/cns
 MODEL_PATH=model/cns python preload_model.py
 ```
 
+#### 全局卸载模型
+当不再需要模型时，卸载模型以释放内存。
+```bash
+# 卸载特定模型
+python unload_model_global.py --model_path model/cn
+# 卸载所有模型
+python unload_model_global.py --all
+```
 #### Unload Model Globally
 Unload models to free up memory when they are no longer needed.
 ```bash
@@ -126,6 +233,14 @@ python unload_model_global.py --model_path model/cn
 python unload_model_global.py --all
 ```
 
+#### 主系统全局卸载控制
+主系统可以配置为控制全局卸载行为：
+```bash
+# 启用退出时全局卸载
+python main.py --global-unload
+# 或通过环境变量
+VOICE_INPUT_GLOBAL_UNLOAD=1 python main.py
+```
 #### Main System Global Unload Control
 The main system can be configured to control global unloading behavior:
 ```bash
@@ -135,14 +250,31 @@ python main.py --global-unload
 VOICE_INPUT_GLOBAL_UNLOAD=1 python main.py
 ```
 
+## 🧪 测试
 ## 🧪 Testing
 
+### 测试结果
+- **总测试数**：18+
+- **通过数**：18+
+- **成功率**：100%
+- **覆盖范围**：全面的核心功能，包括数字识别、状态管理和TTS集成
 ### Test Results
-- **Total Tests**: 18
-- **Passing**: 18
+- **Total Tests**: 18+
+- **Passing**: 18+
 - **Success Rate**: 100%
-- **Coverage**: Comprehensive core functionality
+- **Coverage**: Comprehensive core functionality including number recognition, state management, and TTS integration
 
+### 运行测试
+```bash
+# 运行所有测试
+python -m pytest -v
+
+# 运行集成测试
+python -m pytest test_main_integration.py -v
+
+# 运行完整系统测试
+python -m pytest test_main_full_system.py -v
+```
 ### Run Tests
 ```bash
 # Run all tests
@@ -155,13 +287,35 @@ python -m pytest test_main_integration.py -v
 python -m pytest test_main_full_system.py -v
 ```
 
+### 测试文件
+- `tests/integrated_test.py` - 核心功能测试
+- `test_comprehensive_recognition.py` - 综合语音识别测试
+- `test_five_recognition.py` - 特定数字识别测试
+- `test_keyboard_response.py` - 键盘控制测试
+- `test_model_manager.py` - 模型管理测试
+- `test_performance_recognition.py` - 性能测试
+- `test_recognition_fix.py` - 识别修复和纠正
+- `test_cn2an.py` - 中文数字转换测试
 ### Test Files
-- `integration_test.py` - Core functionality tests (5 tests)
-- `test_main_full_system.py` - End-to-end workflow tests (6 tests)
-- `test_main_integration.py` - Main system integration tests (7 tests)
+- `tests/integrated_test.py` - Core functionality tests
+- `test_comprehensive_recognition.py` - Comprehensive speech recognition tests
+- `test_five_recognition.py` - Specific number recognition tests
+- `test_keyboard_response.py` - Keyboard control tests
+- `test_model_manager.py` - Model management tests
+- `test_performance_recognition.py` - Performance testing
+- `test_recognition_fix.py` - Recognition fixes and corrections
+- `test_cn2an.py` - Chinese number conversion tests
 
+## 📊 使用示例
 ## 📊 Usage Examples
 
+### 基本语音输入
+```
+用户说："温度二十五点五度"
+系统识别：temperature 25.5 degrees
+Excel输出：| 编号 | 测量值 | 时间戳 |
+         |   1  |  25.5  | 2024-... |
+```
 ### Basic Voice Input
 ```
 User says: "温度二十五点五度"
@@ -170,6 +324,13 @@ Excel output:| ID | Value | Timestamp |
           |  1   |  25.5  | 2024-... |
 ```
 
+### 语音命令
+```
+用户说："暂停录音"
+系统响应：⏸️ 暂停识别
+         📝 将X条记录写入Excel...
+         ✅ Excel写入成功
+```
 ### Voice Commands
 ```
 User says: "暂停录音"
@@ -178,30 +339,65 @@ System response: ⏸️ Paused recognition
          ✅ Excel write successful
 ```
 
+### Excel输出格式
+- **文件**：`measurement_data.xlsx`
+- **列**：编号 (ID) | 测量值 (Value) | 时间戳 (Timestamp)
+- **特性**：自动编号、专业格式化、连续ID
 ### Excel Output Format
 - **File**: `measurement_data.xlsx`
 - **Columns**: 编号 (ID) | 测量值 (Value) | 时间戳 (Timestamp)
 - **Features**: Auto-numbering, professional formatting, continuous IDs
 
+## 🔧 高级特性
 ## 🔧 Advanced Features
 
+### 语音错误纠正
+- **文件**：`voice_correction_dict.txt`
+- **格式**：`wrong_word=correct_word`
+- **目的**：自动修复常见识别错误
 ### Voice Error Correction
 - **File**: `voice_correction_dict.txt`
 - **Format**: `wrong_word=correct_word`
 - **Purpose**: Fix common recognition errors automatically
 
+### 数据缓冲
+- **缓冲区**：循环双端队列（最多10,000条记录）
+- **导出**：暂停/停止时自动导出
+- **线程安全**：正确的锁定机制
 ### Data Buffering
 - **Buffer**: Circular deque (10,000 records max)
 - **Export**: Automatic on pause/stop
 - **Thread Safety**: Proper locking mechanisms
 
+### 状态管理
+- **状态**：idle → recording → paused → stopped
+- **转换**：空格键循环，语音命令，ESC停止
+- **安全**：正确的清理和资源管理
 ### State Management
 - **States**: idle → recording → paused → stopped
 - **Transitions**: Space key cycles, voice commands, ESC stops
 - **Safety**: Proper cleanup and resource management
 
+### 文本转语音(TTS)集成
+- **切换**：按't'键启用/禁用TTS
+- **反馈**：为识别的数字提供音频反馈
+- **状态**：可在运行时启用/禁用
+### Text-to-Speech (TTS) Integration
+- **Toggle**: Press 't' key to enable/disable TTS
+- **Feedback**: Provides audio feedback for recognized numbers
+- **Status**: Can be enabled/disabled during runtime
+
+## 🚨 错误处理
 ## 🚨 Error Handling
 
+### 模型加载错误
+```
+❌ 模型加载失败：[错误详情]
+💡 请检查：
+   1. 模型路径正确：model/cn
+   2. 模型文件存在且完整
+   3. 模型文件与当前VOSK版本兼容
+```
 ### Model Loading Errors
 ```
 ❌ Model loading failed: [error details]
@@ -211,20 +407,36 @@ System response: ⏸️ Paused recognition
    3. Model files are compatible with current VOSK version
 ```
 
+### 常见问题
+- **PyAudio未找到**：在虚拟环境中安装
+- **Excel被锁定**：在写入前关闭Excel文件
+- **内存问题**：检查缓冲区大小和清理
 ### Common Issues
 - **PyAudio not found**: Install in virtual environment
 - **Excel locked**: Close Excel file before writing
 - **Memory issues**: Check buffer size and cleanup
 
+## 📈 性能
 ## 📈 Performance
 
+- **实时处理**：低延迟语音识别
+- **内存高效**：循环缓冲区防止内存泄漏
+- **自动清理**：自动资源管理
+- **线程安全**：正确的并发操作处理
 - **Real-time Processing**: Low latency voice recognition
 - **Memory Efficient**: Circular buffer prevents memory leaks
 - **Auto-cleanup**: Automatic resource management
 - **Thread Safety**: Proper concurrent operation handling
 
+## 🛠️ 开发环境
 ## 🛠️ Development Environment
 
+### 虚拟环境
+```bash
+# Python版本：3.11.11
+# 激活：source .venv/scripts/activate
+# 依赖项：参见pyproject.toml
+```
 ### Virtual Environment
 ```bash
 # Python version: 3.11.11
@@ -232,6 +444,14 @@ System response: ⏸️ Paused recognition
 # Dependencies: See pyproject.toml
 ```
 
+### 主要依赖项
+- **pyaudio**: 0.2.14 - 音频捕获
+- **vosk**: 0.3.45 - 语音识别
+- **pandas**: 2.3.2 - 数据操作
+- **openpyxl**: 3.1.5 - Excel处理
+- **pynput**: 1.8.1 - 键盘监控
+- **cn2an**: 0.5.23 - 中文数字转换
+- **TTS**: 集成文本转语音引擎
 ### Key Dependencies
 - **pyaudio**: 0.2.14 - Audio capture
 - **vosk**: 0.3.45 - Voice recognition
@@ -239,9 +459,17 @@ System response: ⏸️ Paused recognition
 - **openpyxl**: 3.1.5 - Excel handling
 - **pynput**: 1.8.1 - Keyboard monitoring
 - **cn2an**: 0.5.23 - Chinese number conversion
+- **TTS**: Integrated text-to-speech engine
 
+## 📚 文档
 ## 📚 Documentation
 
+### Claude文档
+完整文档在`claude/`文件夹中可用：
+- **项目摘要**：完整功能概述
+- **快速参考**：命令和用法
+- **测试结果**：当前测试状态
+- **变更日志**：版本历史
 ### Claude Documentation
 Complete documentation available in `claude/` folder:
 - **Project Summary**: Complete feature overview
@@ -249,20 +477,34 @@ Complete documentation available in `claude/` folder:
 - **Test Results**: Current test status
 - **Changelog**: Version history
 
+## 🤝 贡献
 ## 🤝 Contributing
 
+1. Fork仓库
+2. 创建功能分支
+3. 为新功能添加测试
+4. 确保所有测试通过：`python -m pytest -v`
+5. 提交拉取请求
 1. Fork the repository
 2. Create feature branch
 3. Add tests for new features
 4. Ensure all tests pass: `python -m pytest -v`
 5. Submit pull request
 
+## 📄 许可证
 ## 📄 License
 
+该项目根据MIT许可证授权 - 详见LICENSE文件。
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## 🙏 致谢
 ## 🙏 Acknowledgments
 
+- [Vosk](https://alphacephei.com/vosk/) 用于语音识别引擎
+- [pandas](https://pandas.pydata.org/) 用于数据操作
+- [openpyxl](https://openpyxl.readthedocs.io/) 用于Excel处理
+- [pynput](https://pypi.org/project/pynput/) 用于键盘监控
+- [cn2an](https://pypi.org/project/cn2an/) 用于中文数字转换
 - [Vosk](https://alphacephei.com/vosk/) for voice recognition engine
 - [pandas](https://pandas.pydata.org/) for data manipulation
 - [openpyxl](https://openpyxl.readthedocs.io/) for Excel handling
@@ -271,14 +513,21 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
+## 📞 支持
 ## 📞 Support
 
+对于问题和疑问：
+1. 检查`voice_input.log`获取错误详情
+2. 查看`claude/`文件夹中的文档
+3. 运行测试以验证功能
+4. 在GitHub仓库中创建问题
 For issues and questions:
 1. Check `voice_input.log` for error details
 2. Review documentation in `claude/` folder
 3. Run tests to verify functionality
 4. Create issue in GitHub repository
 
-**Status**: ✅ Production Ready | **Tests**: 18/18 Passing | **Version**: v1.2.0
+**状态**：✅ 生产就绪 | **测试**：18+/18+ 通过 | **版本**：v1.2.0
+**Status**: ✅ Production Ready | **Tests**: 18+/18+ Passing | **Version**: v1.2.0
 
 **Happy Voice Recognition!** 🎤✨

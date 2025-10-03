@@ -1,7 +1,8 @@
-import logging
 from typing import Optional, Dict, Any
 import threading
 import time
+import logging
+from config_loader import config  # 导入配置系统
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,8 +74,9 @@ class ModelManager:
                 
                 # 创建模型和识别器
                 model = Model(model_path)
-                # 默认使用16000采样率
-                recognizer = KaldiRecognizer(model, 16000)
+                # 从配置系统获取采样率
+                sample_rate = config.get("audio.sample_rate", 16000)
+                recognizer = KaldiRecognizer(model, sample_rate)
                 recognizer.SetWords(False)
                 
                 # 存储模型和识别器

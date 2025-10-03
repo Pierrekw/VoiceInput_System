@@ -11,6 +11,7 @@ from vosk import Model, KaldiRecognizer
 import vosk
 from contextlib import contextmanager
 from TTSengine import TTS
+from config_loader import config  # 导入配置系统
  
 logger = logging.getLogger(__name__)
 # --------------------------------------------------------------
@@ -294,25 +295,29 @@ class AudioCapture:
  
     def __init__(
         self,
-        timeout_seconds=30,
+        timeout_seconds=None,
         excel_exporter: Optional['ExcelExporter'] = None,
-        model_path: str = "model/cn",
-        test_mode: bool = False,
+        model_path=None,
+        test_mode=None,
         device_index: int | None = None,
-        sample_rate: int = 16000,
-        audio_chunk_size: int = 8000,
+        # 修复类型注解，使sample_rate可以接受None值
+        sample_rate: Optional[int] = None,
+        audio_chunk_size=None,
         tts_state: str = "on"
     ):
         self.tts_state: str = "on"
         self.tts = TTS()
         self._tts_lock = threading.Lock()  # 新增：TTS锁
         self._tts_playing = False  # 新增：TTS播放状态
-        self.timeout_seconds: int = timeout_seconds
-        self.model_path: str = model_path
-        self.test_mode: bool = test_mode
-        self.audio_chunk_size = audio_chunk_size
+        # 从配置系统获取参数，允许外部传入覆盖
+        self.timeout_seconds: int = timeout_seconds if timeout_seconds is not None else config.get_timeout_seconds()
+        self.model_path: str = model_path if model_path is not None else config.get_model_path()
+        self.test_mode: bool = test_mode if test_mode is not None else config.get_test_mode()
+        # 从配置系统获取音频块大小默认值
+        self.audio_chunk_size = audio_chunk_size if audio_chunk_size is not None else config.get("audio.chunk_size", 8000)
         self.device_index = device_index
-        self.sample_rate: int = sample_rate
+        # 从配置系统获取采样率默认值
+        self.sample_rate: int = sample_rate if sample_rate is not None else config.get("audio.sample_rate", 16000)
  
         # ---------- 统一状态管理 ----------
         self.state: str = "paused"  # 初始状态为paused
@@ -323,10 +328,12 @@ class AudioCapture:
         
         # 新增：暂停超时计时
         self._pause_start_time: Optional[float] = None
-        self._pause_timeout_multiplier: int = 3
+        # 从配置系统获取暂停超时乘数
+        self._pause_timeout_multiplier: int = config.get("recognition.pause_timeout_multiplier", 3)
  
         self.callback_function: Callable[[list[float]], None] | None = None
-        self.buffered_values: Deque[float] = deque(maxlen=10000)
+        # 从配置系统获取缓冲区大小
+        self.buffered_values: Deque[float] = deque(maxlen=config.get("recognition.buffer_size", 10000))
         
         # 新增：存储带原始文本的数据
         self.buffered_data_with_text: List[Tuple[float, str]] = []
@@ -663,14 +670,17 @@ class AudioCapture:
                 print("[系统] 模型预热完成")
 
 
-        countdown_seconds = 10
+        # 从配置系统获取倒计时秒数
+        countdown_seconds = config.get("recognition.countdown_seconds", 10)
         logger.info(f"🚀 系统将在 {countdown_seconds} 秒后开始识别...")
         logger.info("   按空格键可立即开始识别")
         
+        print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
+ 
         # 使用全局按键状态变量
         start_early = False              
         space_pressed = False
-
+ 
         print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
  
         # 倒计时循环

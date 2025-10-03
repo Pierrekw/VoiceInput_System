@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Voice Input System Main Module / 语音输入系统主模块
- 
+
 import logging
 import sys
 import os
@@ -8,34 +8,39 @@ import io
 import threading
 from audio_capture_v import AudioCapture, start_keyboard_listener
 from excel_exporter import ExcelExporter
+from config_loader import config  # 导入配置系统
 # ---------- Basic Configuration ----------
 if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding='utf-8')
-os.environ["VOSK_LOG_LEVEL"] = "-1"
- 
+
+# 从配置系统获取VOSK日志级别
+os.environ["VOSK_LOG_LEVEL"] = str(config.get_vosk_log_level())
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, config.get_log_level()),
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('voice_input.log', encoding='utf-8'),
         logging.StreamHandler(stream=sys.stdout)
     ]
 )
- 
+
 logger = logging.getLogger(__name__)
- 
+
 class VoiceInputSystem:
     """
     Program entry point: Create ExcelExporter → Inject AudioCapture → Register callback → Start recognition
     """
- 
-    def __init__(self, timeout_seconds=300, test_mode: bool = False):
-        self.test_mode = test_mode
+
+    def __init__(self, timeout_seconds=None, test_mode=None):
+        # 从配置系统获取参数，允许命令行覆盖
+        self.test_mode = test_mode if test_mode is not None else config.get_test_mode()
+        timeout = timeout_seconds if timeout_seconds is not None else config.get_timeout_seconds()
         self.excel_exporter = ExcelExporter()
         self.audio_capture = AudioCapture(
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=timeout,
             excel_exporter=self.excel_exporter,
-            test_mode=test_mode
+            test_mode=self.test_mode
         )
         
         # 预加载模型（只加载一次）
@@ -45,20 +50,20 @@ class VoiceInputSystem:
             print("✅ 模型加载成功")
         
         # 设置测试模式
-        if test_mode:
+        if self.test_mode:
             self.audio_capture.test_mode = True
             print("🧪 测试模式已启用")
-    
+        
 
 
     def on_data_detected(self, values, text=None) -> None:
         """Callback function: print values when detected"""
         pass
- 
+
     def start_realtime_vosk(self) -> None:
         """Start real-time voice recognition system"""
         self.audio_capture.set_callback(self.on_data_detected)
- 
+
         # 启动键盘监听器，传递测试模式
         keyboard_listener = start_keyboard_listener(self.audio_capture, test_mode=self.test_mode)
         
@@ -67,10 +72,10 @@ class VoiceInputSystem:
             if not self.audio_capture.load_model():
                 print("❌ 模型加载失败，系统可能无法正常工作")
                 return
- 
+
         # 直接调用内部的实时监听（阻塞式）
         result = self.audio_capture.listen_realtime_vosk()
- 
+
         # 打印结果
         buffered_values = result.get('buffered_values', [])
         session_data = result.get('session_data', [])
@@ -95,7 +100,7 @@ class VoiceInputSystem:
                     print(f"  无效记录: {record}")
             
             # 提供数据汇总
-            print(f"\n📈 数据汇总:")
+            print("\n📈 数据汇总:")
             print(f"  总记录数: {len(session_data)}")
             
             # 提取有效的数值进行统计
@@ -114,25 +119,26 @@ class VoiceInputSystem:
         if keyboard_listener:
             keyboard_listener.stop()
             keyboard_listener.join()
- 
+
     def stop(self) -> None:
         """Stop the system"""
         self.audio_capture.stop()
         logging.info("=== 系统已停止 ===")
 
 if __name__ == "__main__":
-    # 可以通过命令行参数或环境变量控制测试模式
-    test_mode = "--test" in sys.argv or os.getenv("VOICE_INPUT_TEST_MODE", "").lower() == "true"
+    # 可以通过命令行参数或环境变量控制测试模式，配置系统的值作为默认值
+    test_mode = "--test" in sys.argv or os.getenv("VOICE_INPUT_TEST_MODE", "").lower() == "true" or config.get_test_mode()
     
     # 控制是否在程序退出时全局卸载模型（默认仅本地卸载）
-    global_unload = "--global-unload" in sys.argv or os.getenv("VOICE_INPUT_GLOBAL_UNLOAD", "").lower() == "true"
+    global_unload = "--global-unload" in sys.argv or os.getenv("VOICE_INPUT_GLOBAL_UNLOAD", "").lower() == "true" or config.get_global_unload()
     
     if test_mode:
         print("🧪 运行在测试模式")
     else:
         print("🚀 运行在生产模式")
     
-    system = VoiceInputSystem(timeout_seconds=60, test_mode=test_mode)
+    # 使用配置系统的超时时间
+    system = VoiceInputSystem(test_mode=test_mode)
     
     try:
         system.start_realtime_vosk()

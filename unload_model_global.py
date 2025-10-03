@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def unload_vosk_model_globally(model_path: str = None):
+def unload_vosk_model_globally(model_path: str | None = None):
     """
     全局卸载Vosk模型
     
@@ -61,22 +61,16 @@ def unload_vosk_model_globally(model_path: str = None):
 
 
 if __name__ == "__main__":
-    # 从命令行参数或环境变量获取模型路径
-    import sys
-    model_path = sys.argv[1] if len(sys.argv) > 1 else os.getenv("VOSK_MODEL_PATH")
-    
-    print("=== Vosk模型全局卸载工具 ===")
-    success = unload_vosk_model_globally(model_path)
-    
-    if success:
-        print("\n💡 注意事项:")
-        print("   - 模型已从内存中完全释放")
-        print("   - 后续使用模型将需要重新从磁盘加载（耗时较长）")
-        print("   - 如仅需清除单个实例的模型引用，无需使用此脚本")
-        sys.exit(0)
+    # 获取命令行参数
+    import argparse
+    parser = argparse.ArgumentParser(description='全局卸载Vosk模型')
+    parser.add_argument('--model_path', type=str, default=None, help='要卸载的模型路径，默认卸载所有模型')
+    parser.add_argument('--all', action='store_true', help='卸载所有模型')
+    args = parser.parse_args()
+
+    # 如果指定了--all或者没有指定model_path，则卸载所有模型
+    if args.all or not args.model_path:
+        unload_vosk_model_globally()
     else:
-        print("\n❓ 可能的解决方法:")
-        print("   - 检查模型路径是否正确")
-        print("   - 确认模型确实已加载")
-        print("   - 尝试不带参数运行以卸载所有模型: python unload_model_global.py")
-        sys.exit(1)
+        # 否则只卸载指定的模型
+        unload_vosk_model_globally(args.model_path)

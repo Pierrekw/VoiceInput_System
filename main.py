@@ -51,7 +51,7 @@ class VoiceInputSystem:
     
 
 
-    def on_data_detected(self, values) -> None:
+    def on_data_detected(self, values, text=None) -> None:
         """Callback function: print values when detected"""
         pass
  
@@ -87,14 +87,28 @@ class VoiceInputSystem:
         # 显示会话数据
         if session_data:
             print("\n📋 本次识别会话数据列表:")
-            for record_id, value, original_text in session_data:
-                print(f"  ID: {record_id}, {value}, 原始文本: {original_text}")
+            for record in session_data:
+                if isinstance(record, tuple) and len(record) >= 3:
+                    record_id, value, original_text = record
+                    print(f"  ID: {record_id}, {value}, 原始文本: {original_text}")
+                else:
+                    print(f"  无效记录: {record}")
             
             # 提供数据汇总
             print(f"\n📈 数据汇总:")
             print(f"  总记录数: {len(session_data)}")
-            print(f"  数值范围: {min(v for _, v, _ in session_data):.2f} - {max(v for _, v, _ in session_data):.2f}")
-            print(f"  平均值: {sum(v for _, v, _ in session_data)/len(session_data):.2f}")
+            
+            # 提取有效的数值进行统计
+            valid_values = []
+            for record in session_data:
+                if isinstance(record, tuple) and len(record) >= 2 and isinstance(record[1], (int, float)):
+                    valid_values.append(record[1])
+            
+            if valid_values:
+                print(f"  数值范围: {min(valid_values):.2f} - {max(valid_values):.2f}")
+                print(f"  平均值: {sum(valid_values)/len(valid_values):.2f}")
+            else:
+                print("  无法计算数值统计: 没有有效的数值数据")
         
         # 停止键盘监听器
         if keyboard_listener:

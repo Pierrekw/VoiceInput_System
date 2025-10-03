@@ -1,5 +1,5 @@
 import os
-import yaml
+import yaml  # type: ignore
 import logging
 from typing import Dict, Any, Optional
 
@@ -107,9 +107,10 @@ class ConfigLoader:
             config["model"]["default_path"] = os.environ.get("MODEL_PATH")
         
         # 超时设置覆盖
-        if os.environ.get("TIMEOUT_SECONDS"):
+        timeout_env = os.environ.get("TIMEOUT_SECONDS")
+        if timeout_env:
             try:
-                config["recognition"]["timeout_seconds"] = int(os.environ.get("TIMEOUT_SECONDS"))
+                config["recognition"]["timeout_seconds"] = int(timeout_env)
             except ValueError:
                 logger.error("环境变量TIMEOUT_SECONDS不是有效的整数")
         
@@ -122,9 +123,10 @@ class ConfigLoader:
             config["system"]["test_mode"] = True
         
         # VOSK日志级别覆盖
-        if os.environ.get("VOSK_LOG_LEVEL"):
+        vosk_log_level_env = os.environ.get("VOSK_LOG_LEVEL")
+        if vosk_log_level_env:
             try:
-                config["system"]["vosk_log_level"] = int(os.environ.get("VOSK_LOG_LEVEL"))
+                config["system"]["vosk_log_level"] = int(vosk_log_level_env)
             except ValueError:
                 logger.error("环境变量VOSK_LOG_LEVEL不是有效的整数")
     

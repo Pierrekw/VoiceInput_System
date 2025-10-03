@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from audio_capture_v import extract_measurements, correct_voice_errors
 
 print("🔍 测试数字被误识别为文本的情况：")
@@ -12,12 +13,12 @@ test_cases = [
 
 print("\n📊 数值提取测试结果：")
 for text, description in test_cases:
-    result = extract_measurements(text)
+    result = extract_measurements(text)  # 这应该返回List[float]
     print(f"- '{text}' → {result} ({description})")
 
 print("\n🔄 语音纠错规则应用测试：")
 for text, description in test_cases:
-    result = correct_voice_errors(text)
-    print(f"- '{text}' → '{result}'")
+    corrected_text = correct_voice_errors(text)
+    print(f"- '{text}' → '{corrected_text}'")
 
 print("\n✅ 测试完成")

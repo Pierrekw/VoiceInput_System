@@ -60,7 +60,8 @@ except ImportError as e:
     print("⚠️ 警告: pynput 模块未安装，键盘快捷键将不可用")
     print("请执行: uv pip install pynput 或 pip install pynput 安装该模块")
     PYNPUT_AVAILABLE = False
-    keyboard = None
+    # 导入时使用类型注解，运行时不影响行为
+    keyboard = None  # type: ignore
 # 全局变量存储按键状态（按下但未释放）
 _key_pressed = {
     'space': False,
@@ -106,7 +107,9 @@ def correct_voice_errors(text: str) -> str:
 # --------------------------------------------------------------
 # 5️⃣ Number Extraction / 数值提取
 # --------------------------------------------------------------
-_NUM_PATTERN = re.compile(r"[零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万两\d]+)*")
+_NUM_PATTERN = re.compile(r"[零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万点两\d]+)*")
+# 单位正则表达式，用于提取带单位的数值
+_UNIT_PATTERN = re.compile(r"([零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万点两\d]+)*)(?:公斤|克|吨|米|厘米|毫米|升|毫升|秒|分钟|小时|天|月|年)")
 
 # 特殊处理模式：处理"点八四"这种格式
 def handle_special_formats(text: str) -> str:
@@ -121,9 +124,46 @@ def extract_measurements(text: Any) -> List[float]:
     """Extract all possible numbers (Chinese or Arabic) from text and return as float list"""
     if not isinstance(text, (str, int, float)):
         return []
- 
+
     try:
         txt = str(text).strip()
+        
+        # 特殊处理：当前不支持负数，检测到负数关键词时返回空列表
+        negative_keywords = ['负数', '负']
+        for keyword in negative_keywords:
+            if keyword in txt:
+                logger.debug(f"检测到负数关键词 '{keyword}'，不提取数字")
+                return []
+        
+        # 优先尝试直接转换整个文本
+        try:
+            num = cn2an.cn2an(txt, "smart")
+            num_float = float(num)
+            # 增加上限以支持更大的数值，如连续数字
+            if 0 <= num_float <= 1000000000000:  # 10^12，足够大的数值范围
+                logger.debug(f"直接转换整个文本得到数值: {num_float} (文本: '{txt}')")
+                return [num_float]
+            else:
+                logger.debug(f"直接转换数值超出范围: {num_float} (文本: '{txt}')")
+        except Exception as e:
+            logger.debug(f"直接转换失败: {e} (文本: '{txt}')")
+        
+        # 特殊处理：尝试按字符逐个转换连续中文数字
+        try:
+            # 检查文本是否全是中文数字字符
+            chinese_nums = set("零一二三四五六七八九十百千万")
+            if all(char in chinese_nums for char in txt):
+                result = ""
+                for char in txt:
+                    num = cn2an.cn2an(char, "smart")
+                    result += str(num)
+                if result.isdigit():
+                    num_float = float(result)
+                    if 0 <= num_float <= 1000000000000:
+                        logger.debug(f"按字符逐个转换连续中文数字得到数值: {num_float} (文本: '{txt}')")
+                        return [num_float]
+        except Exception as e:
+            logger.debug(f"按字符逐个转换失败: {e} (文本: '{txt}')")
         # 专门处理常见的误识别模式
         # 1. '我'可能是'五'的误识别
         if txt == '我':
@@ -131,7 +171,7 @@ def extract_measurements(text: Any) -> List[float]:
             try:
                 num = cn2an.cn2an('五', "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000:
+                if 0 <= num_float <= 10000000000:
                     logger.debug(f"成功将'我'识别为数值: {num_float}")
                     return [num_float]
             except Exception:
@@ -143,7 +183,7 @@ def extract_measurements(text: Any) -> List[float]:
             try:
                 num = cn2an.cn2an('五十', "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000:
+                if 0 <= num_float <= 1000000:
                     logger.debug(f"成功将'我是'识别为数值: {num_float}")
                     return [num_float]
             except Exception:
@@ -155,7 +195,7 @@ def extract_measurements(text: Any) -> List[float]:
             try:
                 num = cn2an.cn2an('五五', "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000:
+                if 0 <= num_float <= 1000000:
                     logger.debug(f"成功将'我是我'识别为数值: {num_float}")
                     return [num_float]
             except Exception:
@@ -179,14 +219,20 @@ def extract_measurements(text: Any) -> List[float]:
                 logger.debug(f"特殊格式处理后: '{special_handled}'")
                 num = cn2an.cn2an(special_handled, "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000:
+                if 0 <= num_float <= 1000000:
                     logger.debug(f"成功提取整个文本的数值: {num_float}")
                     return [num_float]
         except Exception:
             # 如果整个文本不是数字表达式，再使用正则提取
             pass
         
-        candidates = _NUM_PATTERN.findall(txt)
+        # 先尝试使用单位正则提取带单位的数值
+        unit_matches = _UNIT_PATTERN.findall(txt)
+        if unit_matches:
+            candidates = unit_matches
+        else:
+            # 如果没有带单位的数值，再使用普通数字正则
+            candidates = _NUM_PATTERN.findall(txt)
         nums = []
         seen_numbers = set()  # 用于去重
         
@@ -200,8 +246,8 @@ def extract_measurements(text: Any) -> List[float]:
                 num = cn2an.cn2an(cand_handled, "smart")
                 num_float = float(num)
                 
-                # 过滤掉不合理的数值（这取决于实际应用场景，这里保留0-1000的数值）
-                if 0 <= num_float <= 1000:
+                # 过滤掉不合理的数值（增加上限以支持更大的数值，如千克、吨等单位的数值）
+                if 0 <= num_float <= 1000000:
                     # 去重：避免同一数值被多次提取
                     if num_float not in seen_numbers:
                         seen_numbers.add(num_float)
@@ -219,11 +265,20 @@ def extract_measurements(text: Any) -> List[float]:
                 txt_handled = handle_special_formats(txt)
                 num = cn2an.cn2an(txt_handled, "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000:
+                if 0 <= num_float <= 1000000:
                     nums.append(num_float)
                     logger.debug(f"直接转换整个文本得到数值: {num_float}")
             except Exception:
-                pass
+                # 特殊处理：尝试直接转换整个文本中的每个数字部分
+                try:
+                    # 对于连续的中文数字，直接使用cn2an转换整个字符串
+                    num = cn2an.cn2an(txt, "smart")
+                    num_float = float(num)
+                    if 0 <= num_float <= 1000000:
+                        nums.append(num_float)
+                        logger.debug(f"特殊处理连续中文数字得到数值: {num_float}")
+                except Exception:
+                    pass
         
         return nums
     except Exception as e:
@@ -405,7 +460,7 @@ class AudioCapture:
         """Process voice control commands"""
         if not text:
             return False
- 
+
         text_lower = text.lower()
         
         if any(word in text_lower for word in ["暂停录音", "暂停", "pause"]):
@@ -422,7 +477,7 @@ class AudioCapture:
             logger.info("🎤 语音命令：停止")
             self.stop()
             return True
- 
+
         return False
  
     def filtered_callback(self, text: str) -> List[Tuple[int, float, str]]:
@@ -601,7 +656,7 @@ class AudioCapture:
             
             # 用一个空的音频数据预热模型
             dummy_data = bytes(self.audio_chunk_size * 2)  # 空音频数据
-            if hasattr(self._recognizer, 'AcceptWaveform'):
+            if self._recognizer and hasattr(self._recognizer, 'AcceptWaveform'):
                 self._recognizer.AcceptWaveform(dummy_data)
             
             if self.test_mode:
@@ -687,7 +742,7 @@ class AudioCapture:
                         except Exception as e:
                             logger.debug(f"暂停状态音频检测错误: {e}")        
 
-                        time.sleep(0.1)  # 折中的睡眠时间，兼顾识别速度和键盘响应
+                        time.sleep(0.05)  # 折中的睡眠时间，兼顾识别速度和键盘响应
                     
                     # 检查暂停事件
                     if not self._pause_event.is_set():
@@ -699,7 +754,7 @@ class AudioCapture:
                         if self._tts_playing:
                             if self.test_mode and audio_frames % 1000 == 0:
                                 print("[调试] TTS播报中，跳过音频处理")
-                            time.sleep(0.1)
+                            time.sleep(0.05)
                             continue                        
                         
                         data = stream.read(self.audio_chunk_size, exception_on_overflow=False)
@@ -1043,7 +1098,7 @@ if __name__ == "__main__":
             try:
                 import time
                 while True:
-                    time.sleep(0.1)
+                    time.sleep(0.05)
                     if cap.state == "stopped":
                         break
             except KeyboardInterrupt:

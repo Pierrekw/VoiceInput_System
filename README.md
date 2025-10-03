@@ -1,6 +1,11 @@
 # 🎤 Voice Input System
 
-A powerful offline real-time voice recognition system with pause/resume functionality and automatic Excel export capabilities.
+一个功能强大的离线实时语音识别系统，具有暂停/恢复功能和自动Excel导出能力。
+
+## 📚 项目简介
+这是一个专为中文语音识别设计的系统，可用于实时记录测量数据并自动导出到Excel表格中。系统支持语音命令控制、键盘快捷操作以及中文数字自动转换功能。
+
+## 🌟 特性
 
 ## 🌟 Features
 
@@ -8,7 +13,7 @@ A powerful offline real-time voice recognition system with pause/resume function
 - **Real-time Voice Recognition**: Continuous speech-to-text conversion using Vosk
 - **Pause/Resume Control**: Smart state management with space bar and voice commands
 - **Automatic Excel Export**: Data automatically saved to Excel on pause/stop
-- **Bilingual Number Recognition**: Supports both Chinese and Arabic numerals
+- **Chinese Number Recognition**: Supports conversion of Chinese numerals to Arabic numerals
 - **Professional Excel Formatting**: Auto-numbering, timestamps, headers with proper formatting
 
 ### 🎮 Control Methods
@@ -16,8 +21,7 @@ A powerful offline real-time voice recognition system with pause/resume function
 - **Space Bar**: Start/Pause/Resume (cycle control)
 - **ESC Key**: Stop and exit
 
-#### Voice Commands
-- **"开始录音" / "启动" / "开始"**: Start system
+#### Voice Commands-
 - **"暂停录音" / "暂停"**: Pause recording
 - **"继续录音" / "继续" / "恢复"**: Resume recording
 - **"停止录音" / "停止" / "结束"**: Stop system
@@ -28,6 +32,10 @@ A powerful offline real-time voice recognition system with pause/resume function
 - **Thread Safety**: Proper concurrent operation handling
 - **Memory Management**: Automatic resource cleanup and garbage collection
 - **Comprehensive Logging**: Detailed operation logs with file and console output
+
+## ⚠️ Current Limitations
+- **Negative Numbers**: Currently not supported (returns empty list for texts with negative numbers like "负数二十五点五")
+- **Special Number Sequences**: "一二三四五六七八九十" is specially handled as a single number 1234567890
 
 ## 🚀 Quick Start
 
@@ -92,7 +100,39 @@ model_path="model/uss"  # English small
 ### Timeout Configuration
 ```python
 # Set timeout for voice recognition
-system = VoiceInputSystem(timeout_seconds=30)
+system = VoiceInputSystem(timeout_seconds=xx) xx seconds in the range [1, 60]
+```
+
+### Model Global Operations
+
+#### Preload Model Globally
+Preloading the model globally can significantly improve performance when running multiple tests or instances.
+```bash
+# Preload default model (model/cn)
+python preload_model.py
+
+# Preload specific model
+python preload_model.py --model_path model/cns
+# or via environment variable
+MODEL_PATH=model/cns python preload_model.py
+```
+
+#### Unload Model Globally
+Unload models to free up memory when they are no longer needed.
+```bash
+# Unload specific model
+python unload_model_global.py --model_path model/cn
+# Unload all models
+python unload_model_global.py --all
+```
+
+#### Main System Global Unload Control
+The main system can be configured to control global unloading behavior:
+```bash
+# Enable global unloading on exit
+python main.py --global-unload
+# or via environment variable
+VOICE_INPUT_GLOBAL_UNLOAD=1 python main.py
 ```
 
 ## 🧪 Testing

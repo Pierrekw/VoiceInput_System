@@ -16,9 +16,11 @@ class ExcelExporter:
     def __init__(self, filename: str = "measurement_data.xlsx"):
         self._lock: threading.Lock = threading.Lock()
         self.filename: str = filename
-        self.columns: List[str] = ["编号", "测量值", "时间戳"]
+        self.columns: List[str] = ["编号", "测量值", "时间戳" "原始语音"]
         self._last_id: int = 0
         self._initialize_last_id()
+        # 新增：记录本次会话的所有数据
+        self._session_data: List[Tuple[int, float, str]] = []
 
     @staticmethod
     def _float_cell(val: Any) -> float:
@@ -56,14 +58,12 @@ class ExcelExporter:
                 else:
                     self._last_id = 0
                 workbook.close()
-                logger.info(f"使用openpyxl初始化_last_id: {self._last_id}")
             except Exception as e:
                 logger.error(f"使用openpyxl读取Excel文件时出错: {e}")
                 try:
                     df = pd.read_excel(self.filename)
                     if not df.empty and "编号" in df.columns:
                         self._last_id = self._int_cell(df["编号"].max())
-                        logger.info(f"回退到pandas，_last_id: {self._last_id}")
                     else:
                         self._last_id = 0
                 except Exception as fallback_error:
@@ -79,6 +79,57 @@ class ExcelExporter:
         df.to_excel(self.filename, index=False)
         self.format_excel()  # ✅ 仅在此处格式化
         logger.info(f"创建并格式化新Excel文件: {self.filename}")
+
+    def append_with_text(
+            self,
+            data: List[Tuple[float, str]],  # (数值, 原始语音文本)
+            auto_generate_ids: bool = True
+        ) -> List[Tuple[int, float, str]]:  # 返回 [(ID, 数值, 原始文本)]
+            """
+            新增方法：写入带原始语音文本的数据
+            返回本次写入的所有记录（包含生成的ID）
+            """
+            if not data:
+                logger.warning("没有数据可写入")
+                return []
+    
+            with self._lock:
+                try:
+                    if not os.path.exists(self.filename):
+                        self.create_new_file()
+    
+                    existing_data = pd.read_excel(self.filename)
+                    
+                    # 生成新记录
+                    new_records = []
+                    for val, original_text in data:
+                        new_id = self.get_next_id()
+                        new_record = {
+                            "编号": new_id,
+                            "测量值": self._float_cell(val),
+                            "时间戳": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "原始语音": original_text
+                        }
+                        new_records.append(new_record)
+                        # 记录到会话数据
+                        self._session_data.append((new_id, self._float_cell(val), original_text))
+    
+                    # 合并数据
+                    if existing_data.empty:
+                        updated_data = pd.DataFrame(new_records)
+                    else:
+                        updated_data = pd.concat([existing_data, pd.DataFrame(new_records)], ignore_index=True)
+    
+                    updated_data.to_excel(self.filename, index=False)
+                    
+                    # 返回写入的记录列表
+                    result = [(r["编号"], r["测量值"], r["原始语音"]) for _, r in pd.DataFrame(new_records).iterrows()]
+                    logger.debug(f"成功写入 {len(result)} 条数据到 {self.filename}")
+                    return result
+    
+                except Exception as e:
+                    logger.error(f"写入Excel失败: {e}")
+                    return []
 
     def append(
         self,
@@ -127,7 +178,8 @@ class ExcelExporter:
                 new_data = [{
                     "编号": nid,
                     "测量值": val,
-                    "时间戳": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "时间戳": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "原始语音": ""  # 兼容旧数据
                 } for nid, val in data_pairs]
 
                 if existing_data.empty:
@@ -135,8 +187,7 @@ class ExcelExporter:
                 else:
                     updated_data = pd.concat([existing_data, pd.DataFrame(new_data)], ignore_index=True)
 
-                updated_data.to_excel(self.filename, index=False)
-                # ❌ 不再调用 self.format_excel() —— 已在 create_new_file 中完成
+                updated_data.to_excel(self.filename, index=False)                
 
                 if data_pairs:
                     self._last_id = max(nid for nid, _ in data_pairs)
@@ -156,7 +207,7 @@ class ExcelExporter:
                 return
             
             # Set column widths using letters
-            column_widths = {'A': 10, 'B': 15, 'C': 20}
+            column_widths = {'A': 10, 'B': 15, 'C': 20, 'D': 30}  # 增加原始语音列宽
             for col_letter, width in column_widths.items():
                 worksheet.column_dimensions[col_letter].width = width
 
@@ -201,11 +252,18 @@ class ExcelExporter:
                 logger.error(f"回退到pandas也失败: {fallback_error}")
                 return []
 
+    def get_session_data(self) -> List[Tuple[int, float, str]]:
+            """获取本次会话的所有数据"""
+            return self._session_data.copy()
+    
+    def clear_session_data(self) -> None:
+        """清空会话数据"""
+        self._session_data.clear()
+
 # 测试代码（保持不变，但修复日志配置）
 if __name__ == '__main__':
     import tempfile, shutil
-    # ✅ 测试时才配置日志
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(message)s') # ✅ 测试时才配置日志
     test_dir = tempfile.mkdtemp()
     test_file = os.path.join(test_dir, "test_data.xlsx")
     try:

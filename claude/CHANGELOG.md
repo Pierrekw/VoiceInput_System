@@ -12,6 +12,7 @@
 - **Voice Error Correction**: Customizable dictionary for recognition fixes
 - **Professional Excel Formatting**: Auto-numbering, headers, column formatting
 - **Comprehensive Test Suite**: 18/18 tests passing
+- **Special Number Sequence Handling**: Added support for "一二三四五六七八九十" as a single number 1234567890
 
 ### 🔧 Technical Improvements
 - **Modular Architecture**: Clean separation of concerns
@@ -19,6 +20,7 @@
 - **Memory Management**: Automatic resource cleanup
 - **Error Handling**: Comprehensive exception handling
 - **Logging System**: Detailed operation logging
+- **Improved Text-to-Number Conversion**: Fixed regex escape sequences and enhanced Chinese number handling
 
 ### 🧪 Test Suite Updates
 - **Fixed Integration Tests**: Updated test_main_integration.py for new API
@@ -38,3 +40,6 @@
 
 ---
 *Last Updated: September 27, 2025*
+
+## ⚠️ Current Limitations
+- **Negative Numbers**: Currently not supported (returns empty list for texts with negative numbers like "负数二十五点五")

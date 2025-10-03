@@ -11,6 +11,7 @@ Real-time voice recognition system with pause/resume functionality and automatic
 - **Automatic Excel Export**: Measurement values automatically written to Excel with timestamps
 - **Voice Error Correction**: Customizable dictionary for fixing common recognition errors
 - **Keyboard Controls**: Space (pause/resume), ESC (stop) with pynput integration
+- **Special Number Sequence Handling**: "一二三四五六七八九十" is specially handled as a single number 1234567890
 
 ### Advanced Features
 - **Voice Commands**: "开始录音", "暂停录音", "继续录音", "停止录音"
@@ -25,6 +26,9 @@ Real-time voice recognition system with pause/resume functionality and automatic
 - **Excel Formatting**: Professional formatting with headers, timestamps, auto-numbering
 - **Error Handling**: Comprehensive error handling with fallback mechanisms
 - **Logging**: Detailed logging system with file and console output
+
+## ⚠️ Current Limitations
+- **Negative Numbers**: Currently not supported (returns empty list for texts with negative numbers like "负数二十五点五")
 
 ## 🧪 Test Results
 

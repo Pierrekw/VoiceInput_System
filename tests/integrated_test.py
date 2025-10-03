@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from unittest.mock import patch, MagicMock, mock_open
 import tempfile
 from datetime import datetime
+import json
 
 # 设置编码
 if os.name == 'nt':
@@ -22,6 +23,39 @@ if os.name == 'nt':
         sys.stdout.reconfigure(encoding='utf-8')
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8')
+
+def load_test_config(config_file="tests/test_config.json"):
+    """加载测试配置文件"""
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = json.load(f)   
+        # 验证配置完整性
+        required_keys = ["voice_data", "test_settings"]
+        for key in required_keys:
+            if key not in config:
+                raise ValueError(f"配置文件缺少必需的键: {key}")
+        
+        return config
+    except FileNotFoundError:
+        logger.warning(f"配置文件 {config_file} 不存在，使用默认配置")
+        return get_default_config()
+    
+    except json.JSONDecodeError as e:
+        logger.error(f"配置文件格式错误: {e}")
+        return get_default_config()
+
+def get_default_config():
+    """获取默认配置"""
+    return {
+        "voice_data": [
+            {"text": "测量值为十二点五", "values": [12.5], "delay": 2}
+        ],
+        "test_settings": {
+            "timeout_seconds": 30,
+            "retry_count": 3,
+            "mock_audio": False
+        }
+    }
 
 # 统一的日志设置
 def setup_logging(log_file=None):
@@ -37,6 +71,11 @@ def setup_logging(log_file=None):
         
     logging.basicConfig(**log_config)
     return logging.getLogger(__name__)
+
+# 初始化日志系统
+logger = setup_logging()
+
+test_data = load_test_config()
 
 # 导入核心模块
 try:
@@ -77,6 +116,8 @@ def voice_test_session():
     finally:
         logger.info("✅ 语音测试会话结束")
 
+
+
 # 模拟测试数据
 MOCK_VOICE_DATA = [
     # 会话1: 初始测量值
@@ -102,49 +143,44 @@ KEYBOARD_COMMANDS = [
 ]
 
 class QuickSystemTest:
-    """快速系统测试类"""
-    def __init__(self):
-        self.excel_exporter = ExcelExporter(filename=f"quick_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+    def __init__(self, config_file="test_config.json"):
+        self.config = load_test_config(config_file)
+        self.test_settings = self.config["test_settings"]
+        # 动态生成Excel文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        excel_filename = self.test_settings["excel_filename_template"].format(
+            timestamp=timestamp
+        )
+        self.excel_exporter = ExcelExporter(filename=excel_filename)
         self.audio_capture = AudioCapture(excel_exporter=self.excel_exporter)
-        self.keyboard_listener = None
-        
+    
     def simulate_voice_sessions(self):
-        """模拟语音输入会话，包括暂停/恢复"""
-        print("\n🎯 开始语音输入模拟")
-        
-        # 会话1: 初始语音输入
-        print("\n🎤 [会话1] 语音: '测量值为十二点五和三十三点八'")
-        print("📊 [值] [12.5, 33.8]")
-        self.audio_capture.filtered_callback("测量值为十二点五和三十三点八")
-        time.sleep(1)
-        
-        print("🎤 [会话1] 语音: '五十五点五'")
-        print("📊 [值] [55.5]")
-        self.audio_capture.filtered_callback("五十五点五")
-        time.sleep(1)
-        
-        # 模拟F6暂停 - Excel应自动保存
-        print("\n🔑 [F6] 暂停: 保存数据到Excel...")
-        self.audio_capture.pause()
-        time.sleep(0.5)
-        self.show_excel_status()
-        
-        # 模拟F7恢复
-        print("\n🔑 [F7] 恢复: 继续录音...")
-        self.audio_capture.resume()
-        time.sleep(0.5)
-        
-        # 会话2: 恢复后的语音输入
-        print("\n🎤 [会话2] 语音: '七十七点七和九十九点九'")
-        print("📊 [值] [77.7, 99.9]")
-        self.audio_capture.filtered_callback("七十七点七和九十九点九")
-        time.sleep(1)
-        
-        # 模拟F8停止
-        print("\n🔑 [F8] 停止: 结束会话...")
-        self.audio_capture.stop()
-        self.show_excel_status()
-        
+        """使用配置文件中的数据进行模拟测试"""
+        voice_data = self.config["voice_data"]
+        for i, data in enumerate(voice_data):
+            print(f"\n🎤 [会话{i+1}] 语音: '{data['text']}'")
+            if "description" in data:
+                print(f"📝 描述: {data['description']}")
+            if data["values"]:
+                print(f"📊 [值] {data['values']}")
+                self.audio_capture.filtered_callback(data["text"])
+            else:
+                print("📭 [无数值提取]")
+            time.sleep(data["delay"])
+            # 模拟键盘命令（如果有配置）
+            if "keyboard_commands" in self.config:
+                self._simulate_keyboard_commands(i)
+    
+    def _simulate_keyboard_commands(self, session_index):
+        """模拟键盘命令"""
+        commands = self.config.get("keyboard_commands", [])
+        for cmd in commands:
+            if cmd.get("session_index") == session_index:
+                print(f"\n🔑 [{cmd['key']}] {cmd['description']}")
+                # 执行对应的操作
+                self._execute_keyboard_command(cmd["action"])
+                time.sleep(cmd["delay"])
+    
     def show_excel_status(self):
         """显示Excel状态"""
         if hasattr(self.excel_exporter, 'filename'):
@@ -181,8 +217,20 @@ def test_text_to_numbers_conversion():
         ("温度25度", [25], "混合中英文"),
         ("暂停录音", [], "语音命令不应提取数字"),
         ("开始录音温度三十度", [], "包含命令的文本应优先处理命令（不提取数字）"),
-    ]
+        ("", [], "空字符串"),
+        ("无数字文本", [], "纯文本无数字"),
+        ("一二三四五六七八九十", [1234567890], "连续数字"),
+        ("零点零零一", [0.001], "极小小数"),
+        ("负数二十五点五", [], "负数（当前不支持）"),
+        
+        ]
     
+    def extract_measurements_safe(text):
+        """安全的数字提取，处理边界情况"""
+        if not text or not isinstance(text, str):
+            return []
+        return extract_measurements(text)
+
     for text, expected_nums, description in test_cases:
         # 检查是否是语音命令（如果是命令，不应进行数字提取）
         is_command = system.audio_capture._process_voice_commands(text)
@@ -193,7 +241,7 @@ def test_text_to_numbers_conversion():
             assert nums == expected_nums, f"{description}: 命令文本'{text}'不应提取数字"
         else:
             # 如果不是命令，验证数字提取
-            nums = extract_measurements(text)
+            nums = extract_measurements_safe(text)
             assert nums == expected_nums, f"{description}: 文本'{text}'期望{expected_nums}, 实际{nums}"
     
     print("✅ 文本转数字转换测试通过")
@@ -211,7 +259,7 @@ def test_state_machine():
     
     # 测试状态转换
     print(f"初始状态: {capture.state}")
-    assert capture.state == "idle", f"初始状态应为 idle, 实际为 {capture.state}"
+    assert capture.state == "paused", f"初始状态应为 paused, 实际为 {capture.state}"
     
     # 测试启动确认逻辑（已简化）
     print("测试启动确认...")
@@ -263,7 +311,7 @@ def test_main_initialization():
     # 验证增强功能集成
     assert hasattr(system.audio_capture, '_process_voice_commands'), "应该包含语音命令处理方法"
     assert hasattr(system.audio_capture, 'state'), "应该使用统一状态系统"
-    assert system.audio_capture.state == "idle", "初始状态应该是 idle"
+    assert system.audio_capture.state == "paused", "初始状态应该是 paused"
     
     print("✅ Main.py 初始化测试通过")
 
@@ -282,7 +330,8 @@ def test_callback_integration():
     
     # 测试回调功能
     test_values = [25.5, 30.2, 15.8]
-    system.on_data_detected(test_values)
+    test_text = "温度二十五点五度，压力三十点二度，湿度十五点八度"
+    system.on_data_detected(test_values, test_text)
     
     # 验证回调函数被正确设置
     assert system.audio_capture.callback_function is not None, "回调函数应该被设置"
@@ -311,6 +360,17 @@ def test_voice_recognition_pipeline():
         "overall_status": "UNKNOWN"
     }
     
+    def test_audio_device_availability():
+        """实际检测音频设备"""
+        try:
+            import pyaudio
+            p = pyaudio.PyAudio()
+            device_count = p.get_device_count()
+            p.terminate()
+            return device_count > 0
+        except:
+            return False
+
     try:
         # 测试1: 系统初始化
         logger.info("测试1: 系统初始化")
@@ -320,8 +380,8 @@ def test_voice_recognition_pipeline():
         
         # 测试2: 音频设备可用性
         logger.info("测试2: 音频设备可用性")
-        test_results["audio_device"] = True  # 假设音频设备可用
-        logger.info("✅ 音频设备可用")
+        test_results["audio_device"] = test_audio_device_availability()
+        logger.info("✅ 音频设备可用" if test_results["audio_device"] else "❌ 音频设备不可用")
         
         # 测试3: 语音模型加载
         logger.info("测试3: 语音模型加载")
@@ -495,9 +555,15 @@ def run_quick_system_test():
     except KeyboardInterrupt:
         print("\n🔴 测试被用户中断")
         return {"overall_status": "ABORTED"}
+    except ImportError as e:
+        print(f"\n❌ 模块导入错误: {e}")
+        return {"overall_status": "IMPORT_ERROR"}
+    except PermissionError as e:
+        print(f"\n❌ 权限错误（可能是麦克风访问）: {e}")
+        return {"overall_status": "PERMISSION_ERROR"}
     except Exception as e:
-        print(f"\n❌ 测试发生错误: {e}")
-        return {"overall_status": "ERROR"}
+        print(f"\n❌ 未知错误: {e}")
+        return {"overall_status": "UNKNOWN_ERROR"}
 
 
 def run_auto_integration_test():

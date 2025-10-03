@@ -1,0 +1,82 @@
+# 语音输入系统配置文件
+# 可以在不修改源代码的情况下通过此文件调整系统参数
+
+# ===== 模型配置 =====
+model:
+  # 默认模型路径
+  default_path: "model/cn"
+  # 可选模型路径列表
+  available_models:
+    - name: "中文标准模型（高精度）"
+      path: "model/cn"
+      description: "完整的中文语音识别模型，准确率高"
+    - name: "中文小模型（快速加载）"
+      path: "model/cns"
+      description: "精简版中文语音识别模型，启动速度快，占用内存少"
+    - name: "英文标准模型"
+      path: "model/us"
+      description: "完整的英文语音识别模型"
+    - name: "英文小模型"
+      path: "model/uss"
+      description: "精简版英文语音识别模型"
+  
+# ===== 识别配置 =====
+recognition:
+  # 语音识别超时时间（秒），范围[1, 60]
+  timeout_seconds: 60
+  # 缓冲大小（最大记录数）
+  buffer_size: 10000
+  # 睡眠设置（秒）
+  sleep_times:
+    # 非常小的睡眠（不干扰测试）
+    small: 0.01
+    # 短睡眠（提高响应性）
+    short: 0.05
+    # 中等睡眠（折中的睡眠时间）
+    medium: 0.1
+    # 较长睡眠（模拟测试操作）
+    long: 0.5
+    # 测试优化睡眠
+    test: 2
+
+# ===== 系统配置 =====
+system:
+  # 日志级别：DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_level: "INFO"
+  # 全局卸载控制：true - 退出时全局卸载模型，false - 仅清除本地引用
+  global_unload: false
+  # 测试模式：true - 启用测试模式，false - 禁用测试模式
+  test_mode: false
+  # VOSK日志级别：-1(DEBUG), 0(INFO), 1(WARNING), 2(ERROR), 3(CRITICAL)
+  vosk_log_level: 0
+
+# ===== Excel导出配置 =====
+excel:
+  # 默认文件名
+  file_name: "measurement_data.xlsx"
+  # 自动导出：true - 在暂停/停止时自动导出，false - 手动导出
+  auto_export: true
+  # 格式设置
+  formatting:
+    # 是否启用自动编号
+    auto_numbering: true
+    # 是否包含时间戳
+    include_timestamp: true
+    # 表头语言："zh"(中文), "en"(英文)
+    header_language: "zh"
+
+# ===== 语音命令配置 =====
+voice_commands:
+  # 暂停命令
+  pause_commands: ["暂停录音", "暂停"]
+  # 继续命令
+  resume_commands: ["继续录音", "继续", "恢复"]
+  # 停止命令
+  stop_commands: ["停止录音", "停止", "结束"]
+
+# ===== 错误修正配置 =====
+error_correction:
+  # 错误修正字典文件路径
+  dictionary_path: "voice_correction_dict.txt"
+  # 启用自动错误修正
+  enabled: true

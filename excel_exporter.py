@@ -10,13 +10,35 @@ import threading
 import logging
 from typing import Any, List, Tuple, Union, Optional
 
+# 新增：导入配置系统
+from config_loader import config
+
 logger = logging.getLogger(__name__)
 
 class ExcelExporter:
-    def __init__(self, filename: str = "measurement_data.xlsx"):
+    def __init__(self, filename: str = None):
         self._lock: threading.Lock = threading.Lock()
+        # 使用配置文件中的文件名，如果未指定则使用默认值
+        if filename is None:
+            filename = config.get("excel.file_name", "measurement_data.xlsx")
         self.filename: str = filename
-        self.columns: List[str] = ["编号", "测量值", "时间戳" "原始语音"]
+        # 使用配置系统获取是否包含原始语音的设置
+        include_original = config.get("excel.formatting.include_original", True)
+        
+        # 根据header_language配置设置列名
+        header_language = config.get("excel.formatting.header_language", "zh")
+        if header_language == "en":
+            self.columns: List[str] = ["ID", "Measurement", "Timestamp"]
+        else:
+            self.columns: List[str] = ["编号", "测量值", "时间戳"]
+            
+        # 根据配置决定是否添加原始语音列
+        if include_original:
+            if header_language == "en":
+                self.columns.append("Original Text")
+            else:
+                self.columns.append("原始语音")
+                
         self._last_id: int = 0
         self._initialize_last_id()
         # 新增：记录本次会话的所有数据
@@ -100,19 +122,40 @@ class ExcelExporter:
     
                     existing_data = pd.read_excel(self.filename)
                     
+                    # 获取配置设置
+                    include_original = config.get("excel.formatting.include_original", True)
+                    auto_numbering = config.get("excel.formatting.auto_numbering", True)
+                    include_timestamp = config.get("excel.formatting.include_timestamp", True)
+                    
                     # 生成新记录
                     new_records = []
                     for val, original_text in data:
-                        new_id = self.get_next_id()
-                        new_record = {
-                            "编号": new_id,
-                            "测量值": self._float_cell(val),
-                            "时间戳": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "原始语音": original_text
-                        }
+                        new_record = {}
+                        
+                        # 根据配置决定是否添加编号
+                        if auto_numbering:
+                            new_id = self.get_next_id()
+                            new_record["编号"] = new_id
+                            
+                        # 添加测量值
+                        new_record["测量值"] = self._float_cell(val)
+                        
+                        # 根据配置决定是否添加时间戳
+                        if include_timestamp:
+                            new_record["时间戳"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 根据配置决定是否添加原始语音字段
+                        if include_original:
+                            new_record["原始语音"] = original_text
+                        
                         new_records.append(new_record)
-                        # 记录到会话数据
-                        self._session_data.append((new_id, self._float_cell(val), original_text))
+                        
+                        # 如果启用了自动编号，记录到会话数据
+                        if auto_numbering:
+                            self._session_data.append((new_id, self._float_cell(val), original_text))
+                        else:
+                            # 对于没有ID的情况，使用-1作为占位符
+                            self._session_data.append((-1, self._float_cell(val), original_text))
     
                     # 合并数据
                     if existing_data.empty:
@@ -123,7 +166,15 @@ class ExcelExporter:
                     updated_data.to_excel(self.filename, index=False)
                     
                     # 返回写入的记录列表
-                    result = [(r["编号"], r["测量值"], r["原始语音"]) for _, r in pd.DataFrame(new_records).iterrows()]
+                    result = []
+                    for _, r in pd.DataFrame(new_records).iterrows():
+                        # 根据是否启用了自动编号来处理返回数据
+                        if auto_numbering:
+                            result.append((r["编号"], r["测量值"], r.get("原始语音", "")))
+                        else:
+                            # 对于没有ID的情况，使用-1作为占位符
+                            result.append((-1, r["测量值"], r.get("原始语音", "")))
+                    
                     logger.debug(f"成功写入 {len(result)} 条数据到 {self.filename}")
                     return result
     
@@ -175,21 +226,42 @@ class ExcelExporter:
                     self.create_new_file()
 
                 existing_data = pd.read_excel(self.filename)
-                new_data = [{
-                    "编号": nid,
-                    "测量值": val,
-                    "时间戳": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "原始语音": ""  # 兼容旧数据
-                } for nid, val in data_pairs]
+                
+                # 获取配置设置
+                include_original = config.get("excel.formatting.include_original", True)
+                auto_numbering = config.get("excel.formatting.auto_numbering", True)
+                include_timestamp = config.get("excel.formatting.include_timestamp", True)
+                
+                # 生成新数据记录
+                new_data = []
+                for nid, val in data_pairs:
+                    record = {}
+                    
+                    # 根据配置决定是否添加编号
+                    if auto_numbering:
+                        record["编号"] = nid
+                    
+                    # 添加测量值
+                    record["测量值"] = val
+                    
+                    # 根据配置决定是否添加时间戳
+                    if include_timestamp:
+                        record["时间戳"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # 根据配置决定是否添加原始语音字段
+                    if include_original:
+                        record["原始语音"] = ""  # 兼容旧数据
+                        
+                    new_data.append(record)
 
                 if existing_data.empty:
                     updated_data = pd.DataFrame(new_data)
                 else:
                     updated_data = pd.concat([existing_data, pd.DataFrame(new_data)], ignore_index=True)
 
-                updated_data.to_excel(self.filename, index=False)                
-
-                if data_pairs:
+                updated_data.to_excel(self.filename, index=False)
+                  
+                if data_pairs and auto_numbering:
                     self._last_id = max(nid for nid, _ in data_pairs)
 
                 logger.info(f"成功写入 {len(data_pairs)} 条数据到 {self.filename}")
@@ -206,8 +278,14 @@ class ExcelExporter:
             if worksheet is None:
                 return
             
-            # Set column widths using letters
-            column_widths = {'A': 10, 'B': 15, 'C': 20, 'D': 30}  # 增加原始语音列宽
+            # 获取include_original配置
+            include_original = config.get("excel.formatting.include_original", True)
+            
+            # 根据配置设置列宽
+            column_widths = {'A': 10, 'B': 15, 'C': 20}
+            if include_original:
+                column_widths['D'] = 30  # 只有在包含原始语音时才设置D列宽
+            
             for col_letter, width in column_widths.items():
                 worksheet.column_dimensions[col_letter].width = width
 

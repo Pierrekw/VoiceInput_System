@@ -7,6 +7,9 @@
 import os
 import logging
 
+# 导入配置系统
+from config_loader import config
+
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -74,3 +77,8 @@ if __name__ == "__main__":
     else:
         # 否则只卸载指定的模型
         unload_vosk_model_globally(args.model_path)
+    
+    # 提示用户关于配置文件的信息
+    print("\n💡 提示:")
+    print(f"   - 您可以在config.yaml中的'model.default_path'配置默认模型路径")
+    print(f"   - 系统全局卸载控制可通过'system.global_unload'配置")

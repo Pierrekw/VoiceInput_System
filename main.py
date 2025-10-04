@@ -36,7 +36,16 @@ class VoiceInputSystem:
         # 从配置系统获取参数，允许命令行覆盖
         self.test_mode = test_mode if test_mode is not None else config.get_test_mode()
         timeout = timeout_seconds if timeout_seconds is not None else config.get_timeout_seconds()
-        self.excel_exporter = ExcelExporter()
+        
+        # 根据配置决定是否创建ExcelExporter
+        self.excel_exporter = None
+        auto_export = config.get("excel.auto_export", True)
+        if auto_export:
+            self.excel_exporter = ExcelExporter()
+            logger.info("📊 Excel导出器已创建")
+        else:
+            logger.info("📊 Excel自动导出功能已禁用")
+        
         self.audio_capture = AudioCapture(
             timeout_seconds=timeout,
             excel_exporter=self.excel_exporter,

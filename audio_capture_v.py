@@ -78,8 +78,17 @@ vosk.SetLogLevel(-1)
 # --------------------------------------------------------------
 # 4️⃣ Voice Correction Dictionary / 语音纠错词典
 # --------------------------------------------------------------
-def load_voice_correction_dict(file_path="voice_correction_dict.txt") -> dict[str, str]:
+def load_voice_correction_dict(file_path=None) -> dict[str, str]:
     """Load voice error correction dictionary from external file"""
+    # 检查错误修正功能是否启用
+    if not config.get("error_correction.enabled", True):
+        logger.info("🔇 语音错误修正功能已禁用")
+        return {}
+    
+    # 使用配置文件中的词典路径，如果未指定则使用默认值
+    if file_path is None:
+        file_path = config.get("error_correction.dictionary_path", "voice_correction_dict.txt")
+    
     correction_dict = {}
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -98,10 +107,15 @@ def load_voice_correction_dict(file_path="voice_correction_dict.txt") -> dict[st
     
     return correction_dict
  
+# 加载语音纠错词典
 VOICE_CORRECTION_DICT = load_voice_correction_dict()
  
 def correct_voice_errors(text: str) -> str:
     """Replace commonly misrecognized words with correct number expressions"""
+    # 检查错误修正功能是否启用
+    if not config.get("error_correction.enabled", True):
+        return text
+        
     for wrong, correct in VOICE_CORRECTION_DICT.items():
         text = text.replace(wrong, correct)
     return text
@@ -294,17 +308,15 @@ class AudioCapture:
     """
  
     def __init__(
-        self,
-        timeout_seconds=None,
-        excel_exporter: Optional['ExcelExporter'] = None,
-        model_path=None,
-        test_mode=None,
-        device_index: int | None = None,
-        # 修复类型注解，使sample_rate可以接受None值
-        sample_rate: Optional[int] = None,
-        audio_chunk_size=None,
-        tts_state: str = "on"
-    ):
+        self, timeout_seconds=None, 
+        excel_exporter: Optional['ExcelExporter'] = None, 
+        model_path=None, 
+        test_mode=None, 
+        device_index: int | None = None, 
+        sample_rate: Optional[int] = None, 
+        audio_chunk_size=None, 
+        tts_state: str = "on"):
+        
         self.tts_state: str = "on"
         self.tts = TTS()
         self._tts_lock = threading.Lock()  # 新增：TTS锁
@@ -318,7 +330,7 @@ class AudioCapture:
         self.device_index = device_index
         # 从配置系统获取采样率默认值
         self.sample_rate: int = sample_rate if sample_rate is not None else config.get("audio.sample_rate", 16000)
- 
+
         # ---------- 统一状态管理 ----------
         self.state: str = "paused"  # 初始状态为paused
         self._pause_event: threading.Event = threading.Event()
@@ -330,17 +342,28 @@ class AudioCapture:
         self._pause_start_time: Optional[float] = None
         # 从配置系统获取暂停超时乘数
         self._pause_timeout_multiplier: int = config.get("recognition.pause_timeout_multiplier", 3)
- 
+
         self.callback_function: Callable[[list[float]], None] | None = None
         # 从配置系统获取缓冲区大小
         self.buffered_values: Deque[float] = deque(maxlen=config.get("recognition.buffer_size", 10000))
         
         # 新增：存储带原始文本的数据
         self.buffered_data_with_text: List[Tuple[float, str]] = []
- 
+
         # ---------- Excel 导出器 ----------
+        # 如果没有提供导出器但配置了自动导出，则自动创建
         self._exporter: Optional['ExcelExporter'] = excel_exporter
- 
+        if excel_exporter is None:
+            auto_export = config.get("excel.auto_export", True)
+            if auto_export:
+                try:
+                    from excel_exporter import ExcelExporter
+                    self._exporter = ExcelExporter()
+                    logger.info("📊 根据配置自动创建Excel导出器")
+                except ImportError:
+                    logger.warning("⚠️ 无法导入Excel导出器")
+                    self._exporter = None
+
         # ---------- 模型相关（使用全局模型管理器）----------
         self._model: Optional['Model'] = None
         self._recognizer: Optional['KaldiRecognizer'] = None
@@ -470,17 +493,22 @@ class AudioCapture:
 
         text_lower = text.lower()
         
-        if any(word in text_lower for word in ["暂停录音", "暂停", "pause"]):
+        # 使用配置文件中的语音命令
+        pause_commands = config.get("voice_commands.pause_commands", ["暂停录音", "暂停", "pause"])
+        resume_commands = config.get("voice_commands.resume_commands", ["继续录音", "继续", "恢复", "resume"])
+        stop_commands = config.get("voice_commands.stop_commands", ["停止录音", "停止", "结束", "stop", "exit"])
+        
+        if any(word in text_lower for word in pause_commands):
             if self.state == "recording":
                 logger.info("🎤 语音命令：暂停")
                 self.pause()
                 return True
-        elif any(word in text_lower for word in ["继续录音", "继续", "恢复", "resume"]):
+        elif any(word in text_lower for word in resume_commands):
             if self.state == "paused":
                 logger.info("🎤 语音命令：恢复")
                 self.resume()
                 return True
-        elif any(word in text_lower for word in ["停止录音", "停止", "结束", "stop", "exit"]):
+        elif any(word in text_lower for word in stop_commands):
             logger.info("🎤 语音命令：停止")
             self.stop()
             return True
@@ -635,14 +663,14 @@ class AudioCapture:
     def listen_realtime_vosk(self) -> dict[str, Union[str, List[float], List[str], List[Tuple[int, float, str]]]]:
         """Start real-time voice recognition, return final text and cached values list"""
         import time
- 
+
         logger.info("=" * 60)
         logger.info("🎤 开始实时语音识别流程...")
         logger.info(f"📊 当前状态: {self.state}")
         logger.info(f"🎯 模型路径: {self.model_path}")
         logger.info(f"⏱️  超时时间: {self.timeout_seconds}秒")
         logger.info(f"🧪 测试模式: {'开启' if self.test_mode else '关闭'}")
- 
+
         # 检查模型是否已加载
         if not self._model_loaded or self._model is None or self._recognizer is None:
             logger.warning("⚠️ 模型未加载，尝试重新加载...")
@@ -676,13 +704,13 @@ class AudioCapture:
         logger.info("   按空格键可立即开始识别")
         
         print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
- 
+
         # 使用全局按键状态变量
         start_early = False              
         space_pressed = False
- 
+
         print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
- 
+
         # 倒计时循环
         for i in range(countdown_seconds, 0, -1):
             print(f"⏰ 倒计时: {i}秒 (按空格键立即开始)", end="\r")
@@ -697,7 +725,8 @@ class AudioCapture:
                         _key_pressed['space'] = False  # 清除状态
                     print("\n✅ 检测到空格键，立即开始！")
                     break
-                time.sleep(0.05)  # 更短的睡眠时间，提高响应性
+                
+                time.sleep(config.get("recognition.sleep_times.production", 0.05))
             
             if start_early:
                 break
@@ -728,7 +757,7 @@ class AudioCapture:
                 
                 # 新增：会话数据收集
                 session_records: List[Tuple[int, float, str]] = []
- 
+
                 while self.state != "stopped":
         # 检查暂停超时（仅在paused状态下）
                     if self.state == "paused":
@@ -738,7 +767,7 @@ class AudioCapture:
                                 logger.info(f"⏰ 暂停超时（{pause_duration:.1f}秒），自动停止")
                                 self.stop()
                                 break                 
-            
+                
                         # 新增：在暂停状态下检测是否有音频输入
                         try:
                             if stream.is_active():
@@ -752,7 +781,8 @@ class AudioCapture:
                         except Exception as e:
                             logger.debug(f"暂停状态音频检测错误: {e}")        
 
-                        time.sleep(0.05)  # 折中的睡眠时间，兼顾识别速度和键盘响应
+                        # 使用配置中的medium睡眠值，兼顾识别速度和键盘响应
+                        time.sleep(config.get("recognition.sleep_times.production", 0.05))
                     
                     # 检查暂停事件
                     if not self._pause_event.is_set():
@@ -764,23 +794,24 @@ class AudioCapture:
                         if self._tts_playing:
                             if self.test_mode and audio_frames % 1000 == 0:
                                 print("[调试] TTS播报中，跳过音频处理")
-                            time.sleep(0.05)
+                            
+                            time.sleep(config.get("recognition.sleep_times.production", 0.05))
                             continue                        
                         
                         data = stream.read(self.audio_chunk_size, exception_on_overflow=False)
                         audio_frames += 1
- 
+
                         if audio_frames % 50 == 0:
                             logger.debug(f"🎧 音频流正常 - 帧数: {audio_frames}")
- 
+
                         if self._recognizer and self._recognizer.AcceptWaveform(data):
                             recognition_count += 1
                             result = json.loads(self._recognizer.Result())
                             text = (result.get("text") or "").replace(" ", "")
- 
+
                             if text:
                                 collected_text.append(text)
- 
+
                                 # 处理语音命令
                                 if not self._process_voice_commands(text):
                                     # 处理数值提取和Excel写入
@@ -792,39 +823,41 @@ class AudioCapture:
                                 partial = json.loads(self._recognizer.PartialResult()).get("partial") or ""
                                 if partial:
                                     pass
- 
+
                     except Exception as e:
                         logger.error(f"❌ 音频流读取错误: {e}")
                         continue
- 
+
                 # 识别结束后获取最终结果
                 final_text = ""
                 if self._recognizer:
                     final_result = self._recognizer.FinalResult()
                     final_data = json.loads(final_result)
                     final_text = final_data.get("text", "")
- 
+
                 if not final_text and collected_text:
                     final_text = " ".join(collected_text)
- 
+
                 # 获取会话数据
                 if self._exporter:
                     session_records = self._exporter.get_session_data()
- 
+
                 result_dict: dict[str, Union[str, List[float], List[str], List[Tuple[int, float, str]]]] = {
                     "final": final_text,
                     "buffered_values": list(self.buffered_values),
                     "collected_text": collected_text,
                     "session_data": session_records
                 }
- 
+
                 return result_dict
- 
+                
         except Exception as e:
-            logger.exception("实时识别异常")
+            logger.error(f"❌ 实时识别过程中发生错误: {e}")
+            import traceback
+            traceback.print_exc()
             return {
-                "final": "", 
-                "buffered_values": [],
+                "final": "",
+                "buffered_values": list(self.buffered_values),
                 "collected_text": [],
                 "session_data": []
             }
@@ -1098,7 +1131,7 @@ if __name__ == "__main__":
             elif choice == "4":
                 break
  
-    def mode_keyboard_check():
+    def mode_keyboard_check():        
         print("\n⌨️ 键盘监听测试")
         print("操作说明: 空格键-开始/暂停/恢复 | ESC键-停止 | 't'键-TTS切换")
         print(f"当前状态: {cap.state}")
@@ -1108,7 +1141,8 @@ if __name__ == "__main__":
             try:
                 import time
                 while True:
-                    time.sleep(0.05)
+                    # 使用配置中的short睡眠值
+                    time.sleep(config.get("recognition.sleep_times.production", 0.05))
                     if cap.state == "stopped":
                         break
             except KeyboardInterrupt:

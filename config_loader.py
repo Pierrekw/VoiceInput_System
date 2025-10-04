@@ -38,11 +38,13 @@ class ConfigLoader:
             "recognition": {
                 "timeout_seconds": 60,
                 "buffer_size": 10000,
+                "pause_timeout_multiplier": 3,
                 "sleep_times": {
                     "small": 0.01,
                     "short": 0.05,
                     "medium": 0.1,
                     "long": 0.5,
+                    "production": 0.05,
                     "test": 2
                 }
             },
@@ -52,13 +54,18 @@ class ConfigLoader:
                 "test_mode": False,
                 "vosk_log_level": 0
             },
+            "audio": {
+                "sample_rate": 16000,
+                "chunk_size": 8000
+            },
             "excel": {
                 "file_name": "measurement_data.xlsx",
                 "auto_export": True,
                 "formatting": {
                     "auto_numbering": True,
                     "include_timestamp": True,
-                    "header_language": "zh"
+                    "header_language": "zh",
+                    "include_original": True
                 }
             },
             "voice_commands": {
@@ -176,6 +183,26 @@ class ConfigLoader:
     def get_log_level(self) -> str:
         """获取系统日志级别"""
         return self.get("system.log_level")
+    
+    def get_pause_timeout_multiplier(self) -> int:
+        """获取暂停超时乘数"""
+        return self.get("recognition.pause_timeout_multiplier", 3)
+    
+    def get_sample_rate(self) -> int:
+        """获取音频采样率"""
+        return self.get("audio.sample_rate", 16000)
+    
+    def get_chunk_size(self) -> int:
+        """获取音频块大小"""
+        return self.get("audio.chunk_size", 8000)
+    
+    def is_error_correction_enabled(self) -> bool:
+        """获取错误修正功能是否启用"""
+        return self.get("error_correction.enabled", True)
+    
+    def get_error_correction_dict_path(self) -> str:
+        """获取错误修正字典路径"""
+        return self.get("error_correction.dictionary_path", "voice_correction_dict.txt")
 
 # 全局配置实例
 config = ConfigLoader()

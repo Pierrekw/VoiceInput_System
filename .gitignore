@@ -29,3 +29,5 @@ tests/*.xlsx
 voice_input.egg-info/
 
 check_json.py # AI用于检查json文件
+
+tests_develop/

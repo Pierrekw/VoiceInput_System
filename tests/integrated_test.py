@@ -16,6 +16,7 @@ from unittest.mock import patch, MagicMock, mock_open
 import tempfile
 from datetime import datetime
 import json
+from config_loader import config
 
 # 设置编码
 if os.name == 'nt':
@@ -23,6 +24,10 @@ if os.name == 'nt':
         sys.stdout.reconfigure(encoding='utf-8')
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8')
+
+# 配置日志
+logging.basicConfig(level=getattr(logging, config.get_log_level()), format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def load_test_config(config_file="tests/test_config.json"):
     """加载测试配置文件"""

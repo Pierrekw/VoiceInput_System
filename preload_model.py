@@ -8,17 +8,20 @@ import time
 import os
 import logging
 
+# 导入配置系统
+from config_loader import config
+
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def preload_vosk_model(model_path: str = "model/cn"):
+def preload_vosk_model(model_path: str = None):
     """
     预加载Vosk模型
     
     Args:
-        model_path: Vosk模型路径，默认为"model/cn"
+        model_path: Vosk模型路径，默认使用配置文件中的值
         
     Returns:
         bool: 是否成功预加载
@@ -26,6 +29,11 @@ def preload_vosk_model(model_path: str = "model/cn"):
     try:
         # 动态导入，避免脚本开始就加载模块
         from model_manager import global_model_manager
+        
+        # 如果未提供模型路径，从配置系统获取
+        if model_path is None:
+            model_path = config.get_model_path()
+            logger.info(f"使用配置文件中的默认模型路径: {model_path}")
         
         print(f"\n📦 开始预加载Vosk模型: {model_path}")
         start_time = time.time()
@@ -45,10 +53,13 @@ def preload_vosk_model(model_path: str = "model/cn"):
 
 
 if __name__ == "__main__":
-    # 从命令行参数或环境变量获取模型路径
+    # 从命令行参数或环境变量获取模型路径，如果都没有则使用配置文件中的值
     import sys
-    model_path = sys.argv[1] if len(sys.argv) > 1 else os.getenv("VOSK_MODEL_PATH", "model/cn")
-    
+    if len(sys.argv) > 1:
+        model_path = sys.argv[1]
+    else:
+        model_path = os.getenv("VOSK_MODEL_PATH")  # 允许通过环境变量覆盖配置
+        
     print("=== Vosk模型全局预加载工具 ===")
     success = preload_vosk_model(model_path)
     
@@ -63,4 +74,5 @@ if __name__ == "__main__":
         print("   - 检查模型路径是否正确")
         print("   - 确保模型文件完整无损坏")
         print("   - 尝试使用正确的模型路径参数运行: python preload_model.py [模型路径]")
+        print(f"   - 或修改config.yaml中的model.default_path配置项")
         sys.exit(1)

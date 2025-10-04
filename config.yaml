@@ -3,7 +3,8 @@
 
 # ===== 模型配置 =====
 model:
-  # 默认模型路径
+  # 默认模型路径 - 影响所有需要加载模型的模块
+  # 使用位置: config_loader.py, audio_capture_v.py, main.py, model_manager.py, preload_model.py, unload_model_global.py
   default_path: "model/cn"
   # 可选模型路径列表
   available_models:
@@ -23,60 +24,90 @@ model:
 # ===== 识别配置 =====
 recognition:
   # 语音识别超时时间（秒），范围[1, 60]
+  # 使用位置: audio_capture_v.py, main.py
   timeout_seconds: 60
   # 缓冲大小（最大记录数）
+  # 使用位置: audio_capture_v.py
   buffer_size: 10000
+  # 暂停超时乘数
+  # 使用位置: audio_capture_v.py
+  pause_timeout_multiplier: 3
   # 睡眠设置（秒）
   sleep_times:
-    # 非常小的睡眠（不干扰测试）
-    small: 0.01
-    # 短睡眠（提高响应性）
-    short: 0.05
-    # 中等睡眠（折中的睡眠时间）
-    medium: 0.1
-    # 较长睡眠（模拟测试操作）
-    long: 0.5
-    # 测试优化睡眠
+    # 非常小的睡眠值，用于高频检测（不干扰测试） e.g. 0.01s
+    # 中等睡眠时间，用于一般场景，兼顾响应性和系统资源 e.g. 0.1s
+    # 长睡眠时间，用于调试和测试场景 e.g. >=0.5s  
+   
+    # 使用位置: audio_capture_v.py: (701 - 倒计时检测),(757 - 暂停状态检测), (770 - TTS播报时) (1117 - 测试模式 键盘监听循环)
+    production: 0.05      
+    
+    # 使用位置: test_keyboard_response.py ; 注意 test_sleep_optimization.py 是硬编码   
     test: 2
 
 # ===== 系统配置 =====
 system:
   # 日志级别：DEBUG, INFO, WARNING, ERROR, CRITICAL
+  # 使用位置: main.py
   log_level: "INFO"
   # 全局卸载控制：true - 退出时全局卸载模型，false - 仅清除本地引用
+  # 使用位置: main.py
   global_unload: false
   # 测试模式：true - 启用测试模式，false - 禁用测试模式
+  # 使用位置: audio_capture_v.py, main.py
   test_mode: false
   # VOSK日志级别：-1(DEBUG), 0(INFO), 1(WARNING), 2(ERROR), 3(CRITICAL)
+  # 使用位置: main.py
   vosk_log_level: 0
+
+# ===== 音频配置 =====
+audio:
+  # 音频采样率
+  # 使用位置: audio_capture_v.py, model_manager.py
+  sample_rate: 16000
+  # 音频块大小
+  # 使用位置: audio_capture_v.py
+  chunk_size: 8000
 
 # ===== Excel导出配置 =====
 excel:
   # 默认文件名
+  # 使用位置: excel_exporter.py
   file_name: "measurement_data.xlsx"
-  # 自动导出：true - 在暂停/停止时自动导出，false - 手动导出
+  # 自动导出：true - 自动创建和使用Excel导出器，false - 禁用自动导出
+  # 使用位置: audio_capture_v.py, main.py
   auto_export: true
   # 格式设置
   formatting:
     # 是否启用自动编号
+    # 使用位置: excel_exporter.py
     auto_numbering: true
     # 是否包含时间戳
+    # 使用位置: excel_exporter.py
     include_timestamp: true
     # 表头语言："zh"(中文), "en"(英文)
+    # 使用位置: excel_exporter.py
     header_language: "zh"
+    # 原文信息是否包含在导出数据中
+    # 使用位置: excel_exporter.py
+    include_original: true
 
 # ===== 语音命令配置 =====
 voice_commands:
-  # 暂停命令
+  # 暂停命令 - 影响语音控制功能
+  # 使用位置: audio_capture_v.py
   pause_commands: ["暂停录音", "暂停"]
-  # 继续命令
+  # 继续命令 - 影响语音控制功能
+  # 使用位置: audio_capture_v.py
   resume_commands: ["继续录音", "继续", "恢复"]
-  # 停止命令
+  # 停止命令 - 影响语音控制功能
+  # 使用位置: audio_capture_v.py
   stop_commands: ["停止录音", "停止", "结束"]
 
 # ===== 错误修正配置 =====
 error_correction:
   # 错误修正字典文件路径
+  # 使用位置: audio_capture_v.py
   dictionary_path: "voice_correction_dict.txt"
   # 启用自动错误修正
+  # 使用位置: audio_capture_v.py
   enabled: true

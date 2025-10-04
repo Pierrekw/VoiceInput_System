@@ -5,7 +5,7 @@
 model:
   # 默认模型路径 - 影响所有需要加载模型的模块
   # 使用位置: config_loader.py, audio_capture_v.py, main.py, model_manager.py, preload_model.py, unload_model_global.py
-  default_path: "model/cn"
+  default_path: "model/cns"
   # 可选模型路径列表
   available_models:
     - name: "中文标准模型（高精度）"

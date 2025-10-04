@@ -24,7 +24,7 @@ def audio_stream():
  
     try:
         default_device = p.get_default_input_device_info()
-        logger.info(f"🎤 使用音频设备: {default_device['name']} (索引: {default_device['index']})")
+        logger.debug(f"🎤 使用音频设备: {default_device['name']} (索引: {default_device['index']})")
  
         stream = p.open(
             format=pyaudio.paInt16,
@@ -35,7 +35,7 @@ def audio_stream():
             start=True,
         )
  
-        logger.info(f"🎧 音频流创建成功 - 活动状态: {stream.is_active()}")
+        logger.debug(f"🎧 音频流创建成功 - 活动状态: {stream.is_active()}")
  
     except Exception as e:
         logger.error(f"❌ 音频流创建失败: {e}")
@@ -332,7 +332,7 @@ class AudioCapture:
         self.sample_rate: int = sample_rate if sample_rate is not None else config.get("audio.sample_rate", 16000)
 
         # ---------- 统一状态管理 ----------
-        self.state: str = "paused"  # 初始状态为paused
+        self.state: str = "idle"  # 初始状态为idle
         self._pause_event: threading.Event = threading.Event()
         self._pause_event.set()
         self._start_event: threading.Event = threading.Event()
@@ -349,6 +349,8 @@ class AudioCapture:
         
         # 新增：存储带原始文本的数据
         self.buffered_data_with_text: List[Tuple[float, str]] = []
+
+        self.start_early: bool = False
 
         # ---------- Excel 导出器 ----------
         # 如果没有提供导出器但配置了自动导出，则自动创建
@@ -417,7 +419,7 @@ class AudioCapture:
             
             # 记录加载时间
             load_time = self._model_manager.get_load_time(self.model_path)
-            logger.info(f"✅ 模型加载完成: {self.model_path} (耗时: {load_time:.2f}秒)")
+            # 不再重复打印相同的加载完成日志，避免重复
             
             if self.test_mode:
                 print(f"[模型管理] 模型 '{self.model_path}' 已加载")
@@ -524,15 +526,14 @@ class AudioCapture:
             return []
         
         nums = extract_measurements(text)
-        written_records = []
+        written_records = []          
         
-        if self.test_mode:
-            if text.strip(): #只有非空白文本才显示
-                print(f"\n[实时识别] '{text}'")
+        if self.test_mode:            
             if nums:
                 print(f"[提取数值] {nums}")
             else:
                 print("[提示] 未检测到数值")
+
 
         if nums:
             # 记录原始文本和数值
@@ -564,18 +565,18 @@ class AudioCapture:
                     # 使用锁机制，避免TTS声音被识别
                     with self._tts_lock:
                         self._tts_playing = True
-                             
+                              
                         # 暂停Vosk识别
                         original_state = self.state
                         if original_state == "recording":
                             self.state = "paused"  # 临时暂停识别
-                                 
+                                  
                             if self.test_mode:
                                 print(f"[TTS] 开始播报，暂停识别")
-                         
+                          
                     numbers_text = "，".join(str(num) for num in nums)
                     self.tts.speak(f"测量值: {numbers_text}")
-                         
+                          
                     if self.test_mode:
                         print(f"[TTS] 播报完成")
                 except Exception as e:
@@ -586,13 +587,16 @@ class AudioCapture:
                         if original_state == "recording":
                             self.state = "recording"
                             self._pause_start_time = time.time()  # 重置暂停计时器
-                               
+                                
                             if self.test_mode:
                                 print(f"[TTS] 恢复识别")
-                         
+                          
                         self._tts_playing = False
             elif self.test_mode:
                     print(f"[TTS跳过] 检测到可能的误识别，跳过播报: '{text}'")
+        elif not nums:
+            if text.strip(): #只有非空白文本才显示
+                print(f"[实时识别] '{text}'")
         
         return written_records
  
@@ -614,6 +618,7 @@ class AudioCapture:
     # ----------------------------------------------------------
     # 6.3 控制接口（暂停/恢复/停止）
     # ----------------------------------------------------------
+        
     def pause(self) -> None:
         """暂停实时识别"""
         if self.state != "recording":
@@ -648,10 +653,19 @@ class AudioCapture:
         self.state = "stopped"
         self._pause_event.set()
         self._pause_start_time = None
+        if self.start_early: #如果提前启动阶段，检测到ESC，则直接停止。
+            return
+            logger.info("🛑用户按ESC键，强制退出")
         logger.info("🛑 已停止识别")
         if self.test_mode:
             print(f"状态: {old_state} -> {self.state}")
- 
+
+    def monitor_esc_key(self):
+        #监听ESC键，如果按下则停止识别，并退出程序。
+        self.stop()
+        return
+        
+
     @property
     def is_running(self) -> bool:
         """外部用于判断当前是"运行中"还是"已暂停"。"""
@@ -669,8 +683,10 @@ class AudioCapture:
         logger.info(f"📊 当前状态: {self.state}")
         logger.info(f"🎯 模型路径: {self.model_path}")
         logger.info(f"⏱️  超时时间: {self.timeout_seconds}秒")
-        logger.info(f"🧪 测试模式: {'开启' if self.test_mode else '关闭'}")
+        if self.test_mode:
+            logger.info(f"🧪 测试模式:开启")
 
+        """
         # 检查模型是否已加载
         if not self._model_loaded or self._model is None or self._recognizer is None:
             logger.warning("⚠️ 模型未加载，尝试重新加载...")
@@ -697,6 +713,7 @@ class AudioCapture:
             if self.test_mode:
                 print("[系统] 模型预热完成")
 
+        """
 
         # 从配置系统获取倒计时秒数
         countdown_seconds = config.get("recognition.countdown_seconds", 10)
@@ -706,10 +723,11 @@ class AudioCapture:
         print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
 
         # 使用全局按键状态变量
-        start_early = False              
+        self.start_early = False              
         space_pressed = False
-
-        print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
+        self.state = "idle"
+        logger.info("✅ 系统状态已设置为 idle")
+               
 
         # 倒计时循环
         for i in range(countdown_seconds, 0, -1):
@@ -717,23 +735,24 @@ class AudioCapture:
             
             # 快速检测循环，提高响应性
             for _ in range(20):  # 0.05秒 x 20 = 1秒
-                # 检查空格键或状态变化（如果从paused变为recording，说明有外部触发）
+                # 检查空格键或状态变化（如果从idle变为recording，说明有外部触发）
+                # 修复：添加适当的ESC键处理
+                if _key_pressed.get('esc', False):
+                    self.stop()
+                    break
                 if (_key_pressed.get('space', False) and not space_pressed) or self.state == "recording":
-                    start_early = True
+                    self.start_early = True
                     space_pressed = True
                     if _key_pressed.get('space', False):
-                        _key_pressed['space'] = False  # 清除状态
-                    print("\n✅ 检测到空格键，立即开始！")
+                        _key_pressed['space'] = False  # 清除状态                    
                     break
                 
                 time.sleep(config.get("recognition.sleep_times.production", 0.05))
             
-            if start_early:
-                break
-        
-        print()  # 换行
+            if self.start_early:
+                break            
                 
-        if start_early:
+        if self.start_early:
             print("✅ 已通过空格键立即开始识别！       ")
             logger.info("✅ 用户通过空格键立即开始识别！")
         else:
@@ -743,23 +762,22 @@ class AudioCapture:
         self.state = "recording"
         logger.info("✅ 系统状态已设置为 recording")
         if self.test_mode:
-            print(f"状态: paused -> recording")
+            print(f"状态: idle -> recording")
         
         
         try:
             with audio_stream() as stream:
-                logger.info("🎤 开始音频流监听...")
-                
+                                
                 audio_frames = 0
                 recognition_count = 0
                 collected_text = []
-                recognition_start_time = time.time()
-                
-                # 新增：会话数据收集
+                recognition_start_time = time.time()               
+                # 会话数据收集
                 session_records: List[Tuple[int, float, str]] = []
-
+                
+                logger.info("🎤 开始音频流监听...")
                 while self.state != "stopped":
-        # 检查暂停超时（仅在paused状态下）
+                # 检查暂停超时（仅在paused状态下）
                     if self.state == "paused":
                         if self._pause_start_time is not None:
                             pause_duration = time.time() - self._pause_start_time
@@ -1006,8 +1024,7 @@ def start_keyboard_listener(capture: AudioCapture, test_mode: bool = False):
                     # 立即处理按键
                     if capture and capture.state != "stopped":
                         if test_mode:
-                            print("空格键")
-                        
+                            print("空格键")                        
                         if capture.state == "paused":
                             capture.resume()
                         elif capture.state == "recording":

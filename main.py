@@ -54,9 +54,7 @@ class VoiceInputSystem:
         
         # 预加载模型（只加载一次）
         if not self.audio_capture.load_model():
-            print("❌ 模型加载失败，系统可能无法正常工作")
-        else:
-            print("✅ 模型加载成功")
+            print("❌ 模型加载失败，系统可能无法正常工作")        
         
         # 设置测试模式
         if self.test_mode:

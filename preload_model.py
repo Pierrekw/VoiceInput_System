@@ -5,8 +5,9 @@
 用于在测试前预加载Vosk模型，避免重复加载导致的长时间等待
 """
 import time
-import os
 import logging
+import os
+from typing import Optional
 
 # 导入配置系统
 from config_loader import config
@@ -16,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def preload_vosk_model(model_path: str = None):
+def preload_vosk_model(model_path: Optional[str] = None) -> bool:
     """
     预加载Vosk模型
     
@@ -55,10 +56,13 @@ def preload_vosk_model(model_path: str = None):
 if __name__ == "__main__":
     # 从命令行参数或环境变量获取模型路径，如果都没有则使用配置文件中的值
     import sys
+    model_path: Optional[str] = None
     if len(sys.argv) > 1:
         model_path = sys.argv[1]
     else:
-        model_path = os.getenv("VOSK_MODEL_PATH")  # 允许通过环境变量覆盖配置
+        env_model_path = os.getenv("VOSK_MODEL_PATH")  # 允许通过环境变量覆盖配置
+        if env_model_path is not None:
+            model_path = env_model_path
         
     print("=== Vosk模型全局预加载工具 ===")
     success = preload_vosk_model(model_path)

@@ -366,14 +366,10 @@ class AudioCapture:
                     logger.warning("⚠️ 无法导入Excel导出器")
                     self._exporter = None
 
-        # ---------- 模型相关（使用全局模型管理器）----------
+        # ---------- 模型相关 ----------
         self._model: Optional['Model'] = None
         self._recognizer: Optional['KaldiRecognizer'] = None
         self._model_loaded: bool = False
-        
-        # 引用全局模型管理器
-        from model_manager import global_model_manager
-        self._model_manager = global_model_manager
  
     # ----------------------------------------------------------
     # 动态设置音频块大小
@@ -393,38 +389,30 @@ class AudioCapture:
 
     def load_model(self) -> bool:
         """预加载Vosk模型和识别器，返回是否成功"""
-        # 首先检查是否已经有通过模型管理器加载的模型
-        model_data = self._model_manager.get_model(self.model_path)
-        if model_data:
-            self._model = model_data["model"]
-            self._recognizer = model_data["recognizer"]
-            self._model_loaded = True
-            logger.info(f"✅ 成功从全局模型管理器获取模型: {self.model_path}")
-            return True
-
-        # 如果本地已有模型，直接标记为已加载
+        # 检查本地是否已经加载了模型
         if self._model_loaded and self._model is not None and self._recognizer is not None:
             logger.info("✅ 本地模型已加载，无需重复加载")
             return True
 
-        logger.info("📦 通过全局模型管理器加载模型...")
+        logger.info("📦 正在加载Vosk模型...")
         try:
-            # 使用全局模型管理器加载模型
-            model_data = self._model_manager.load_model(self.model_path)
+            # 检查模型路径是否存在
+            if not os.path.exists(self.model_path):
+                logger.error(f"❌ 模型路径不存在: {self.model_path}")
+                return False
             
-            # 设置本地引用
-            self._model = model_data["model"]
-            self._recognizer = model_data["recognizer"]
+            start_time = time.time()
+            # 直接在本地加载模型
+            self._model = Model(self.model_path)
+            self._recognizer = KaldiRecognizer(self._model, self.sample_rate)
             self._model_loaded = True
             
-            # 记录加载时间
-            load_time = self._model_manager.get_load_time(self.model_path)
-            # 不再重复打印相同的加载完成日志，避免重复
+            load_time = time.time() - start_time
+            logger.info(f"✅ 模型加载成功: {self.model_path} (耗时: {load_time:.2f}秒)")
             
             if self.test_mode:
-                print(f"[模型管理] 模型 '{self.model_path}' 已加载")
-                print(f"[模型管理] 加载耗时: {load_time:.2f}秒")
-                print(f"[模型管理] 当前已加载模型数量: {len(self._model_manager.get_loaded_models())}")
+                print(f"[模型] 模型 '{self.model_path}' 已加载")
+                print(f"[模型] 加载耗时: {load_time:.2f}秒")
                 
             return True
         except Exception as e:
@@ -433,30 +421,15 @@ class AudioCapture:
             self._recognizer = None
             self._model_loaded = False
             return False
-
+    
     def unload_model(self) -> None:
-        """清除本地模型引用，但不卸载全局模型"""
-        # 注意：这里只清除本地引用，不卸载全局模型
-        # 这样其他实例仍然可以使用已加载的模型
+        """卸载模型以释放内存"""
         self._model = None
         self._recognizer = None
         self._model_loaded = False
         import gc
         gc.collect()
-        logger.info("🧹 本地模型引用已清除")
-        
-    def unload_model_globally(self) -> None:
-        """全局卸载模型以释放内存"""
-        if self._model_manager.is_model_loaded(self.model_path):
-            self._model_manager.unload_model(self.model_path)
-            logger.info(f"🧹 全局模型 '{self.model_path}' 已卸载")
-            
-        # 同时清除本地引用
-        self._model = None
-        self._recognizer = None
-        self._model_loaded = False
-        import gc
-        gc.collect()
+        logger.info("🧹 模型已卸载，内存已释放")
  
     # ----------------------------------------------------------
     # 新增TTS控制方法
@@ -685,36 +658,7 @@ class AudioCapture:
         logger.info(f"⏱️  超时时间: {self.timeout_seconds}秒")
         if self.test_mode:
             logger.info(f"🧪 测试模式:开启")
-
-        """
-        # 检查模型是否已加载
-        if not self._model_loaded or self._model is None or self._recognizer is None:
-            logger.warning("⚠️ 模型未加载，尝试重新加载...")
-            if not self.load_model():
-                logger.error("❌ 无法加载模型")
-                return {
-                    "final": "", 
-                    "buffered_values": [],
-                    "collected_text": [],
-                    "session_data": []
-                }
-        else:
-            logger.info("✅ 模型已加载")
-        
-        if self._model:
-            if self.test_mode:
-                print("[系统] 预热模型...")
-            
-            # 用一个空的音频数据预热模型
-            dummy_data = bytes(self.audio_chunk_size * 2)  # 空音频数据
-            if self._recognizer and hasattr(self._recognizer, 'AcceptWaveform'):
-                self._recognizer.AcceptWaveform(dummy_data)
-            
-            if self.test_mode:
-                print("[系统] 模型预热完成")
-
-        """
-
+   
         # 从配置系统获取倒计时秒数
         countdown_seconds = config.get("recognition.countdown_seconds", 10)
         logger.info(f"🚀 系统将在 {countdown_seconds} 秒后开始识别...")
@@ -762,8 +706,7 @@ class AudioCapture:
         self.state = "recording"
         logger.info("✅ 系统状态已设置为 recording")
         if self.test_mode:
-            print(f"状态: idle -> recording")
-        
+            print(f"状态: idle -> recording")        
         
         try:
             with audio_stream() as stream:

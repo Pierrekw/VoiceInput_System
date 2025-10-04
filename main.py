@@ -52,16 +52,11 @@ class VoiceInputSystem:
             test_mode=self.test_mode
         )
         
-        # 预加载模型（只加载一次）
-        if not self.audio_capture.load_model():
-            print("❌ 模型加载失败，系统可能无法正常工作")        
-        
         # 设置测试模式
         if self.test_mode:
             self.audio_capture.test_mode = True
             print("🧪 测试模式已启用")
-        
-
+         
 
     def on_data_detected(self, values, text=None) -> None:
         """Callback function: print values when detected"""
@@ -74,12 +69,6 @@ class VoiceInputSystem:
         # 启动键盘监听器，传递测试模式
         keyboard_listener = start_keyboard_listener(self.audio_capture, test_mode=self.test_mode)
         
-        # 确保模型已加载
-        if not self.audio_capture._model_loaded:
-            if not self.audio_capture.load_model():
-                print("❌ 模型加载失败，系统可能无法正常工作")
-                return
-
         # 直接调用内部的实时监听（阻塞式）
         result = self.audio_capture.listen_realtime_vosk()
 
@@ -136,34 +125,24 @@ if __name__ == "__main__":
     # 可以通过命令行参数或环境变量控制测试模式，配置系统的值作为默认值
     test_mode = "--test" in sys.argv or os.getenv("VOICE_INPUT_TEST_MODE", "").lower() == "true" or config.get_test_mode()
     
-    # 控制是否在程序退出时全局卸载模型（默认仅本地卸载）
-    global_unload = "--global-unload" in sys.argv or os.getenv("VOICE_INPUT_GLOBAL_UNLOAD", "").lower() == "true" or config.get_global_unload()
+    system = VoiceInputSystem(test_mode=test_mode)
     
     if test_mode:
         print("🧪 运行在测试模式")
     else:
-        print("🚀 运行在生产模式")
+        print("🚀 运行在生产模式")    
     
-    # 使用配置系统的超时时间
-    system = VoiceInputSystem(test_mode=test_mode)
+    # 检查模型是否加载成功
+    if not system.audio_capture.load_model():
+        print("❌ 无法加载模型")
+        sys.exit(1)
     
     try:
         system.start_realtime_vosk()
     except KeyboardInterrupt:
         print("👋 用户中断程序")
     finally:
-        # 在程序结束时的模型管理策略
-        if global_unload:
-            # 全局卸载模型，完全释放内存
-            print("🔄 正在全局卸载模型...")
-            system.audio_capture.unload_model_globally()
-            print("✅ 模型已全局卸载")
-        else:
-            # 仅清除本地模型引用，保留全局模型
-            # 这样其他实例仍然可以使用已加载的模型，无需重新加载
-            system.audio_capture.unload_model()
-            print("💡 已清除本地模型引用，全局模型仍然可用")
-            print("   提示: 如需完全释放内存，可运行 'python unload_model_global.py' 或使用 '--global-unload' 参数")
-        
+        # 卸载模型，释放内存
+        system.audio_capture.unload_model()
         print("✅ 系统已安全退出")
         sys.exit(0)

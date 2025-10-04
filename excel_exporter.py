@@ -8,7 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment
 import threading
 import logging
-from typing import Any, List, Tuple, Union, Optional
+from typing import Any, List, Tuple, Union, Optional, Dict
 
 # 新增：导入配置系统
 from config_loader import config
@@ -16,7 +16,7 @@ from config_loader import config
 logger = logging.getLogger(__name__)
 
 class ExcelExporter:
-    def __init__(self, filename: str = None):
+    def __init__(self, filename: Optional[str] = None):
         self._lock: threading.Lock = threading.Lock()
         # 使用配置文件中的文件名，如果未指定则使用默认值
         if filename is None:
@@ -27,10 +27,12 @@ class ExcelExporter:
         
         # 根据header_language配置设置列名
         header_language = config.get("excel.formatting.header_language", "zh")
+        self.columns = []
+        
         if header_language == "en":
-            self.columns: List[str] = ["ID", "Measurement", "Timestamp"]
+            self.columns.extend(["ID", "Measurement", "Timestamp"])
         else:
-            self.columns: List[str] = ["编号", "测量值", "时间戳"]
+            self.columns.extend(["编号", "测量值", "时间戳"])
             
         # 根据配置决定是否添加原始语音列
         if include_original:
@@ -42,7 +44,7 @@ class ExcelExporter:
         self._last_id: int = 0
         self._initialize_last_id()
         # 新增：记录本次会话的所有数据
-        self._session_data: List[Tuple[int, float, str]] = []
+        self._session_data: List[Tuple[Union[int, str, float], Any, str]] = []
 
     @staticmethod
     def _float_cell(val: Any) -> float:
@@ -130,7 +132,7 @@ class ExcelExporter:
                     # 生成新记录
                     new_records = []
                     for val, original_text in data:
-                        new_record = {}
+                        new_record: Dict[str, Union[int, float, str]] = {}
                         
                         # 根据配置决定是否添加编号
                         if auto_numbering:
@@ -235,7 +237,7 @@ class ExcelExporter:
                 # 生成新数据记录
                 new_data = []
                 for nid, val in data_pairs:
-                    record = {}
+                    record: Dict[str, Union[int, float, str]] = {}
                     
                     # 根据配置决定是否添加编号
                     if auto_numbering:
@@ -330,7 +332,7 @@ class ExcelExporter:
                 logger.error(f"回退到pandas也失败: {fallback_error}")
                 return []
 
-    def get_session_data(self) -> List[Tuple[int, float, str]]:
+    def get_session_data(self) -> List[Tuple[Union[int, str, float], Any, str]]:
             """获取本次会话的所有数据"""
             return self._session_data.copy()
     

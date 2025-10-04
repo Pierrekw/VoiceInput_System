@@ -32,6 +32,9 @@ recognition:
   # 暂停超时乘数
   # 使用位置: audio_capture_v.py
   pause_timeout_multiplier: 3
+  # 倒计时时间（秒）
+  # 使用位置: audio_capture_v.py
+  countdown_seconds: 5
   # 睡眠设置（秒）
   sleep_times:
     # 非常小的睡眠值，用于高频检测（不干扰测试） e.g. 0.01s

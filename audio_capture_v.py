@@ -349,8 +349,7 @@ class AudioCapture:
         
         # 新增：存储带原始文本的数据
         self.buffered_data_with_text: List[Tuple[float, str]] = []
-
-        self.start_early: bool = False
+        
 
         # ---------- Excel 导出器 ----------
         # 如果没有提供导出器但配置了自动导出，则自动创建
@@ -626,9 +625,9 @@ class AudioCapture:
         self.state = "stopped"
         self._pause_event.set()
         self._pause_start_time = None
-        if self.start_early: #如果提前启动阶段，检测到ESC，则直接停止。
+        if self.state == "idle": #如果提前启动阶段，检测到ESC，则直接停止。
             return
-            logger.info("🛑用户按ESC键，强制退出")
+            logger.info("🛑用户强制退出")
         logger.info("🛑 已停止识别")
         if self.test_mode:
             print(f"状态: {old_state} -> {self.state}")
@@ -655,58 +654,9 @@ class AudioCapture:
         logger.info("🎤 开始实时语音识别流程...")
         logger.info(f"📊 当前状态: {self.state}")
         logger.info(f"🎯 模型路径: {self.model_path}")
-        logger.info(f"⏱️  超时时间: {self.timeout_seconds}秒")
+        logger.info(f"⏱️  超时时间设定: {self.timeout_seconds}秒")
         if self.test_mode:
-            logger.info(f"🧪 测试模式:开启")
-   
-        # 从配置系统获取倒计时秒数
-        countdown_seconds = config.get("recognition.countdown_seconds", 10)
-        logger.info(f"🚀 系统将在 {countdown_seconds} 秒后开始识别...")
-        logger.info("   按空格键可立即开始识别")
-        
-        print(f"⏰ {countdown_seconds}秒后自动开始录音 (按空格键立即开始)...")
-
-        # 使用全局按键状态变量
-        self.start_early = False              
-        space_pressed = False
-        self.state = "idle"
-        logger.info("✅ 系统状态已设置为 idle")
-               
-
-        # 倒计时循环
-        for i in range(countdown_seconds, 0, -1):
-            print(f"⏰ 倒计时: {i}秒 (按空格键立即开始)", end="\r")
-            
-            # 快速检测循环，提高响应性
-            for _ in range(20):  # 0.05秒 x 20 = 1秒
-                # 检查空格键或状态变化（如果从idle变为recording，说明有外部触发）
-                # 修复：添加适当的ESC键处理
-                if _key_pressed.get('esc', False):
-                    self.stop()
-                    break
-                if (_key_pressed.get('space', False) and not space_pressed) or self.state == "recording":
-                    self.start_early = True
-                    space_pressed = True
-                    if _key_pressed.get('space', False):
-                        _key_pressed['space'] = False  # 清除状态                    
-                    break
-                
-                time.sleep(config.get("recognition.sleep_times.production", 0.05))
-            
-            if self.start_early:
-                break            
-                
-        if self.start_early:
-            print("✅ 已通过空格键立即开始识别！       ")
-            logger.info("✅ 用户通过空格键立即开始识别！")
-        else:
-            print("⏰ 倒计时结束，开始识别！       ")
-            logger.info("✅ 倒计时结束，系统已开始识别！")
-            
-        self.state = "recording"
-        logger.info("✅ 系统状态已设置为 recording")
-        if self.test_mode:
-            print(f"状态: idle -> recording")        
+            logger.info(f"🧪 测试模式:开启")           
         
         try:
             with audio_stream() as stream:
@@ -716,8 +666,32 @@ class AudioCapture:
                 collected_text = []
                 recognition_start_time = time.time()               
                 # 会话数据收集
-                session_records: List[Tuple[int, float, str]] = []
+                session_records: List[Tuple[int, float, str]] = []                
+                        # 从配置系统获取倒计时秒数
+                countdown_seconds = config.get("recognition.countdown_seconds", 5)
+                logger.info(f"🚀 系统将在 {countdown_seconds} 秒后开始识别...")      
                 
+                print(f"⏰ {countdown_seconds}秒后自动开始录音")              
+                               
+                self.state = "idle"
+                logger.debug("✅ 系统状态已设置为 idle")
+
+                while countdown_seconds > 0:
+                    print(f"⏰ 倒计时: {countdown_seconds}秒 ", end="\r")
+                    countdown_seconds -= 1
+                    time.sleep(1)
+                    
+                    if self.state == "stopped":
+                        break
+                
+                logger.info("⏰✅ 倒计时结束")
+                    
+                self.state = "recording"
+                logger.debug("✅ 系统状态已设置为 recording")
+                
+                if self.test_mode:
+                    print(f"状态: idle -> recording")      
+
                 logger.info("🎤 开始音频流监听...")
                 while self.state != "stopped":
                 # 检查暂停超时（仅在paused状态下）

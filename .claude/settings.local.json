@@ -8,7 +8,10 @@
       "Bash(.venv/scripts/python:*)",
       "Bash(.venv/scripts/pip:*)",
       "Bash(timeout:*)",
-      "Bash(./.venv/Scripts/python:*)"
+      "Bash(./.venv/Scripts/python:*)",
+      "Read(//c/Users/Administrator/**)",
+      "Bash(tree:*)",
+      "Bash(git --version)"
     ],
     "deny": []
   }

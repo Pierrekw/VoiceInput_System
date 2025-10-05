@@ -14,7 +14,7 @@ from config_loader import config  # 导入配置系统
 
 # 导入共享文本处理模块
 try:
-    from text_processor import extract_measurements, correct_voice_errors
+    from text_processor import extract_measurements as shared_extract_measurements, correct_voice_errors as shared_correct_voice_errors
     SHARED_TEXT_PROCESSOR_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("Successfully loaded shared text processing module")
@@ -133,9 +133,7 @@ def correct_voice_errors(text: str) -> str:
     """Replace commonly misrecognized words with correct number expressions"""
     if SHARED_TEXT_PROCESSOR_AVAILABLE:
         # 使用共享模块的纠错功能
-        # 注意：这里调用的是导入的函数，不是递归调用
-        from text_processor import correct_voice_errors as shared_correct
-        return shared_correct(text)
+        return shared_correct_voice_errors(text)
     else:
         # 使用原始实现
         # 检查错误修正功能是否启用
@@ -171,9 +169,7 @@ def extract_measurements(text: Any) -> List[float]:
     """Extract all possible numbers (Chinese or Arabic) from text and return as float list"""
     if SHARED_TEXT_PROCESSOR_AVAILABLE:
         # 使用共享模块的数字提取功能
-        # 注意：这里调用的是导入的函数，不是递归调用
-        from text_processor import extract_measurements as shared_extract
-        return shared_extract(text)
+        return shared_extract_measurements(text)
     else:
         # 使用原始实现（简化版本，保留核心功能）
         return _extract_measurements_fallback(text)
@@ -695,7 +691,7 @@ class AudioCapture:
 
                 # 获取会话数据
                 if self._exporter:
-                    session_records = self._exporter.get_session_data()
+                    session_records = self._exporter.get_session_data()  # type: ignore
 
                 result_dict: dict[str, Union[str, List[float], List[str], List[Tuple[int, float, str]]]] = {
                     "final": final_text,

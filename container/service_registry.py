@@ -6,8 +6,9 @@
 """
 
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, cast
 from dataclasses import dataclass
+from .exceptions import InvalidServiceDescriptorError
 
 T = TypeVar('T')
 
@@ -27,11 +28,11 @@ class ServiceDescriptor:
     描述一个服务的完整信息，包括类型、实现、生命周期等。
     """
     service_type: Type          # 服务接口类型
-    implementation_type: Type   # 实现类型
+    implementation_type: Optional[Type]   # 实现类型
     lifetime: ServiceLifetime   # 生命周期
     factory: Optional[Callable] = None    # 工厂方法
     instance: Optional[Any] = None        # 预创建实例（仅用于单例）
-    dependencies: List[Type] = None       # 依赖类型列表
+    dependencies: Optional[List[Type]] = None       # 依赖类型列表
 
     def __post_init__(self):
         if self.dependencies is None:
@@ -63,7 +64,8 @@ class ServiceDescriptor:
         return self.lifetime == ServiceLifetime.SCOPED
 
     def __str__(self) -> str:
-        return f"ServiceDescriptor({self.service_type.__name__} -> {self.implementation_type.__name__}, {self.lifetime.value})"
+        impl_name = self.implementation_type.__name__ if self.implementation_type else "None"
+        return f"ServiceDescriptor({self.service_type.__name__} -> {impl_name}, {self.lifetime.value})"
 
 
 class ServiceRegistry:
@@ -81,11 +83,11 @@ class ServiceRegistry:
     def register(
         self,
         service_type: Type[T],
-        implementation_type: Type[T] = None,
+        implementation_type: Optional[Type[T]] = None,
         lifetime: ServiceLifetime = ServiceLifetime.TRANSIENT,
-        factory: Callable[[], T] = None,
-        instance: T = None,
-        name: str = None
+        factory: Optional[Callable[[], T]] = None,
+        instance: Optional[T] = None,
+        name: Optional[str] = None
     ) -> 'ServiceRegistry':
         """
         注册服务
@@ -102,18 +104,17 @@ class ServiceRegistry:
             ServiceRegistry: 返回自身以支持链式调用
 
         Raises:
-            ValueError: 参数配置错误
-            TypeError: 类型不匹配
+            InvalidServiceDescriptorError: 服务描述符配置错误
         """
         # 参数验证
         if implementation_type is None and factory is None and instance is None:
-            raise ValueError("At least one of implementation_type, factory, or instance must be provided")
+            raise InvalidServiceDescriptorError("At least one of implementation_type, factory, or instance must be provided", service_type.__name__)
 
         if implementation_type is not None and not issubclass(implementation_type, service_type):
-            raise TypeError(f"Implementation type {implementation_type} must be a subclass of {service_type}")
+            raise InvalidServiceDescriptorError(f"Implementation type {implementation_type} must be a subclass of {service_type}", service_type.__name__)
 
         if instance is not None and not isinstance(instance, service_type):
-            raise TypeError(f"Instance must be of type {service_type}")
+            raise InvalidServiceDescriptorError(f"Instance must be of type {service_type}", service_type.__name__)
 
         # 单例模式如果有实例则忽略工厂和实现类型
         if instance is not None:
@@ -140,7 +141,7 @@ class ServiceRegistry:
 
         return self
 
-    def register_transient(self, service_type: Type[T], implementation_type: Type[T] = None, factory: Callable[[], T] = None) -> 'ServiceRegistry':
+    def register_transient(self, service_type: Type[T], implementation_type: Optional[Type[T]] = None, factory: Optional[Callable[[], T]] = None) -> 'ServiceRegistry':
         """
         注册瞬态服务
 
@@ -154,7 +155,7 @@ class ServiceRegistry:
         """
         return self.register(service_type, implementation_type, ServiceLifetime.TRANSIENT, factory)
 
-    def register_scoped(self, service_type: Type[T], implementation_type: Type[T] = None, factory: Callable[[], T] = None) -> 'ServiceRegistry':
+    def register_scoped(self, service_type: Type[T], implementation_type: Optional[Type[T]] = None, factory: Optional[Callable[[], T]] = None) -> 'ServiceRegistry':
         """
         注册作用域服务
 
@@ -171,9 +172,9 @@ class ServiceRegistry:
     def register_singleton(
         self,
         service_type: Type[T],
-        implementation_type: Type[T] = None,
-        factory: Callable[[], T] = None,
-        instance: T = None
+        implementation_type: Optional[Type[T]] = None,
+        factory: Optional[Callable[[], T]] = None,
+        instance: Optional[T] = None
     ) -> 'ServiceRegistry':
         """
         注册单例服务
@@ -216,7 +217,7 @@ class ServiceRegistry:
         """
         return self.register(service_type, factory=factory, lifetime=lifetime)
 
-    def get_descriptor(self, service_type: Type[T], name: str = None) -> Optional[ServiceDescriptor]:
+    def get_descriptor(self, service_type: Type[T], name: Optional[str] = None) -> Optional[ServiceDescriptor]:
         """
         获取服务描述符
 
@@ -231,7 +232,7 @@ class ServiceRegistry:
             return self._named_services.get(name, {}).get(service_type)
         return self._services.get(service_type)
 
-    def is_registered(self, service_type: Type, name: str = None) -> bool:
+    def is_registered(self, service_type: Type, name: Optional[str] = None) -> bool:
         """
         检查服务是否已注册
 
@@ -265,7 +266,7 @@ class ServiceRegistry:
         """
         return [desc for desc in self._services.values() if desc.lifetime == lifetime]
 
-    def remove(self, service_type: Type, name: str = None) -> bool:
+    def remove(self, service_type: Type, name: Optional[str] = None) -> bool:
         """
         移除服务注册
 

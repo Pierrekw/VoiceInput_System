@@ -51,7 +51,7 @@ recognition:
 system:
   # 日志级别：DEBUG, INFO, WARNING, ERROR, CRITICAL
   # 使用位置: main.py
-  log_level: "INFO"
+  log_level: "DEBUG"
   # 全局卸载控制：true - 退出时全局卸载模型，false - 仅清除本地引用
   # 使用位置: main.py
   global_unload: false
@@ -60,7 +60,7 @@ system:
   test_mode: false
   # VOSK日志级别：-1(DEBUG), 0(INFO), 1(WARNING), 2(ERROR), 3(CRITICAL)
   # 使用位置: main.py
-  vosk_log_level: 0
+  vosk_log_level: -1
 
 # ===== 音频配置 =====
 audio:

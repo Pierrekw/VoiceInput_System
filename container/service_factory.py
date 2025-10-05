@@ -5,12 +5,16 @@
 提供不同类型的服务工厂实现，支持服务的创建和管理。
 """
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Type, TypeVar, Optional
+from typing import Any, Callable, Dict, List, Type, TypeVar, Optional, TYPE_CHECKING
 from inspect import signature, Parameter
 import inspect
 
 from .exceptions import ServiceCreationError, CircularDependencyError
+
+if TYPE_CHECKING:
+    from .container import DIContainer
 
 T = TypeVar('T')
 
@@ -23,7 +27,7 @@ class ServiceFactory(ABC):
     """
 
     @abstractmethod
-    def create(self, container: 'DIContainer') -> Any:
+    def create(self, container: DIContainer) -> Any:
         """
         创建服务实例
 
@@ -68,19 +72,29 @@ class ReflectionFactory(ServiceFactory):
     def _analyze_constructor(self) -> None:
         """分析构造函数参数"""
         try:
-            self._constructor = self.service_type.__init__
-            sig = signature(self._constructor)
+            constructor = self.service_type.__init__
+            if constructor is None:
+                self._constructor = None
+                self._parameters = []
+                raise ServiceCreationError(
+                    self.service_type.__name__,
+                    Exception("Constructor is None")
+                )
+            sig = signature(constructor)
             self._parameters = [
                 param for param in sig.parameters.values()
                 if param.name != 'self' and param.kind == Parameter.POSITIONAL_OR_KEYWORD
             ]
+            self._constructor = constructor
         except Exception as e:
+            self._constructor = None
+            self._parameters = []
             raise ServiceCreationError(
                 self.service_type.__name__,
                 Exception(f"Failed to analyze constructor: {e}")
             )
 
-    def create(self, container: 'DIContainer') -> T:
+    def create(self, container: DIContainer) -> Any:
         """
         使用反射创建服务实例
 
@@ -88,7 +102,7 @@ class ReflectionFactory(ServiceFactory):
             container: 依赖注入容器
 
         Returns:
-            T: 创建的服务实例
+            Any: 创建的服务实例
 
         Raises:
             ServiceCreationError: 创建失败
@@ -98,8 +112,14 @@ class ReflectionFactory(ServiceFactory):
 
         try:
             # 解析构造函数参数
-            args = []
-            kwargs = {}
+            args: List[Any] = []
+            kwargs: Dict[str, Any] = {}
+
+            if self._parameters is None:
+                raise ServiceCreationError(
+                    self.service_type.__name__,
+                    Exception("Parameters not analyzed")
+                )
 
             for param in self._parameters:
                 if param.annotation == Parameter.empty:
@@ -135,7 +155,7 @@ class DelegateFactory(ServiceFactory):
     使用委托函数或lambda表达式创建服务。
     """
 
-    def __init__(self, factory_func: Callable[[Any], T]):
+    def __init__(self, factory_func: Callable[[Any], Any]):
         """
         初始化委托工厂
 
@@ -144,7 +164,7 @@ class DelegateFactory(ServiceFactory):
         """
         self.factory_func = factory_func
 
-    def create(self, container: 'DIContainer') -> T:
+    def create(self, container: DIContainer) -> Any:
         """
         使用委托函数创建服务实例
 
@@ -152,7 +172,7 @@ class DelegateFactory(ServiceFactory):
             container: 依赖注入容器
 
         Returns:
-            T: 创建的服务实例
+            Any: 创建的服务实例
 
         Raises:
             ServiceCreationError: 创建失败
@@ -174,7 +194,7 @@ class InstanceFactory(ServiceFactory):
     直接返回预创建的实例。
     """
 
-    def __init__(self, instance: T):
+    def __init__(self, instance: Any):
         """
         初始化实例工厂
 
@@ -183,7 +203,7 @@ class InstanceFactory(ServiceFactory):
         """
         self.instance = instance
 
-    def create(self, container: 'DIContainer') -> T:
+    def create(self, container: DIContainer) -> Any:
         """
         返回预创建的实例
 
@@ -191,7 +211,7 @@ class InstanceFactory(ServiceFactory):
             container: 依赖注入容器
 
         Returns:
-            T: 服务实例
+            Any: 服务实例
         """
         return self.instance
 
@@ -215,10 +235,10 @@ class SingletonFactory(ServiceFactory):
             inner_factory: 内部工厂，用于创建实际实例
         """
         self.inner_factory = inner_factory
-        self._instance: Optional[T] = None
+        self._instance: Optional[Any] = None
         self._created = False
 
-    def create(self, container: 'DIContainer') -> T:
+    def create(self, container: DIContainer) -> Any:
         """
         创建或返回缓存的单例实例
 
@@ -226,7 +246,7 @@ class SingletonFactory(ServiceFactory):
             container: 依赖注入容器
 
         Returns:
-            T: 单例实例
+            Any: 单例实例
         """
         if not self._created:
             self._instance = self.inner_factory.create(container)
@@ -264,7 +284,7 @@ class ScopedFactory(ServiceFactory):
         self.inner_factory = inner_factory
         self._scoped_instances: Dict[str, Any] = {}
 
-    def create(self, container: 'DIContainer') -> T:
+    def create(self, container: 'DIContainer') -> Any:
         """
         在作用域内创建或返回缓存实例
 
@@ -272,14 +292,15 @@ class ScopedFactory(ServiceFactory):
             container: 依赖注入容器
 
         Returns:
-            T: 作用域实例
+            Any: 作用域实例
         """
         scope_id = container.get_current_scope_id()
 
         if scope_id not in self._scoped_instances:
             self._scoped_instances[scope_id] = self.inner_factory.create(container)
 
-        return self._scoped_instances[scope_id]
+        instance = self._scoped_instances[scope_id]
+        return instance
 
     def can_create(self) -> bool:
         """检查是否可以创建服务"""
@@ -311,7 +332,7 @@ class FactoryFactory(ServiceFactory):
         """
         self.service_factory = service_factory
 
-    def create(self, container: 'DIContainer') -> Callable[[], T]:
+    def create(self, container: DIContainer) -> Callable[[], Any]:
         """
         创建工厂函数
 
@@ -319,9 +340,9 @@ class FactoryFactory(ServiceFactory):
             container: 依赖注入容器
 
         Returns:
-            Callable[[], T]: 工厂函数
+            Callable[[], Any]: 工厂函数
         """
-        def factory_func() -> T:
+        def factory_func() -> Any:
             return self.service_factory.create(container)
 
         return factory_func

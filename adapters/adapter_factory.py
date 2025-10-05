@@ -5,8 +5,9 @@
 提供适配器实例的创建和管理功能，支持工厂模式和注册机制。
 """
 
+from __future__ import annotations
 import logging
-from typing import Dict, Any, Type, TypeVar, Optional, Callable, List
+from typing import Dict, Any, Type, TypeVar, Optional, Callable, List, Generic
 
 from interfaces import (
     IAudioProcessor, IDataExporter, ITTSProvider,
@@ -17,8 +18,16 @@ from .data_exporter_adapter import DataExporterAdapter
 from .tts_provider_adapter import TTSProviderAdapter
 from .config_provider_adapter import ConfigProviderAdapter
 
+# Re-export the adapter classes for type safety
+__all__ = ['AdapterFactory', 'global_adapter_factory',
+           'create_audio_processor_adapter', 'create_data_exporter_adapter',
+           'create_tts_provider_adapter', 'create_config_provider_adapter',
+           'AudioProcessorAdapter', 'DataExporterAdapter',
+           'TTSProviderAdapter', 'ConfigProviderAdapter']
+
 logger = logging.getLogger(__name__)
 
+# 定义类型变量，T表示任何接口类型
 T = TypeVar('T')
 
 
@@ -33,6 +42,12 @@ class AdapterFactory:
         """初始化适配器工厂"""
         self._factories: Dict[Type, Callable] = {}
         self._default_configs: Dict[Type, Dict[str, Any]] = {}
+        self._interface_to_adapter_map: Dict[Type, Type] = {
+            IAudioProcessor: AudioProcessorAdapter,
+            IDataExporter: DataExporterAdapter,
+            ITTSProvider: TTSProviderAdapter,
+            IConfigProvider: ConfigProviderAdapter,
+        }
         self._register_default_factories()
 
     def _register_default_factories(self) -> None:
@@ -63,16 +78,42 @@ class AdapterFactory:
 
         logger.info("Default adapter factories registered")
 
-    def register_factory(self, interface_type: Type[T], factory_func: Callable[..., T]) -> None:
+    def register_factory(self, interface_type: type, factory_func: Callable[..., Any]) -> None:
         """
         注册适配器工厂函数
 
         Args:
             interface_type: 接口类型
-            factory_func: 工厂函数，接受关键字参数并返回适配器实例
+            factory_func: 工厂函数，接受关键字参数并返回实现了该接口的适配器实例
         """
         self._factories[interface_type] = factory_func
         logger.debug(f"Factory registered for {interface_type.__name__}")
+
+    def create_adapter_by_interface(
+        self,
+        interface_type: type,
+        wrapped_instance: Optional[Any] = None,
+        **kwargs
+    ) -> Any:
+        """
+        通过接口类型创建适配器实例
+
+        Args:
+            interface_type: 接口类型
+            wrapped_instance: 要包装的实例
+            **kwargs: 传递给适配器的参数
+
+        Returns:
+            Any: 适配器实例
+
+        Raises:
+            ValueError: 不支持的接口类型
+        """
+        if interface_type not in self._interface_to_adapter_map:
+            raise ValueError(f"没有找到支持{interface_type.__name__}接口的适配器")
+
+        adapter_class = self._interface_to_adapter_map[interface_type]
+        return self.create_adapter(adapter_class, wrapped_instance, **kwargs)
 
     def create_adapter(
         self,
@@ -104,14 +145,14 @@ class AdapterFactory:
 
             # 如果提供了包装实例，添加到参数中
             if wrapped_instance is not None:
-                # 根据接口类型确定参数名
-                if interface_type == IAudioProcessor:
+                # 根据适配器类型确定参数名
+                if interface_type == AudioProcessorAdapter:
                     default_config['audio_capture'] = wrapped_instance
-                elif interface_type == IDataExporter:
+                elif interface_type == DataExporterAdapter:
                     default_config['excel_exporter'] = wrapped_instance
-                elif interface_type == ITTSProvider:
+                elif interface_type == TTSProviderAdapter:
                     default_config['tts_engine'] = wrapped_instance
-                elif interface_type == IConfigProvider:
+                elif interface_type == ConfigProviderAdapter:
                     default_config['config_loader'] = wrapped_instance
 
             # 创建适配器实例
@@ -180,13 +221,13 @@ class AdapterFactory:
 
 
 # 全局适配器工厂实例
-global_adapter_factory = AdapterFactory()
+global_adapter_factory: AdapterFactory = AdapterFactory()
 
 
 def create_audio_processor_adapter(
     wrapped_instance: Optional[Any] = None,
     **kwargs
-) -> AudioProcessorAdapter:
+) -> IAudioProcessor:
     """
     创建音频处理器适配器的便捷函数
 
@@ -195,19 +236,19 @@ def create_audio_processor_adapter(
         **kwargs: 传递给适配器的参数
 
     Returns:
-        AudioProcessorAdapter: 音频处理器适配器实例
+        IAudioProcessor: 音频处理器适配器实例
     """
-    return global_adapter_factory.create_adapter(
+    return global_adapter_factory.create_adapter_by_interface(
         IAudioProcessor,
         wrapped_instance=wrapped_instance,
         **kwargs
-    )
+    )  # type: ignore
 
 
 def create_data_exporter_adapter(
     wrapped_instance: Optional[Any] = None,
     **kwargs
-) -> DataExporterAdapter:
+) -> IDataExporter:
     """
     创建数据导出器适配器的便捷函数
 
@@ -216,19 +257,19 @@ def create_data_exporter_adapter(
         **kwargs: 传递给适配器的参数
 
     Returns:
-        DataExporterAdapter: 数据导出器适配器实例
+        IDataExporter: 数据导出器适配器实例
     """
-    return global_adapter_factory.create_adapter(
+    return global_adapter_factory.create_adapter_by_interface(
         IDataExporter,
         wrapped_instance=wrapped_instance,
         **kwargs
-    )
+    )  # type: ignore
 
 
 def create_tts_provider_adapter(
     wrapped_instance: Optional[Any] = None,
     **kwargs
-) -> TTSProviderAdapter:
+) -> ITTSProvider:
     """
     创建TTS服务适配器的便捷函数
 
@@ -237,19 +278,19 @@ def create_tts_provider_adapter(
         **kwargs: 传递给适配器的参数
 
     Returns:
-        TTSProviderAdapter: TTS服务适配器实例
+        ITTSProvider: TTS服务适配器实例
     """
-    return global_adapter_factory.create_adapter(
+    return global_adapter_factory.create_adapter_by_interface(
         ITTSProvider,
         wrapped_instance=wrapped_instance,
         **kwargs
-    )
+    )  # type: ignore
 
 
 def create_config_provider_adapter(
     wrapped_instance: Optional[Any] = None,
     **kwargs
-) -> ConfigProviderAdapter:
+) -> IConfigProvider:
     """
     创建配置提供者适配器的便捷函数
 
@@ -258,13 +299,13 @@ def create_config_provider_adapter(
         **kwargs: 传递给适配器的参数
 
     Returns:
-        ConfigProviderAdapter: 配置提供者适配器实例
+        IConfigProvider: 配置提供者适配器实例
     """
-    return global_adapter_factory.create_adapter(
+    return global_adapter_factory.create_adapter_by_interface(
         IConfigProvider,
         wrapped_instance=wrapped_instance,
         **kwargs
-    )
+    )  # type: ignore
 
 
 def set_adapter_default_config(interface_type: Type, config: Dict[str, Any]) -> None:

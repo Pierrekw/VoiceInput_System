@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Voice Input System Package
-
-íó“eûß;Ð›°ã„eó‘Ÿý
 """
 
 __version__ = "2.0.0"

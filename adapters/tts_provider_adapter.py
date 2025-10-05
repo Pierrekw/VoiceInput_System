@@ -17,12 +17,14 @@ from interfaces.tts_provider import (
 
 # 导入现有的TTS类
 try:
-    from TTSengine import TTS
+    from TTSengine import TTS as OriginalTTS
+    _TTSType = OriginalTTS  # type: ignore
 except ImportError:
     # 如果导入失败，创建一个占位符
-    class TTS:
+    class _FallbackTTS:
         def __init__(self, *args, **kwargs):
             pass
+    _TTSType = _FallbackTTS  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,7 @@ class TTSProviderAdapter(ITTSProvider):
     保持原有功能的同时提供新的接口支持。
     """
 
-    def __init__(self, tts_engine: Optional[TTS] = None, **kwargs):
+    def __init__(self, tts_engine: Optional[Any] = None, **kwargs):
         """
         初始化TTS语音服务适配器
 
@@ -45,7 +47,7 @@ class TTSProviderAdapter(ITTSProvider):
         """
         if tts_engine is None:
             # 创建新的TTS实例
-            self._tts_engine = TTS(**kwargs)
+            self._tts_engine = _TTSType(**kwargs)
         else:
             self._tts_engine = tts_engine
 
@@ -748,7 +750,7 @@ class TTSProviderAdapter(ITTSProvider):
 
     # 属性访问器
     @property
-    def wrapped_instance(self) -> TTS:
+    def wrapped_instance(self) -> Any:
         """获取包装的TTS实例"""
         return self._tts_engine
 

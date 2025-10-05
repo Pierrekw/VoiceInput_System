@@ -34,6 +34,10 @@ Voice_Input/
 ├── config_loader.py           # Configuration management
 ├── model_manager.py           # Model loading and management
 ├── TTSengine.py               # Text-to-speech engine
+├── model_server/              # Flask model API server
+│   ├── flask_model_api.py     # API server implementation
+│   ├── model_api_client.py    # Client SDK
+│   └── README.md              # API documentation
 ├── claude/                    # Documentation
 │   ├── CONSOLIDATED_DOCUMENTATION.md
 │   ├── PROJECT_SUMMARY_CONCISE.md
@@ -153,6 +157,38 @@ python -m pytest tests/test_text_processing.py -v
 3. **Test** all functionality
 4. **Update** documentation if API changes
 
+### Using Flask Model API
+
+#### Starting the API Server
+```bash
+# Start the model loading API server
+python model_server/flask_model_api.py
+```
+
+#### API Endpoints
+- `GET /api/health` - Health check
+- `GET /api/models` - List all loaded models
+- `GET /api/models/status/<path>` - Get specific model status
+- `POST /api/models/load` - Load a model
+- `POST /api/models/unload` - Unload a model
+
+#### Client Usage
+```python
+from model_server.model_api_client import ModelAPIClient
+
+# Create client instance
+client = ModelAPIClient()
+
+# Load model
+result = client.load_model("model/cn")
+
+# List models
+models = client.list_models()
+
+# Unload model
+client.unload_model("model/cn")
+```
+
 ## 📊 Version Management
 
 ### Version Numbering
@@ -166,6 +202,127 @@ python -m pytest tests/test_text_processing.py -v
 3. **Documentation Complete**: All docs updated
 4. **Version Tag**: Create git tag for release
 5. **Changelog**: Update CHANGELOG.md
+
+---
+
+## 🔄 Synchronization and Asynchronous System Separation
+
+### Overview
+The project currently contains both synchronous and asynchronous voice input systems. To improve maintainability and scalability, we're planning to separate these systems. This section outlines the proposed separation approaches.
+
+### Approach 1: Directory Restructuring (Recommended)
+**Core Idea**: Restructure the codebase within the existing Git repository to separate synchronous and asynchronous systems into different directories while maintaining shared components.
+
+**Proposed Structure**:
+```
+Voice_Input/
+├── shared/              # Shared components (interfaces, utilities, configs)
+│   ├── interfaces/
+│   ├── text_processor.py
+│   ├── config_loader.py
+│   └── ...
+├── sync_system/         # Synchronous system
+│   ├── main.py
+│   ├── audio_capture_v.py
+│   └── ...
+├── async_system/        # Asynchronous system
+│   ├── main_production.py
+│   ├── async_audio/
+│   ├── events/
+│   └── ...
+├── models/              # Shared model files
+├── configs/             # Configuration files
+│   ├── sync_config.yaml
+│   └── async_config.yaml
+├── tests/               # Test code
+└── requirements.txt     # Shared dependencies
+```
+
+**Advantages**:
+- Maintains Git history in a single repository
+- Simplified shared component maintenance
+- Relatively low implementation complexity
+- Clearer project structure
+- Good IDE support
+
+**Disadvantages**:
+- Complex dependency management
+- Cannot version the systems independently
+- More complex release process
+- Potential import conflicts
+
+### Approach 2: Separate Repositories
+**Core Idea**: Split the synchronous and asynchronous systems into two completely independent Git repositories, each containing all necessary code, dependencies, and configurations.
+
+**Proposed Structure**:
+
+Synchronous system repository:
+```
+Voice_Input_Sync/
+├── src/
+│   ├── main.py
+│   ├── audio_capture_v.py
+│   ├── text_processor.py
+│   └── ...
+├── models/
+├── config.yaml
+├── requirements.txt
+└── README.md
+```
+
+Asynchronous system repository:
+```
+Voice_Input_Async/
+├── src/
+│   ├── main_production.py
+│   ├── async_audio/
+│   ├── events/
+│   ├── text_processor.py
+│   └── ...
+├── models/
+├── config.yaml
+├── requirements.txt
+└── README.md
+```
+
+**Advantages**:
+- Complete isolation of code, dependencies, and environments
+- Independent version control
+- Independent dependency management
+- Clearer ownership
+- Easier system-specific optimizations
+
+**Disadvantages**:
+- Difficult shared code maintenance
+- Split Git history
+- Increased project management complexity
+- Higher storage requirements
+- Complex workflow when modifying features affecting both systems
+
+### Approach 3: Git Submodules
+**Core Idea**: Use Git submodules to manage shared components while maintaining some level of separation between the systems.
+
+**Implementation Options**:
+1. Keep the main project (synchronous system) in one repository and the asynchronous system as a submodule
+2. Extract shared components into submodules that are referenced by both systems
+
+**Advantages**:
+- Code sharing with independent version control
+- Potential for independent virtual environments
+
+**Disadvantages**:
+- Complex Git submodule usage
+- Additional steps for updates and synchronization
+- Steeper learning curve for team members
+
+### Implementation Steps (for Approach 1)
+1. Create the proposed directory structure
+2. Move relevant code to corresponding directories
+3. Update import paths across the codebase
+4. Update the `.gitignore` file if necessary
+5. Create `__init__.py` files to ensure modules are importable
+6. Test both systems thoroughly to ensure functionality is preserved
+7. Update documentation to reflect the new structure
 
 ---
 

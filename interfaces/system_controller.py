@@ -66,9 +66,9 @@ class SystemInfo:
     version: str
     uptime: float
     audio_processor_state: Optional[AudioProcessorState] = None
-    components_status: Dict[str, bool] = None
+    components_status: Optional[Dict[str, bool]] = None
     last_error: Optional[str] = None
-    performance_metrics: Dict[str, float] = None
+    performance_metrics: Optional[Dict[str, float]] = None
 
     def __post_init__(self):
         if self.components_status is None:

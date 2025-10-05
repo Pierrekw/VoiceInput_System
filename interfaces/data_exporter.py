@@ -51,7 +51,7 @@ class ExportResult:
     file_path: str
     processing_time: float = 0.0
     error_message: Optional[str] = None
-    exported_records: List[ExportRecord] = None
+    exported_records: Optional[List[ExportRecord]] = None
 
     def __post_init__(self):
         if self.exported_records is None:
@@ -79,7 +79,7 @@ class ExportConfig:
     auto_format: bool = True
 
     # 列宽配置
-    column_widths: Dict[str, int] = None
+    column_widths: Optional[Dict[str, int]] = None
 
     def __post_init__(self):
         if self.column_widths is None:

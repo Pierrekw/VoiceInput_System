@@ -27,8 +27,10 @@ from events.event_bus import AsyncEventBus, EventPriority
 from events.event_types import (
     AudioStreamStartedEvent, AudioDataReceivedEvent, RecognitionCompletedEvent,
     TTSPlaybackStartedEvent, TTSPlaybackCompletedEvent,
-    KeyboardPressEvent, VoiceCommandEvent, SystemShutdownEvent
+    KeyboardPressEvent, VoiceCommandEvent, SystemShutdownEvent,
+    AudioStreamStoppedEvent
 )
+from interfaces.audio_processor import RecognitionResult
 from events.system_coordinator import SystemCoordinator
 from optimization.async_optimizer import get_global_optimizer, start_global_optimizer, stop_global_optimizer
 from error_handling.async_error_handler import get_global_error_handler, ErrorSeverity, ErrorCategory
@@ -39,9 +41,10 @@ from async_audio.async_audio_stream_controller import (
 )
 from async_audio.async_audio_stream_controller import TTSController
 
-# 导入原始组件（通过适配器）
-from audio_capture_v import extract_measurements
-from excel_exporter import ExcelExporter
+# 导入共享组件
+from text_processor import extract_measurements, extract_primary_measurement
+from adapters.data_exporter_adapter import DataExporterAdapter
+from async_audio.async_audio_capture import AsyncAudioCapture
 
 # 导入异步配置加载器
 from async_config import AsyncConfigLoader, create_audio_config_validator, create_system_config_validator
@@ -148,21 +151,23 @@ class AsyncAudioProcessor:
 
             # 提取数值
             try:
-                values = extract_measurements(text)
+                primary_value = extract_primary_measurement(text)
+                values = [primary_value] if primary_value is not None else []
 
                 # 存储识别结果历史
                 self.recognition_results[recognition_id] = {
                     'original_text': text,
                     'extracted_values': values,
+                    'primary_value': primary_value,
                     'timestamp': time.time(),
                     'text_length': len(text),
                     'has_numbers': len(values) > 0
                 }
 
                 if values:
-                    # 改进的日志格式：ID + 数值 + 原始文本
-                    values_str = ", ".join(f"{v:.1f}" for v in values)
-                    self.logger.info(f"成功提取数值: ID{recognition_id}, [{values_str}] (来源文本: '{text}')")
+                    # 改进的日志格式：ID + 单个数值 + 原始文本 (模拟老系统)
+                    value = values[0]
+                    self.logger.info(f"识别文字：{text} -> ID {recognition_id}, 数值 {value}，已写入Excel")
 
                     # 检查是否为中文数字（后续用于字典优化）
                     chinese_numbers = self._extract_chinese_numbers(text)
@@ -492,10 +497,16 @@ class ProductionVoiceSystem:
         self.audio_processor = AsyncAudioProcessor(self.event_bus)
         self.tts_manager = AsyncTTSManager(self.event_bus)
         self.keyboard_controller = AsyncKeyboardController(self.event_bus)
-        self.excel_exporter = None
+        self.data_exporter = None
 
         # 异步配置加载器
         self.config_loader = AsyncConfigLoader(self.config_path, enable_hot_reload=True)
+
+        # 异步音频捕获器
+        self.audio_capture = None
+
+        # 异步数据导出器
+        self.data_exporter = None
 
         # 系统状态
         self.system_state = "idle"
@@ -531,8 +542,8 @@ class ProductionVoiceSystem:
             # 6. 注册系统组件
             await self._register_system_components()
 
-            # 7. 初始化Excel导出器
-            await self._initialize_excel_exporter()
+            # 7. 初始化数据导出器
+            await self._initialize_data_exporter()
 
             # 8. 订阅系统事件
             await self._setup_event_subscriptions()
@@ -583,6 +594,17 @@ class ProductionVoiceSystem:
             await self.keyboard_controller.start()
             self.logger.info("异步键盘控制器已启动")
 
+            # 初始化异步音频捕获器
+            timeout = audio_config.get('timeout_seconds', 30)
+            model_path = self.config_loader.get('model.default_path', 'model/cn')
+
+            self.audio_capture = AsyncAudioCapture(
+                timeout_seconds=timeout,
+                model_path=model_path,
+                test_mode=False  # 生产模式
+            )
+            self.logger.info("异步音频捕获器已初始化")
+
             self.logger.info("所有核心组件已初始化")
 
         except Exception as e:
@@ -614,18 +636,22 @@ class ProductionVoiceSystem:
             self.logger.error(f"系统组件注册失败: {e}")
             raise
 
-    async def _initialize_excel_exporter(self):
-        """初始化Excel导出器"""
+    async def _initialize_data_exporter(self):
+        """初始化异步数据导出器"""
         try:
             # 从配置中获取Excel设置
             excel_config = self.config_loader.get('excel', {})
             output_file = excel_config.get('output_file', 'measurement_data.xlsx')
 
-            self.excel_exporter = ExcelExporter(output_file)
-            self.logger.info(f"Excel导出器已初始化，输出文件: {output_file}")
+            # 使用异步数据导出器适配器
+            self.data_exporter = DataExporterAdapter(filename=output_file)
+            self.data_exporter.initialize()
+
+            self.logger.info(f"异步数据导出器已初始化，输出文件: {output_file}")
 
         except Exception as e:
-            self.logger.error(f"Excel导出器初始化失败: {e}")
+            self.logger.error(f"数据导出器初始化失败: {e}")
+            self.data_exporter = None
 
     async def _setup_event_subscriptions(self):
         """设置事件订阅"""
@@ -678,9 +704,25 @@ class ProductionVoiceSystem:
         if self.recognition_active:
             return
 
-        print("🎤 开始语音识别...")
+        print("[开始语音识别]...")
         self.recognition_active = True
         self.system_state = "recording"
+
+        # 初始化异步音频捕获
+        if self.audio_capture:
+            try:
+                # 初始化异步音频捕获
+                success = await self.audio_capture.initialize()
+                if not success:
+                    self.logger.error("异步音频捕获初始化失败")
+                    return
+
+                # 添加识别回调
+                self.audio_capture.add_recognition_callback(self._on_recognition_result)
+                self.logger.info("异步音频捕获回调已设置")
+            except Exception as e:
+                self.logger.error(f"初始化异步音频捕获失败: {e}")
+                return
 
         # 发布音频流开始事件
         await self.event_bus.publish(AudioStreamStartedEvent(
@@ -689,8 +731,17 @@ class ProductionVoiceSystem:
             sample_rate=16000
         ))
 
-        # 启动识别任务
-        asyncio.create_task(self._recognition_loop())
+        # 启动异步语音识别
+        if self.audio_capture:
+            try:
+                result = await self.audio_capture.start_recognition()
+                if result.final_text != "Recognition started successfully":
+                    self.logger.error(f"启动异步语音识别失败: {result.final_text}")
+                    return
+                self.logger.info("异步语音识别已启动")
+            except Exception as e:
+                self.logger.error(f"启动异步语音识别失败: {e}")
+                return
 
         # 启动TTS确认
         await self.tts_manager.speak("语音识别已开始", force=True)
@@ -700,92 +751,74 @@ class ProductionVoiceSystem:
         if not self.recognition_active:
             return
 
-        print("🛑 停止语音识别...")
+        print("[停止语音识别]...")
         self.recognition_active = False
         self.system_state = "stopped"
+
+        # 停止异步音频捕获
+        if self.audio_capture:
+            try:
+                result = await self.audio_capture.stop_recognition()
+                if result.final_text != "Recognition stopped successfully":
+                    self.logger.error(f"停止异步语音识别失败: {result.final_text}")
+                else:
+                    self.logger.info("异步音频捕获已停止")
+            except Exception as e:
+                self.logger.error(f"停止异步音频捕获失败: {e}")
+
+        # 发布音频流停止事件
+        await self.event_bus.publish(AudioStreamStoppedEvent(
+            source="ProductionVoiceSystem",
+            stream_id="main_stream",
+            reason="user_stop"
+        ))
 
         # 启动TTS确认
         await self.tts_manager.speak("语音识别已停止", force=True)
 
-    async def _recognition_loop(self):
-        """语音识别循环"""
-        # 这里集成实际的语音识别逻辑
-        # 模拟识别过程，包含更真实的中文数字测试
-        recognition_count = 0
+    def _on_recognition_result(self, result):
+        """识别结果回调"""
+        try:
+            # 使用共享文本处理器提取数值
+            if result and hasattr(result, 'final_text') and result.final_text:
+                primary_value = extract_primary_measurement(result.final_text)
+                values = [primary_value] if primary_value is not None else []
 
-        # 测试用例：包含中文数字和阿拉伯数字的混合
-        test_cases = [
-            "温度二十五点五度",           # 中文数字
-            "压力一百二十帕斯卡",         # 中文数字
-            "湿度百分之七十五",           # 中文百分比
-            "测试数值36.5",              # 阿拉伯数字
-            "长度为一米二",               # 混合数字
-            "重量是十五千克",             # 中文数字
-            "数值42",                    # 纯数字
-            "深度负十点五米",             # 负数中文
-            "角度九十度",                 # 特殊表达
-            "计数一千零一",               # 大数字
-        ]
+                if values:
+                    # 使用音频处理器的集成TTS控制器播报数值
+                    value = values[0]
+                    value_text = f"{value:.1f}"
+                    # 在新线程中执行TTS播放以避免阻塞
+                    asyncio.create_task(self.audio_processor.speak(f"识别到数值: {value_text}"))
 
-        while self.recognition_active:
-            try:
-                # 模拟音频数据接收
-                await asyncio.sleep(0.1)
+                    # 异步写入Excel
+                    if self.data_exporter:
+                        try:
+                            # 将结果转换为列表格式
+                            data_to_write = [(float(value), str(result.final_text))]
+                            # 创建异步任务写入Excel
+                            asyncio.create_task(self._write_to_excel_async(data_to_write, values, result.final_text))
+                        except Exception as e:
+                            self.logger.error(f"Excel写入错误: {e}")
+        except Exception as e:
+            self.logger.error(f"处理识别结果失败: {e}")
 
-                # 每1秒模拟一次识别结果
-                recognition_count += 1
-                if recognition_count % 10 == 0:
-                    # 循环使用测试用例
-                    test_index = (recognition_count // 10 - 1) % len(test_cases)
-                    test_text = test_cases[test_index]
+    async def _write_to_excel_async(self, data_to_write, values, original_text):
+        """异步写入Excel的辅助方法"""
+        try:
+            written_records = await self.data_exporter.append_with_text_async(data_to_write)
 
-                    # 发布音频数据事件
-                    await self.event_bus.publish(AudioDataReceivedEvent(
-                        source="MockRecognizer",
-                        stream_id="main_stream",
-                        audio_data=f"mock_data_{recognition_count}".encode(),
-                        size=20,
-                        sequence_number=recognition_count
-                    ))
-
-                    # 发布识别完成事件
-                    from events.event_types import RecognitionCompletedEvent
-                    await self.event_bus.publish(RecognitionCompletedEvent(
-                        source="MockRecognizer",
-                        recognizer_id="main",
-                        text=test_text,
-                        confidence=0.95,
-                        measurements=[]
-                    ))
-
-                    # 处理识别结果
-                    values = await self.audio_processor.process_recognition_result(test_text)
-
-                    if values:
-                        # 使用音频处理器的集成TTS控制器播报数值（自动静音管理）
-                        value_text = ", ".join(f"{v:.1f}" for v in values)
-                        await self.audio_processor.speak(f"识别到数值: {value_text}")
-
-                        # 写入Excel - 使用原始方法（后续可扩展支持ID）
-                        if self.excel_exporter:
-                            try:
-                                self.excel_exporter.append_with_text(values, test_text)
-                                # 在日志中记录对应的ID信息
-                                latest_id = max(self.audio_processor.recognition_results.keys()) if self.audio_processor.recognition_results else "0000"
-                                self.logger.info(f"ID{latest_id} 数据已写入Excel: 数值={values}, 原始文本='{test_text}'")
-                            except Exception as e:
-                                self.logger.error(f"Excel写入错误: {e}")
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self.logger.error(f"识别循环错误: {e}")
-                await asyncio.sleep(0.1)
+            if written_records:
+                latest_id = written_records[-1][0] if written_records else "0000"
+                value = values[0] if values else 0.0
+                self.logger.info(f"识别文字：{original_text} -> ID {latest_id}, 数值 {value}，已写入Excel")
+        except Exception as e:
+            self.logger.error(f"异步Excel写入错误: {e}")
 
     async def _on_voice_command(self, event):
         """处理语音命令事件"""
         command = event.command
-        print(f"🎤 收到语音命令: {command}")
+        print(f"[收到语音命令]: {command}")
 
         if command == "pause" and self.system_state == "recording":
             print("⏸️ 暂停语音识别")
@@ -818,7 +851,7 @@ class ProductionVoiceSystem:
         await self.initialize()
 
         print("\n" + "=" * 60)
-        print("🎤 语音识别系统 - 生产环境")
+        print("[语音识别系统] - 生产环境")
         print("=" * 60)
         print("控制方式:")
         print("  空格键: 暂停/恢复识别")
@@ -845,19 +878,49 @@ class ProductionVoiceSystem:
         self.logger.info("正在关闭系统...")
 
         try:
+            # 停止语音识别
             await self.stop_recognition()
-            await self.keyboard_controller.stop()
-            await self.tts_manager.stop()
+
+            # 给任务一些时间来完成
+            await asyncio.sleep(0.1)
+
+            # 停止其他组件
+            try:
+                await self.keyboard_controller.stop()
+            except Exception as e:
+                self.logger.warning(f"键盘控制器停止时出错: {e}")
+
+            try:
+                await self.tts_manager.stop()
+            except Exception as e:
+                self.logger.warning(f"TTS管理器停止时出错: {e}")
 
             # 停止配置加载器
             if self.config_loader:
-                await self.config_loader.stop()
+                try:
+                    await self.config_loader.stop()
+                except Exception as e:
+                    self.logger.warning(f"配置加载器停止时出错: {e}")
 
-            await self.coordinator.stop()
-            await self.event_bus.stop()
+            # 停止核心组件
+            try:
+                await self.coordinator.stop()
+            except Exception as e:
+                self.logger.warning(f"协调器停止时出错: {e}")
+
+            try:
+                await self.event_bus.stop()
+            except Exception as e:
+                self.logger.warning(f"事件总线停止时出错: {e}")
 
             # 停止优化器
-            await stop_global_optimizer()
+            try:
+                await stop_global_optimizer()
+            except Exception as e:
+                self.logger.warning(f"优化器停止时出错: {e}")
+
+            # 等待所有待完成的任务
+            await asyncio.sleep(0.5)
 
             self.logger.info("系统已安全关闭")
 
@@ -879,23 +942,30 @@ def setup_logging():
 
     # 配置根日志记录器
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)  # 保持详细日志到文件
 
     # 清除现有处理器
     root_logger.handlers.clear()
 
-    # 控制台处理器
+    # 控制台处理器 - 开发模式显示所有调试信息
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)  # 开发模式：显示所有调试信息
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # 文件处理器 - 主日志
+    # 用户友好消息处理器 - 显示简化的系统状态
+    user_handler = logging.StreamHandler(sys.stdout)
+    user_handler.setLevel(logging.INFO)
+    user_handler.addFilter(lambda record: record.name == 'system.production' and record.levelno == logging.INFO)
+    user_handler.setFormatter(logging.Formatter('%(message)s'))  # 简化格式
+    root_logger.addHandler(user_handler)
+
+    # 文件处理器 - 主日志（保留所有详细信息）
     file_handler = logging.FileHandler(
         log_dir / "voice_system.log",
         encoding='utf-8'
     )
-    file_handler.setLevel(logging.INFO)
+    file_handler.setLevel(logging.DEBUG)  # 记录所有调试信息
     file_handler.setFormatter(formatter)
     root_logger.addHandler(file_handler)
 
@@ -904,7 +974,7 @@ def setup_logging():
         log_dir / "voice_system_errors.log",
         encoding='utf-8'
     )
-    error_handler.setLevel(logging.ERROR)
+    error_handler.setLevel(logging.WARNING)  # 包含警告和错误
     error_handler.setFormatter(formatter)
     root_logger.addHandler(error_handler)
 
@@ -913,11 +983,11 @@ def setup_logging():
         log_dir / "tts_interactions.log",
         encoding='utf-8'
     )
-    tts_handler.setLevel(logging.INFO)
+    tts_handler.setLevel(logging.DEBUG)  # 详细TTS调试信息
     tts_handler.setFormatter(formatter)
     tts_logger = logging.getLogger('tts')
     tts_logger.addHandler(tts_handler)
-    tts_logger.setLevel(logging.INFO)
+    tts_logger.setLevel(logging.DEBUG)
     tts_logger.propagate = False  # 避免重复记录
 
     # 音频处理专用日志处理器
@@ -964,7 +1034,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n👋 程序已退出")
     except Exception as e:
-        print(f"❌ 程序运行错误: {e}")
+        print(f"[程序运行错误]: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

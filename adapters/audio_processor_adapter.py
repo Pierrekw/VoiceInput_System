@@ -17,12 +17,14 @@ from interfaces.audio_processor import (
 
 # 导入现有的AudioCapture类
 try:
-    from audio_capture_v import AudioCapture
+    from audio_capture_v import AudioCapture as OriginalAudioCapture
+    _AudioCaptureType = OriginalAudioCapture  # type: ignore
 except ImportError:
     # 如果导入失败，创建一个占位符
-    class AudioCapture:
+    class _FallbackAudioCapture:
         def __init__(self, *args, **kwargs):
             pass
+    _AudioCaptureType = _FallbackAudioCapture  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class AudioProcessorAdapter(IAudioProcessor):
         """
         if audio_capture is None:
             # 创建新的AudioCapture实例
-            self._audio_capture = AudioCapture(**kwargs)
+            self._audio_capture = _AudioCaptureType(**kwargs)
         else:
             self._audio_capture = audio_capture
 
@@ -431,7 +433,7 @@ class AudioProcessorAdapter(IAudioProcessor):
 
     # 属性访问器
     @property
-    def wrapped_instance(self) -> AudioCapture:
+    def wrapped_instance(self) -> Any:
         """获取包装的AudioCapture实例"""
         return self._audio_capture
 

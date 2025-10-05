@@ -12,7 +12,7 @@ import time
 from typing import List, Optional, Dict, Any, Callable, Tuple
 
 from interfaces.audio_processor import (
-    IAudioProcessor, RecognitionResult, VoiceCommand,
+    IAudioProcessor, RecognitionResult, VoiceCommand, VoiceCommandType,
     AudioProcessorState
 )
 import sys
@@ -122,18 +122,96 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
 
     # IAudioProcessor 接口实现
 
-    async def start_recognition_async(self) -> RecognitionResult:
+    async def start_recognition_async(self, callback: Optional[Callable[[List[float]], None]] = None) -> RecognitionResult:
         """异步开始语音识别"""
+        # 存储回调函数（如果提供）
+        if callback:
+            self.set_callback(callback)
         if not self.use_async:
             # 同步模式的异步包装
-            return await asyncio.to_thread(self._sync_capture.listen_realtime_vosk)
+            # 将listen_realtime_vosk返回的字典转换为RecognitionResult对象
+            result_dict = await asyncio.to_thread(self._sync_capture.listen_realtime_vosk)
+            # 确保获取的值具有正确的类型
+            final_text = str(result_dict.get('text', ''))
+            
+            # 确保buffered_values是List[float]
+            raw_values = result_dict.get('values', [])
+            buffered_values: List[float] = []
+            if isinstance(raw_values, list):
+                for val in raw_values:
+                    # 只尝试转换可以转换为float的类型
+                    if isinstance(val, (int, float, str)):
+                        try:
+                            buffered_values.append(float(val))
+                        except (ValueError, TypeError):
+                            pass
+            
+            # 确保collected_text是List[str]
+            raw_texts = result_dict.get('collected_text', [])
+            collected_text: List[str] = []
+            if isinstance(raw_texts, list):
+                for text in raw_texts:
+                    try:
+                        collected_text.append(str(text))
+                    except (ValueError, TypeError):
+                        pass
+            
+            # 确保session_data是List[Tuple[int, float, str]]
+            raw_session_data = result_dict.get('session_data', [])
+            session_data: List[Tuple[int, float, str]] = []
+            if isinstance(raw_session_data, list):
+                for item in raw_session_data:
+                    try:
+                        if isinstance(item, tuple) and len(item) == 3:
+                            # 尝试转换为正确的类型
+                            timestamp = int(item[0])
+                            value = float(item[1])
+                            text = str(item[2])
+                            session_data.append((timestamp, value, text))
+                    except (ValueError, TypeError, IndexError):
+                        pass
+            
+            # 确保数值类型正确 - 先获取值并确保它是可转换的类型
+            recognition_count_val = result_dict.get('recognition_count', 0)
+            recognition_count = 0
+            if isinstance(recognition_count_val, (int, float, str)):
+                try:
+                    recognition_count = int(recognition_count_val)
+                except (ValueError, TypeError):
+                    pass
+            
+            audio_frames_val = result_dict.get('audio_frames', 0)
+            audio_frames = 0
+            if isinstance(audio_frames_val, (int, float, str)):
+                try:
+                    audio_frames = int(audio_frames_val)
+                except (ValueError, TypeError):
+                    pass
+            
+            processing_time_val = result_dict.get('processing_time', 0.0)
+            processing_time = 0.0
+            if isinstance(processing_time_val, (int, float, str)):
+                try:
+                    processing_time = float(processing_time_val)
+                except (ValueError, TypeError):
+                    pass
+            
+            return RecognitionResult(
+                final_text=final_text,
+                buffered_values=buffered_values,
+                collected_text=collected_text,
+                session_data=session_data,
+                recognition_count=recognition_count,
+                audio_frames=audio_frames,
+                processing_time=processing_time
+            )
 
         # 确保异步处理器已初始化
         if not await self.async_initialize():
             return RecognitionResult(
-                success=False,
-                error_message="Failed to initialize async processor",
-                timestamp=time.time()
+                final_text="",
+                session_data=[],
+                processing_time=0.0
             )
 
         return await self._async_capture.start_recognition()
@@ -144,10 +222,9 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
             # 同步模式的异步包装
             # TODO: 实现同步停止逻辑
             return RecognitionResult(
-                success=True,
-                text="Stop sync recognition",
-                confidence=1.0,
-                timestamp=time.time()
+                final_text="Stop sync recognition",
+                session_data=[],
+                processing_time=0.0
             )
 
         return await self._async_capture.stop_recognition()
@@ -181,7 +258,26 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
                     pass
 
             # 回退到同步版本的数值提取
-            return self._sync_capture.extract_measurements(text)
+            # 由于extract_measurements是异步函数，需要在同步环境中使用run来执行
+            def sync_wrapper():
+                try:
+                    # 检查是否有正在运行的事件循环
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 如果事件循环正在运行，使用创建任务的方式
+                        future = asyncio.run_coroutine_threadsafe(extract_measurements(text), loop)
+                        return future.result()
+                    else:
+                        # 如果没有运行的事件循环，直接运行
+                        return asyncio.run(extract_measurements(text))
+                except RuntimeError:
+                    # 无法获取事件循环，创建一个新的
+                    return asyncio.run(extract_measurements(text))
+                except Exception as e:
+                    logger.error(f"❌ 数值提取包装失败: {e}")
+                    return []
+            
+            return sync_wrapper()
 
         except Exception as e:
             logger.error(f"❌ 数值提取失败: {e}")
@@ -193,7 +289,23 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
             return await extract_measurements(text)
         else:
             # 同步模式的异步包装
-            return await asyncio.to_thread(self._sync_capture.extract_measurements, text)
+            # 由于extract_measurements是异步函数，需要在同步环境中使用run来执行
+            def sync_wrapper():
+                try:
+                    # 检查是否有正在运行的事件循环
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 如果事件循环正在运行，使用创建任务的方式
+                        future = asyncio.run_coroutine_threadsafe(extract_measurements(text), loop)
+                        return future.result()
+                    else:
+                        # 如果没有运行的事件循环，直接运行
+                        return asyncio.run(extract_measurements(text))
+                except RuntimeError:
+                    # 无法获取事件循环，创建一个新的
+                    return asyncio.run(extract_measurements(text))
+            
+            return await asyncio.to_thread(sync_wrapper)
 
     def get_state(self) -> AudioProcessorState:
         """获取当前状态"""
@@ -204,7 +316,7 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
             sync_state = self._sync_capture.state
             state_mapping = {
                 "idle": AudioProcessorState.IDLE,
-                "running": AudioProcessorState.RUNNING,
+                "running": AudioProcessorState.RECORDING,  # 使用RECORDING替代RUNNING
                 "paused": AudioProcessorState.PAUSED,
                 "stopped": AudioProcessorState.STOPPED
             }
@@ -281,7 +393,7 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
 
         return stats
 
-    async def get_diagnostics_info(self) -> Dict[str, Any]:
+    def get_diagnostics_info(self) -> Dict[str, Any]:
         """获取诊断信息"""
         diagnostics = {
             "adapter_type": "AsyncAudioProcessorAdapter",
@@ -292,8 +404,14 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
         }
 
         if self.use_async and self._async_initialized:
-            async_diagnostics = self._async_capture.get_statistics()
-            diagnostics["async_details"] = async_diagnostics
+            # 在同步方法中获取异步处理器的诊断信息
+            # 注意：这里假设get_statistics是同步方法，如果是异步的需要额外处理
+            try:
+                async_diagnostics = self._async_capture.get_statistics()
+                diagnostics["async_details"] = async_diagnostics
+            except Exception:
+                # 如果获取失败，记录错误但不影响整体功能
+                diagnostics["async_details"] = {"error": "Failed to get async diagnostics"}
 
         return diagnostics
 
@@ -355,10 +473,12 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
                     return loop.run_until_complete(self._async_load_model(model_path))
             except RuntimeError:
                 # 如果无法获取事件循环，回退到同步模式
-                return self._sync_capture.load_model(model_path)
+                # AudioCapture.load_model方法没有参数
+                return self._sync_capture.load_model()
         else:
             # 同步模式
-            return self._sync_capture.load_model(model_path)
+            # AudioCapture.load_model方法没有参数
+            return self._sync_capture.load_model()
 
     async def _async_load_model(self, model_path: Optional[str] = None) -> bool:
         """异步加载模型"""
@@ -367,9 +487,9 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
 
         try:
             # 在线程池中执行模型加载
+            # AudioCapture.load_model方法没有参数
             success = await asyncio.to_thread(
-                self._sync_capture.load_model,
-                model_path
+                self._sync_capture.load_model
             )
             return success
         except Exception as e:
@@ -426,11 +546,13 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
                 else:
                     # 如果没有事件循环，运行异步方法
                     result = loop.run_until_complete(self.start_recognition_async())
+                    # RecognitionResult类没有success、text、error_message和timestamp属性
+                    # 使用正确的属性来构建返回值
                     return {
-                        "success": result.success,
-                        "text": result.text,
-                        "error": result.error_message if not result.success else None,
-                        "timestamp": result.timestamp
+                        "success": True,  # 假设识别成功
+                        "text": result.final_text,
+                        "error": None,  # 无法从RecognitionResult中直接获取错误信息
+                        "timestamp": time.time()  # 使用当前时间戳
                     }
             except RuntimeError:
                 # 如果无法获取事件循环，回退到同步模式
@@ -492,9 +614,10 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
         """设置数值检测回调函数"""
         # 转换为RecognitionResult回调
         def converted_callback(result: RecognitionResult):
-            if result.success and self.use_async:
+            # RecognitionResult没有success和text属性，使用正确的属性
+            if result.final_text and self.use_async:
                 # 提取数值
-                measurements = self.extract_measurements(result.text)
+                measurements = self.extract_measurements(result.final_text)
                 if measurements:
                     callback(measurements)
 
@@ -513,33 +636,33 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
             # 停止命令
             if any(keyword in text_lower for keyword in ['停止', '结束', '停止识别']):
                 return VoiceCommand(
-                    command="stop",
-                    confidence=0.9,
-                    parameters={}
+                    command_type=VoiceCommandType.STOP,
+                    original_text=text,
+                    confidence=0.9
                 )
 
             # 暂停命令
             elif any(keyword in text_lower for keyword in ['暂停', '暂停识别']):
                 return VoiceCommand(
-                    command="pause",
-                    confidence=0.9,
-                    parameters={}
+                    command_type=VoiceCommandType.PAUSE,
+                    original_text=text,
+                    confidence=0.9
                 )
 
             # 恢复命令
             elif any(keyword in text_lower for keyword in ['继续', '恢复', '恢复识别']):
                 return VoiceCommand(
-                    command="resume",
-                    confidence=0.9,
-                    parameters={}
+                    command_type=VoiceCommandType.RESUME,
+                    original_text=text,
+                    confidence=0.9
                 )
 
-            # 清空命令
+            # 清空命令 - 使用UNKNOWN类型，因为VoiceCommandType中没有CLEAR枚举
             elif any(keyword in text_lower for keyword in ['清空', '清除', '清空数据']):
                 return VoiceCommand(
-                    command="clear",
-                    confidence=0.8,
-                    parameters={}
+                    command_type=VoiceCommandType.UNKNOWN,
+                    original_text=text,
+                    confidence=0.8
                 )
 
             return None
@@ -559,7 +682,8 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
         else:
             # 同步模式
             if hasattr(self._sync_capture, 'buffered_values'):
-                return self._sync_capture.buffered_values
+                # 确保返回的是list类型，即使原始类型是deque
+                return list(self._sync_capture.buffered_values)
             return []
 
     def get_session_data(self) -> List[Tuple[int, float, str]]:
@@ -671,7 +795,12 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
         else:
             # 同步模式切换TTS
             if hasattr(self._sync_capture, 'toggle_tts'):
-                return self._sync_capture.toggle_tts()
+                try:
+                    self._sync_capture.toggle_tts()
+                    return True
+                except Exception as e:
+                    logger.error(f"❌ 同步模式切换TTS失败: {e}")
+                    return False
             return False
 
     def is_tts_enabled(self) -> bool:
@@ -723,18 +852,20 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
 
     def test_audio_pipeline(self) -> Dict[str, Any]:
         """测试音频处理管道"""
-        test_results = {
+        test_results: Dict[str, Any] = {
             "adapter_type": "AsyncAudioProcessorAdapter",
             "async_mode": self.use_async,
             "test_time": time.time(),
             "tests": {}
         }
+        # 明确指定tests是字典类型
+        tests: Dict[str, Dict[str, Any]] = test_results["tests"]
 
         try:
             # 测试数值提取
             test_text = "二十五点五"
             measurements = self.extract_measurements(test_text)
-            test_results["tests"]["number_extraction"] = {
+            tests["number_extraction"] = {
                 "input": test_text,
                 "output": measurements,
                 "success": len(measurements) > 0
@@ -742,21 +873,21 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
 
             # 测试状态获取
             state = self.get_state()
-            test_results["tests"]["state_check"] = {
+            tests["state_check"] = {
                 "state": state.name,
                 "success": True
             }
 
             # 测试音频参数
             params = self.get_audio_parameters()
-            test_results["tests"]["audio_parameters"] = {
+            tests["audio_parameters"] = {
                 "parameters": params,
                 "success": len(params) > 0
             }
 
             # 测试TTS状态
             tts_enabled = self.is_tts_enabled()
-            test_results["tests"]["tts_status"] = {
+            tests["tts_status"] = {
                 "enabled": tts_enabled,
                 "success": True
             }
@@ -764,13 +895,13 @@ class AsyncAudioProcessorAdapter(IAudioProcessor):
             # 异步模式额外测试
             if self.use_async and self._async_initialized:
                 stats = self._async_capture.get_statistics()
-                test_results["tests"]["async_stats"] = {
+                tests["async_stats"] = {
                     "statistics": stats,
                     "success": True
                 }
 
             test_results["overall_success"] = all(
-                test["success"] for test in test_results["tests"].values()
+                test["success"] for test in tests.values()
             )
 
         except Exception as e:

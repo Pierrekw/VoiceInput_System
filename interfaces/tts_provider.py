@@ -16,6 +16,7 @@ import asyncio
 class TTSState(Enum):
     """TTS状态枚举"""
     IDLE = "idle"           # 空闲状态
+    READY = "ready"         # 准备就绪
     SPEAKING = "speaking"   # 正在播放
     PAUSED = "paused"       # 暂停状态
     ERROR = "error"         # 错误状态

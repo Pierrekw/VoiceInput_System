@@ -19,7 +19,8 @@ from .exceptions import (
     DIContainerError,
     ServiceNotRegisteredError,
     CircularDependencyError,
-    ServiceCreationError
+    ServiceCreationError,
+    InvalidServiceDescriptorError
 )
 
 __all__ = [
@@ -40,7 +41,8 @@ __all__ = [
     "DIContainerError",
     "ServiceNotRegisteredError",
     "CircularDependencyError",
-    "ServiceCreationError"
+    "ServiceCreationError",
+    "InvalidServiceDescriptorError"
 ]
 
 __version__ = "1.0.0"

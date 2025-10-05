@@ -5,8 +5,9 @@
 提供适配器的注册、发现和管理功能，支持适配器的生命周期管理。
 """
 
+from __future__ import annotations
 import logging
-from typing import Dict, List, Optional, Type, Any, Set
+from typing import Dict, List, Optional, Type, Any, Set, Collection
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -26,7 +27,7 @@ class AdapterInfo:
     wrapped_class: Optional[Type] = None
     description: str = ""
     version: str = "1.0.0"
-    registered_at: datetime = None
+    registered_at: Optional[datetime] = None
     is_active: bool = True
 
     def __post_init__(self):
@@ -153,8 +154,9 @@ class AdapterRegistry:
             # 从所有接口类型中查找适配器
             for interface_type, adapters in self._adapters.items():
                 for i, adapter_info in enumerate(adapters):
-                    # 通过时间戳或其他方式匹配适配器
-                    if id(adapter_info) == adapter_id or adapter_info.adapter_class.__name__ == adapter_id:
+                    # 通过适配器ID或适配器类名匹配
+                    adapter_info_id = str(id(adapter_info))
+                    if adapter_info_id == adapter_id or adapter_info.adapter_class.__name__ == adapter_id:
                         del adapters[i]
                         self._active_adapters.discard(adapter_id)
 
@@ -186,7 +188,8 @@ class AdapterRegistry:
         """
         for adapters in self._adapters.values():
             for adapter_info in adapters:
-                if str(id(adapter_info)) == adapter_id or adapter_info.adapter_class.__name__ == adapter_id:
+                adapter_info_id = str(id(adapter_info))
+                if adapter_info_id == adapter_id or adapter_info.adapter_class.__name__ == adapter_id:
                     return adapter_info
         return None
 
@@ -354,7 +357,7 @@ class AdapterRegistry:
         Returns:
             Dict[str, Any]: 注册表信息字典
         """
-        registry_data = {
+        registry_data: Dict[str, Any] = {
             "version": "1.0",
             "exported_at": datetime.now().isoformat(),
             "adapters": {},
@@ -372,7 +375,7 @@ class AdapterRegistry:
                     "wrapped_class": adapter_info.wrapped_class.__name__ if adapter_info.wrapped_class else None,
                     "description": adapter_info.description,
                     "version": adapter_info.version,
-                    "registered_at": adapter_info.registered_at.isoformat(),
+                    "registered_at": adapter_info.registered_at.isoformat() if adapter_info.registered_at else datetime.now().isoformat(),
                     "is_active": adapter_info.is_active
                 }
                 registry_data["adapters"][interface_name].append(adapter_data)

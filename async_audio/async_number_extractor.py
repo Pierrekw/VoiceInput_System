@@ -63,7 +63,7 @@ class AsyncNumberExtractor:
 
     def _extract_sync(self, txt: str) -> List[float]:
         """同步数值提取（在线程池中执行）"""
-        results = []
+        results: List[float] = []
 
         # 检查负数关键词
         negative_keywords = ['负数', '负']
@@ -80,7 +80,7 @@ class AsyncNumberExtractor:
                 logger.debug(f"直接转换整个文本得到数值: {num_float} (文本: '{txt}')")
                 return [num_float]
         except Exception:
-            logger.debug(f"直接转换失败: {e} (文本: '{txt}')")
+            logger.debug(f"直接转换失败: (文本: '{txt}')")
 
         # 处理特殊格式
         txt = self._handle_special_formats(txt)

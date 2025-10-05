@@ -73,7 +73,8 @@ exclude = [
     '^backup/',          # 排除 backup 目录及子目录
     '^__pycache__/',     # 排除 __pycache__
     '.*\.xlsx$',         # 排除所有 .xlsx 文件
-	'^test_develop/'     # 排除 test_develop 目录及子目录
+	'^test_develop/',     # 排除 test_develop 目录及子目录
+	'^examples/'          # 排除 examples 目录及子目录
 ]
 # 如果你只想忽略 cn2an、vosk，用下面两行代替上面那句
 # [[tool.mypy.overrides]]

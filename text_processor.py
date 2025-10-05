@@ -13,6 +13,7 @@ voice error correction with backward compatibility.
 
 import re
 import logging
+import sys
 from typing import List, Any, Optional, Dict
 from config_loader import config
 
@@ -169,6 +170,31 @@ def fix_invalid_chinese_numbers(text: str) -> str:
 # =============================================================================
 # Core Number Extraction
 # =============================================================================
+
+def extract_primary_measurement(text: Any) -> Optional[float]:
+    """
+    Extract the primary number from text - returns only one number like the old system
+
+    Args:
+        text: Input text (string, number, or any type)
+
+    Returns:
+        Single float number or None if no number found
+    """
+    numbers = extract_measurements(text)
+
+    if not numbers:
+        return None
+
+    # Strategy: Return the last number (most common in Chinese speech patterns)
+    # Or return the first if there's only one
+    if len(numbers) == 1:
+        return numbers[0]
+    else:
+        # For multiple numbers, return the last one as it's often the final measurement
+        logger.debug(f"多个数字检测到 {numbers}，返回主要数值: {numbers[-1]}")
+        return numbers[-1]
+
 
 def extract_measurements(text: Any) -> List[float]:
     """
@@ -394,7 +420,7 @@ def process_voice_text(text: str, enable_correction: bool = True,
             'corrections_applied': Applied corrections list
         }
     """
-    result = {
+    result: Dict[str, Any] = {
         'original_text': text,
         'processed_text': text,
         'numbers': [],

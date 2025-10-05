@@ -138,7 +138,7 @@ class TestAsyncAudioProcessorAdapter:
 
         def test_callback(result: RecognitionResult):
             callback_results.append(result)
-            logger.info(f"📞 收到识别回调: {result.text}")
+            logger.info(f"📞 收到识别回调: {result.final_text}")
 
         async_adapter.add_recognition_callback(test_callback)
 

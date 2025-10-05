@@ -35,9 +35,9 @@ class RecognitionResult:
     def __init__(
         self,
         final_text: str = "",
-        buffered_values: List[float] = None,
-        collected_text: List[str] = None,
-        session_data: List[Tuple[int, float, str]] = None,
+        buffered_values: Optional[List[float]] = None,
+        collected_text: Optional[List[str]] = None,
+        session_data: Optional[List[Tuple[int, float, str]]] = None,
         recognition_count: int = 0,
         audio_frames: int = 0,
         processing_time: float = 0.0

@@ -142,7 +142,7 @@ class AsyncEventBus:
     async def subscribe(
         self,
         event_type: Type[BaseEvent],
-        handler: EventHandler,
+        handler: Union[EventHandler, Callable],
         filter_func: Optional[Callable[[BaseEvent], bool]] = None,
         priority: int = 0
     ) -> str:
@@ -151,13 +151,18 @@ class AsyncEventBus:
 
         Args:
             event_type: 事件类型
-            handler: 事件处理器
+            handler: 事件处理器或处理函数
             filter_func: 事件过滤函数
             priority: 订阅优先级
 
         Returns:
             str: 订阅ID
         """
+        # 如果是普通函数，包装为FunctionEventHandler
+        if not hasattr(handler, 'safe_handle') and callable(handler):
+            from .event_handler import FunctionEventHandler
+            handler = FunctionEventHandler(handler)
+
         subscription = EventSubscription(
             event_type=event_type,
             handler=handler,
@@ -483,7 +488,7 @@ class EventBus:
         else:
             self._loop.run_until_complete(self._async_bus.publish(event))
 
-    def subscribe(self, event_type: Type[BaseEvent], handler: EventHandler, **kwargs) -> str:
+    def subscribe(self, event_type: Type[BaseEvent], handler: Union[EventHandler, Callable], **kwargs) -> str:
         """订阅事件（同步）"""
         self._ensure_loop()
         if self._loop.is_running():

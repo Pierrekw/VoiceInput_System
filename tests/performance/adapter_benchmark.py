@@ -19,9 +19,9 @@ try:
     from TTSengine import TTS
 except ImportError:
     print("Warning: Some modules not available, using mocks")
-    AudioCapture = Mock
-    ExcelExporter = Mock
-    TTS = Mock
+    AudioCapture = Mock  # type: ignore
+    ExcelExporter = Mock  # type: ignore
+    TTS = Mock  # type: ignore
 
 from adapters import (
     AudioProcessorAdapter, DataExporterAdapter,
@@ -37,7 +37,7 @@ class AdapterBenchmark:
     def __init__(self):
         self.results = {}
 
-    def benchmark_creation_time(self, create_func, name: str, iterations: int = 100) -> Dict[str, float]:
+    def benchmark_creation_time(self, create_func, name: str, iterations: int = 100) -> Dict[str, object]:
         """
         基准测试：对象创建时间
 
@@ -47,7 +47,7 @@ class AdapterBenchmark:
             iterations: 迭代次数
 
         Returns:
-            Dict[str, float]: 性能指标
+            Dict[str, object]: 性能指标（包含字符串和浮点数）
         """
         times = []
 
@@ -71,7 +71,7 @@ class AdapterBenchmark:
         self.results[name] = result
         return result
 
-    def benchmark_method_call(self, instance, method_name: str, *args, iterations: int = 1000) -> Dict[str, float]:
+    def benchmark_method_call(self, instance, method_name: str, *args, iterations: int = 1000) -> Dict[str, object]:
         """
         基准测试：方法调用时间
 
@@ -82,7 +82,7 @@ class AdapterBenchmark:
             iterations: 迭代次数
 
         Returns:
-            Dict[str, float]: 性能指标
+            Dict[str, object]: 性能指标（包含字符串和浮点数）
         """
         method = getattr(instance, method_name)
         times = []

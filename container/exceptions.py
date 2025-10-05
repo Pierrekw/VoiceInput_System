@@ -5,7 +5,7 @@
 定义了依赖注入容器相关的所有异常类型，提供清晰的错误信息和
 调试支持。
 """
-
+from typing import Optional
 
 class DIContainerError(Exception):
     """
@@ -13,7 +13,7 @@ class DIContainerError(Exception):
 
     所有DI容器相关的异常都继承自此类。
     """
-    def __init__(self, message: str, service_type: str = None):
+    def __init__(self, message: str, service_type: Optional[str] = None):
         super().__init__(message)
         self.service_type = service_type
         self.message = message
@@ -74,7 +74,7 @@ class InvalidServiceDescriptorError(DIContainerError):
 
     当服务描述符配置不正确时抛出此异常。
     """
-    def __init__(self, message: str, service_type: str = None):
+    def __init__(self, message: str, service_type: Optional[str] = None):
         super().__init__(f"Invalid service descriptor: {message}", service_type)
 
 

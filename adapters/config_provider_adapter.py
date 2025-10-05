@@ -9,24 +9,38 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional, Callable, Union, Protocol
 from datetime import datetime
 
 from interfaces.config_provider import (
     IConfigProvider, ConfigFormat, ConfigScope, ConfigMetadata, ConfigChangeEvent
 )
 
+
+class ConfigLoaderProtocol(Protocol):
+    """ConfigLoader协议，定义期望的接口"""
+    def get(self, key: str, default: Any = None) -> Any:
+        ...
+
+    def __getattr__(self, name: str) -> Any:
+        ...
+
 # 导入现有的ConfigLoader类
+from typing import cast
+
 try:
-    from config_loader import ConfigLoader, config
+    from config_loader import ConfigLoader as OriginalConfigLoader, config as original_config
+    _ConfigLoaderType = OriginalConfigLoader  # type: ignore
+    _config = original_config
 except ImportError:
     # 如果导入失败，创建一个占位符
-    class ConfigLoader:
+    class _FallbackConfigLoader:
         def __init__(self):
             self._config = {}
         def get(self, key, default=None):
             return default
-    config = ConfigLoader()
+    _ConfigLoaderType = _FallbackConfigLoader  # type: ignore
+    _config = _ConfigLoaderType()
 
 logger = logging.getLogger(__name__)
 
@@ -39,22 +53,22 @@ class ConfigProviderAdapter(IConfigProvider):
     保持原有功能的同时提供新的接口支持。
     """
 
-    def __init__(self, config_loader: Optional[ConfigLoader] = None):
+    def __init__(self, config_loader: Optional[Any] = None):
         """
         初始化配置提供者适配器
 
         Args:
             config_loader: 现有的ConfigLoader实例，如果为None则使用全局实例
         """
-        self._config_loader = config_loader or config
+        self._config_loader = config_loader or _config
         self._initialized = False
         self._auto_reload = False
-        self._watchers = {}
+        self._watchers: Dict[str, Callable[[ConfigChangeEvent], None]] = {}
         self._watcher_counter = 0
         self._cache_enabled = False
         self._cache_ttl = 300.0
-        self._cache = {}
-        self._cache_timestamps = {}
+        self._cache: Dict[str, Any] = {}
+        self._cache_timestamps: Dict[str, float] = {}
 
         logger.info("ConfigProviderAdapter initialized with ConfigLoader")
 
@@ -185,10 +199,15 @@ class ConfigProviderAdapter(IConfigProvider):
             # ConfigLoader不支持动态设置配置
             # 这里只能在运行时设置，并且不会持久化到文件
             if scope == ConfigScope.RUNTIME:
+                # 获取旧值
+                old_value = self.get(key)
+
                 # 将值存储在内部字典中
                 if not hasattr(self._config_loader, '_runtime_config'):
-                    self._config_loader._runtime_config = {}
-                self._config_loader._runtime_config[key] = value
+                    setattr(self._config_loader, '_runtime_config', {})
+                setattr(self._config_loader, '_runtime_config',
+                       getattr(self._config_loader, '_runtime_config', {}))
+                getattr(self._config_loader, '_runtime_config')[key] = value
 
                 # 清除缓存
                 if key in self._cache:
@@ -197,7 +216,7 @@ class ConfigProviderAdapter(IConfigProvider):
                     del self._cache_timestamps[key]
 
                 # 触发变更事件
-                self._notify_watchers(key, self.get(key), value, scope)
+                self._notify_watchers(key, old_value, value, scope)
 
                 logger.info(f"Runtime config set: {key} = {value}")
                 return True
@@ -456,16 +475,12 @@ class ConfigProviderAdapter(IConfigProvider):
         """通知所有监听器配置变更"""
         try:
             event = ConfigChangeEvent(
-                event_type="config_changed",
-                source="ConfigProviderAdapter",
-                data={
-                    "key": key,
-                    "old_value": old_value,
-                    "new_value": new_value,
-                    "scope": scope
-                },
+                key=key,
+                old_value=old_value,
+                new_value=new_value,
+                scope=scope,
                 timestamp=datetime.now().timestamp(),
-                message=f"Config changed: {key}"
+                source="ConfigProviderAdapter"
             )
 
             for callback in self._watchers.values():
@@ -574,6 +589,92 @@ class ConfigProviderAdapter(IConfigProvider):
         """
         logger.info(f"Environment variable prefix set to: {prefix}")
 
+    def merge(self, config_dict: Dict[str, Any], scope: ConfigScope = ConfigScope.USER) -> None:
+        """
+        合并配置字典
+
+        Args:
+            config_dict: 配置字典
+            scope: 配置作用域
+        """
+        # 简化实现：将配置合并到运行时配置
+        if scope == ConfigScope.RUNTIME:
+            for key, value in config_dict.items():
+                self.set(key, value, scope)
+        else:
+            logger.warning(f"Config merge not supported for scope {scope.value}")
+
+    async def merge_async(self, config_dict: Dict[str, Any], scope: ConfigScope = ConfigScope.USER) -> None:
+        """
+        异步合并配置字典
+
+        Args:
+            config_dict: 配置字典
+            scope: 配置作用域
+        """
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self.merge, config_dict, scope)
+
+    def import_from_file(self, file_path: str, format: Optional[ConfigFormat] = None) -> bool:
+        """
+        从文件导入配置
+
+        Args:
+            file_path: 文件路径
+            format: 文件格式，如果为None则自动检测
+
+        Returns:
+            bool: 导入成功返回True，失败返回False
+        """
+        # 简化实现：不支持文件导入
+        logger.warning("Config import from file not supported in adapter")
+        return False
+
+    async def import_from_file_async(self, file_path: str, format: Optional[ConfigFormat] = None) -> bool:
+        """
+        异步从文件导入配置
+
+        Args:
+            file_path: 文件路径
+            format: 文件格式，如果为None则自动检测
+
+        Returns:
+            bool: 导入成功返回True，失败返回False
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.import_from_file, file_path, format)
+
+    def export_to_file(self, file_path: str, format: ConfigFormat, scope: Optional[ConfigScope] = None) -> bool:
+        """
+        导出配置到文件
+
+        Args:
+            file_path: 文件路径
+            format: 文件格式
+            scope: 配置作用域，如果为None则导出所有配置
+
+        Returns:
+            bool: 导出成功返回True，失败返回False
+        """
+        # 简化实现：不支持文件导出
+        logger.warning("Config export to file not supported in adapter")
+        return False
+
+    async def export_to_file_async(self, file_path: str, format: ConfigFormat, scope: Optional[ConfigScope] = None) -> bool:
+        """
+        异步导出配置到文件
+
+        Args:
+            file_path: 文件路径
+            format: 文件格式
+            scope: 配置作用域，如果为None则导出所有配置
+
+        Returns:
+            bool: 导出成功返回True，失败返回False
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.export_to_file, file_path, format, scope)
+
     def get_env_mappings(self) -> Dict[str, str]:
         """
         获取环境变量映射关系
@@ -657,7 +758,7 @@ class ConfigProviderAdapter(IConfigProvider):
             Dict[str, Any]: 诊断信息字典
         """
         try:
-            import yaml
+            import yaml  # type: ignore
             config_file_exists = os.path.exists("config.yaml")
 
             return {
@@ -691,7 +792,7 @@ class ConfigProviderAdapter(IConfigProvider):
 
     # 属性访问器
     @property
-    def wrapped_instance(self) -> ConfigLoader:
+    def wrapped_instance(self) -> Any:
         """获取包装的ConfigLoader实例"""
         return self._config_loader
 

@@ -228,15 +228,25 @@ class ExcelExporter:
                     self.create_new_file()
 
                 existing_data = pd.read_excel(self.filename)
-                
+
                 # 获取配置设置
                 include_original = config.get("excel.formatting.include_original", True)
                 auto_numbering = config.get("excel.formatting.auto_numbering", True)
                 include_timestamp = config.get("excel.formatting.include_timestamp", True)
-                
+
                 # 生成新数据记录
                 new_data = []
-                for nid, val in data_pairs:
+                for item in data_pairs:
+                    # Handle both tuple and float cases
+                    if isinstance(item, (list, tuple)) and len(item) == 2:
+                        nid, val = item[0], item[1]
+                    elif isinstance(item, (int, float)):
+                        # Single float value - generate auto ID
+                        nid = self.get_next_id()
+                        val = float(item)
+                    else:
+                        logger.warning(f"跳过无效数据项: {item}")
+                        continue
                     record: Dict[str, Union[int, float, str]] = {}
                     
                     # 根据配置决定是否添加编号

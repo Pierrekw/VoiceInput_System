@@ -6,7 +6,7 @@
 """
 
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 
 from .base_event import (
@@ -116,10 +116,10 @@ class RecognitionCompletedEvent(RecognitionEvent):
     """语音识别完成事件"""
     text: str = ""
     confidence: float = 0.0
-    measurements: List[float] = None
+    measurements: List[float] = field(default_factory=list)
     processing_time: float = 0.0
 
-    def __init__(self, source: str, recognizer_id: str, text: str = "", confidence: float = 0.0, measurements: List[float] = None, processing_time: float = 0.0, **kwargs):
+    def __init__(self, source: str, recognizer_id: str, text: str = "", confidence: float = 0.0, measurements: Optional[List[float]] = None, processing_time: float = 0.0, **kwargs):
         super().__init__(source, recognizer_id, **kwargs)
         self.text = text
         self.confidence = confidence
@@ -382,7 +382,7 @@ class DataExportCompletedEvent(DataEvent):
 class MeasurementExtractedEvent(DataEvent):
     """数值提取事件"""
     source_text: str = ""
-    extracted_values: List[float] = None
+    extracted_values: Optional[List[float]] = None
     extraction_method: str = ""
 
     def get_summary(self) -> str:
@@ -396,7 +396,7 @@ class MeasurementExtractedEvent(DataEvent):
 class UserCommandEvent(SystemEvent):
     """用户命令事件"""
     command: str = ""
-    parameters: Dict[str, Any] = None
+    parameters: Dict[str, Any] = Dict[str, Any]
 
     def get_summary(self) -> str:
         params_str = str(self.parameters) if self.parameters else ""
@@ -411,7 +411,7 @@ class VoiceCommandEvent(UserCommandEvent):
     timestamp: float = 0.0
 
     def __init__(self, source: str, command: str, timestamp: float = 0.0, command_text: str = "", confidence: float = 0.0, **kwargs):
-        super().__init__(source, "VoiceCommand", command, **kwargs)
+        super().__init__(source, command="VoiceCommand", **kwargs)
         self.command = command
         self.command_text = command_text or command
         self.confidence = confidence
@@ -434,7 +434,7 @@ class KeyboardPressEvent(UserCommandEvent):
     timestamp: float = 0.0
 
     def __init__(self, source: str, key: str, timestamp: float = 0.0, **kwargs):
-        super().__init__(source, "Keyboard", f"key_press_{key}", **kwargs)
+        super().__init__(source, component="Keyboard", command="Keyboard", **kwargs)
         self.key = key
         self.timestamp = timestamp or time.time()
         self.data.update({

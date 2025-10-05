@@ -5,6 +5,7 @@
 提供完整的依赖注入功能，包括服务注册、解析、生命周期管理等。
 """
 
+from __future__ import annotations
 from typing import Any, Dict, List, Type, TypeVar, Optional, Callable, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -123,8 +124,8 @@ class DIContainer:
     def register_transient(
         self,
         service_type: Type[T],
-        implementation_type: Type[T] = None,
-        factory: Callable[[], T] = None
+        implementation_type: Optional[Type[T]] = None,
+        factory: Optional[Callable[[], T]] = None
     ) -> 'DIContainer':
         """
         注册瞬态服务
@@ -144,8 +145,8 @@ class DIContainer:
     def register_scoped(
         self,
         service_type: Type[T],
-        implementation_type: Type[T] = None,
-        factory: Callable[[], T] = None
+        implementation_type: Optional[Type[T]] = None,
+        factory: Optional[Callable[[], T]] = None
     ) -> 'DIContainer':
         """
         注册作用域服务
@@ -165,9 +166,9 @@ class DIContainer:
     def register_singleton(
         self,
         service_type: Type[T],
-        implementation_type: Type[T] = None,
-        factory: Callable[[], T] = None,
-        instance: T = None
+        implementation_type: Optional[Type[T]] = None,
+        factory: Optional[Callable[[], T]] = None,
+        instance: Optional[T] = None
     ) -> 'DIContainer':
         """
         注册单例服务
@@ -322,7 +323,7 @@ class DIContainer:
             ServiceFactory: 服务工厂
         """
         if descriptor.has_factory:
-            factory = DelegateFactory(lambda container: descriptor.factory(container))
+            factory = DelegateFactory(descriptor.factory)
         elif descriptor.implementation_type:
             factory = ReflectionFactory(descriptor.implementation_type)
         else:
@@ -361,7 +362,7 @@ class DIContainer:
         return self._current_scope
 
     @contextmanager
-    def create_scope(self) -> 'DIContainer':
+    def create_scope(self) -> None:
         """
         创建新的作用域
 
@@ -428,12 +429,25 @@ class DIContainer:
         with self._lock:
             for descriptor in self._registry:
                 if not descriptor.has_instance:  # 不复制实例
-                    child._registry.register(
-                        descriptor.service_type,
-                        descriptor.implementation_type,
-                        descriptor.lifetime,
-                        descriptor.factory
-                    )
+                    # 重新注册服务，不复制实例
+                    if descriptor.is_singleton:
+                        child.register_singleton(
+                            descriptor.service_type,
+                            descriptor.implementation_type,
+                            descriptor.factory
+                        )
+                    elif descriptor.is_scoped:
+                        child.register_scoped(
+                            descriptor.service_type,
+                            descriptor.implementation_type,
+                            descriptor.factory
+                        )
+                    else:
+                        child.register_transient(
+                            descriptor.service_type,
+                            descriptor.implementation_type,
+                            descriptor.factory
+                        )
         return child
 
     def validate_registrations(self) -> List[str]:

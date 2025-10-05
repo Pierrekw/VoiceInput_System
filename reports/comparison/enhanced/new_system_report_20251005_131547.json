@@ -1,0 +1,1379 @@
+{
+  "timestamp": "2025-10-05T13:15:47.164437",
+  "system_type": "new",
+  "summary": {
+    "new": {
+      "avg_response_time": 0.0011438632356947746,
+      "avg_cpu_usage": 5.433333333333333,
+      "avg_memory_usage": 46.224637681159365,
+      "total_tests": 69,
+      "passed_tests": 63,
+      "accuracy_rate": 0.9130434782608695,
+      "excel_consistency": 0.0,
+      "print_function_accuracy": 0.11594202898550725
+    }
+  },
+  "detailed_results": {
+    "new": [
+      {
+        "test_case": "基础测量值",
+        "input_text": "测量值为十二点五",
+        "expected_values": [
+          12.5
+        ],
+        "actual_values": [
+          12.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.000934600830078125,
+        "cpu_usage": 3.0,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:28.893034",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "多值测量",
+        "input_text": "测量值为十二点五和三十三点八",
+        "expected_values": [
+          12.5,
+          33.8
+        ],
+        "actual_values": [
+          12.5,
+          33.8
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0019145011901855469,
+        "cpu_usage": 14.3,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:31.113553",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "单值测量",
+        "input_text": "五十五点五",
+        "expected_values": [
+          55.5
+        ],
+        "actual_values": [
+          55.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 0.9,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:33.328121",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "暂停后测量1",
+        "input_text": "七十七点七和九十九点九",
+        "expected_values": [
+          77.7,
+          99.9
+        ],
+        "actual_values": [
+          77.7,
+          99.9
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 4.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:35.040800",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "暂停后测量2",
+        "input_text": "一百一十一点一",
+        "expected_values": [
+          111.1
+        ],
+        "actual_values": [
+          111.1
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0009548664093017578,
+        "cpu_usage": 1.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:37.758118",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "最终测量1",
+        "input_text": "测量数据为一百二十三点四",
+        "expected_values": [
+          123.4
+        ],
+        "actual_values": [
+          123.4
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0013191699981689453,
+        "cpu_usage": 2.2,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:38.974768",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "最终测量2",
+        "input_text": "二百五十六点七八",
+        "expected_values": [
+          256.78
+        ],
+        "actual_values": [
+          256.78
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 4.8,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:41.200028",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "空字符串测试",
+        "input_text": "",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 10.9,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:42.911186",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "纯文本无数字",
+        "input_text": "无数字文本",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0020046234130859375,
+        "cpu_usage": 3.3,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:43.625958",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "极小小数",
+        "input_text": "零点零零一",
+        "expected_values": [
+          0.001
+        ],
+        "actual_values": [
+          0.001
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 0.6,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:44.842026",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "负数测试",
+        "input_text": "负十度",
+        "expected_values": [
+          -10.0
+        ],
+        "actual_values": [],
+        "accuracy": 0.0,
+        "response_time": 0.0010004043579101562,
+        "cpu_usage": 0.8,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:46.060756",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "负小数测试",
+        "input_text": "温度负二十五点五度",
+        "expected_values": [
+          -25.5
+        ],
+        "actual_values": [],
+        "accuracy": 0.0,
+        "response_time": 0.00099945068359375,
+        "cpu_usage": 2.2,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:47.277670",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "大数多小数位",
+        "input_text": "一千零二十三点四五六",
+        "expected_values": [
+          1023.456
+        ],
+        "actual_values": [
+          1023.456
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 1.2,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:49.495345",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "万位大数",
+        "input_text": "二万三千四百五十六点七八九",
+        "expected_values": [
+          23456.789
+        ],
+        "actual_values": [
+          23456.789
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0036842823028564453,
+        "cpu_usage": 1.2,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:51.213080",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "极小小数",
+        "input_text": "测量值为零点零零一",
+        "expected_values": [
+          0.001
+        ],
+        "actual_values": [
+          0.001
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.00022554397583007812,
+        "cpu_usage": 4.2,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:53.426593",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "纯零",
+        "input_text": "零",
+        "expected_values": [
+          0.0
+        ],
+        "actual_values": [
+          0.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0010139942169189453,
+        "cpu_usage": 6.0,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:54.643585",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "百万级大数",
+        "input_text": "一百万点一二三四五",
+        "expected_values": [
+          1000000.12345
+        ],
+        "actual_values": [
+          1000000.12345
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0005776882171630859,
+        "cpu_usage": 15.2,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:55.360076",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "多个整数",
+        "input_text": "一百二十和三百四十五",
+        "expected_values": [
+          120.0,
+          345.0
+        ],
+        "actual_values": [
+          120.0,
+          345.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0008199214935302734,
+        "cpu_usage": 19.0,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:57.577008",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "多个小数",
+        "input_text": "零点五和零点八",
+        "expected_values": [
+          0.5,
+          0.8
+        ],
+        "actual_values": [
+          0.5,
+          0.8
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0010230541229248047,
+        "cpu_usage": 2.1,
+        "memory_usage": 46.5,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:59.802898",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "多个负数",
+        "input_text": "负一十和负二十点五",
+        "expected_values": [
+          -10.0,
+          -20.5
+        ],
+        "actual_values": [],
+        "accuracy": 0.0,
+        "response_time": 0.0007379055023193359,
+        "cpu_usage": 1.1,
+        "memory_usage": 46.1,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:01.511265",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "连续中文数字",
+        "input_text": "一千二三百",
+        "expected_values": [
+          1200.0,
+          300.0
+        ],
+        "actual_values": [],
+        "accuracy": 0.0,
+        "response_time": 0.001018524169921875,
+        "cpu_usage": 6.5,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:03.726895",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "中英混合",
+        "input_text": "温度25.5度湿度36度",
+        "expected_values": [
+          25.5,
+          36.0
+        ],
+        "actual_values": [
+          25.5,
+          36.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0011110305786132812,
+        "cpu_usage": 12.1,
+        "memory_usage": 46.1,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:05.442691",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "逗号分隔",
+        "input_text": "数值为12，34，56.78",
+        "expected_values": [
+          12.0,
+          34.0,
+          56.78
+        ],
+        "actual_values": [
+          12.0,
+          34.0,
+          56.78
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0007312297821044922,
+        "cpu_usage": 10.6,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:07.663085",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "非标准中文数字",
+        "input_text": "测量值为一二三点四五度",
+        "expected_values": [
+          123.45
+        ],
+        "actual_values": [
+          123.45
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 7.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:09.879725",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "模糊量词",
+        "input_text": "温度大概二十五度左右",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [
+          25.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0014793872833251953,
+        "cpu_usage": 2.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:12.098362",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "选择性数值",
+        "input_text": "二十五或三十度",
+        "expected_values": [
+          25.0,
+          30.0
+        ],
+        "actual_values": [
+          25.0,
+          30.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 3.6,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:14.313219",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "无效数值",
+        "input_text": "数值为N/A",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.003244161605834961,
+        "cpu_usage": 4.1,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:16.529767",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "不完整小数",
+        "input_text": "测量值是二十五点",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [],
+        "accuracy": 0.0,
+        "response_time": 0.0008018016815185547,
+        "cpu_usage": 0.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:17.745274",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "命令包围数值",
+        "input_text": "暂停录音测量值为二十五点五度继续录音",
+        "expected_values": [
+          25.5
+        ],
+        "actual_values": [
+          25.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0009200572967529297,
+        "cpu_usage": 7.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:19.465584",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "命令后数值",
+        "input_text": "停止录音三十度",
+        "expected_values": [
+          30.0
+        ],
+        "actual_values": [
+          30.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.004302501678466797,
+        "cpu_usage": 5.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:22.684318",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "数值后命令",
+        "input_text": "二十五度暂停录音",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [
+          25.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0010135173797607422,
+        "cpu_usage": 11.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:24.897452",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "恢复命令",
+        "input_text": "恢复录音测量值三十七点八度",
+        "expected_values": [
+          37.8
+        ],
+        "actual_values": [
+          37.8
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.001013040542602539,
+        "cpu_usage": 7.4,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:27.113332",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "快速单数字",
+        "input_text": "一",
+        "expected_values": [
+          1.0
+        ],
+        "actual_values": [
+          1.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0009093284606933594,
+        "cpu_usage": 4.2,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:29.829504",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "快速单数字",
+        "input_text": "二",
+        "expected_values": [
+          2.0
+        ],
+        "actual_values": [
+          2.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.00084686279296875,
+        "cpu_usage": 6.8,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:30.152461",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "快速单数字",
+        "input_text": "三",
+        "expected_values": [
+          3.0
+        ],
+        "actual_values": [
+          3.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.003551959991455078,
+        "cpu_usage": 11.4,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:30.468191",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "快速单数字",
+        "input_text": "四",
+        "expected_values": [
+          4.0
+        ],
+        "actual_values": [
+          4.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0005037784576416016,
+        "cpu_usage": 2.4,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:30.780363",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "快速单数字",
+        "input_text": "五",
+        "expected_values": [
+          5.0
+        ],
+        "actual_values": [
+          5.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0010061264038085938,
+        "cpu_usage": 7.9,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:31.099784",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "正常测量值1",
+        "input_text": "温度二十五点五度",
+        "expected_values": [
+          25.5
+        ],
+        "actual_values": [
+          25.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 4.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:31.413797",
+        "system_type": "new",
+        "test_category": "tts_interference"
+      },
+      {
+        "test_case": "TTS回响干扰",
+        "input_text": "语音识别已开始",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 0.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:32.634081",
+        "system_type": "new",
+        "test_category": "tts_interference"
+      },
+      {
+        "test_case": "TTS数值反馈干扰",
+        "input_text": "成功提取数值二十五点五",
+        "expected_values": [],
+        "actual_values": [
+          25.5
+        ],
+        "accuracy": 0.0,
+        "response_time": 0.0,
+        "cpu_usage": 1.1,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:34.844802",
+        "system_type": "new",
+        "test_category": "tts_interference"
+      },
+      {
+        "test_case": "TTS后正常输入",
+        "input_text": "压力一百二十帕斯卡",
+        "expected_values": [
+          120.0
+        ],
+        "actual_values": [
+          120.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 2.8,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:36.564532",
+        "system_type": "new",
+        "test_category": "tts_interference"
+      },
+      {
+        "test_case": "TTS命令+数值混合",
+        "input_text": "继续录音温度三十七度",
+        "expected_values": [
+          37.0
+        ],
+        "actual_values": [
+          37.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.002084970474243164,
+        "cpu_usage": 2.4,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:37.786391",
+        "system_type": "new",
+        "test_category": "tts_interference"
+      },
+      {
+        "test_case": "正常输入前键盘干扰",
+        "input_text": "测量值为二十五度",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [
+          25.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0010080337524414062,
+        "cpu_usage": 0.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:39.996399",
+        "system_type": "new",
+        "test_category": "keyboard_interference"
+      },
+      {
+        "test_case": "输入中键盘干扰",
+        "input_text": "温度三十点五度",
+        "expected_values": [
+          30.5
+        ],
+        "actual_values": [
+          30.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0026552677154541016,
+        "cpu_usage": 1.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:42.216595",
+        "system_type": "new",
+        "test_category": "keyboard_interference"
+      },
+      {
+        "test_case": "输入后键盘干扰",
+        "input_text": "压力一百帕斯卡",
+        "expected_values": [
+          100.0
+        ],
+        "actual_values": [
+          100.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0007002353668212891,
+        "cpu_usage": 2.6,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:44.433002",
+        "system_type": "new",
+        "test_category": "keyboard_interference"
+      },
+      {
+        "test_case": "命令期间键盘干扰",
+        "input_text": "暂停录音湿度四十五度",
+        "expected_values": [
+          45.0
+        ],
+        "actual_values": [
+          45.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.00075531005859375,
+        "cpu_usage": 4.8,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:46.648408",
+        "system_type": "new",
+        "test_category": "keyboard_interference"
+      },
+      {
+        "test_case": "连续命令干扰",
+        "input_text": "暂停录音暂停录音继续录音停止录音测量值为二十五度",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [
+          25.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0009102821350097656,
+        "cpu_usage": 3.2,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:49.866057",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "命令包围数值",
+        "input_text": "停止录音温度三十七度继续录音压力一百帕",
+        "expected_values": [
+          37.0,
+          100.0
+        ],
+        "actual_values": [
+          37.0,
+          100.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0006415843963623047,
+        "cpu_usage": 9.5,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:54.081593",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "命令冲突测试",
+        "input_text": "恢复录音暂停录音恢复录音测量值四十二点五度",
+        "expected_values": [
+          42.5
+        ],
+        "actual_values": [
+          42.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0005037784576416016,
+        "cpu_usage": 6.6,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:14:57.301693",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "中英文命令混合",
+        "input_text": "exit stop 暂停 pause resume 温度二十八度",
+        "expected_values": [
+          28.0
+        ],
+        "actual_values": [
+          28.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0012466907501220703,
+        "cpu_usage": 4.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:01.516713",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "自定义命令测试",
+        "input_text": "测量开始温度三十三度测量结束暂停录音温度三十五度继续录音",
+        "expected_values": [
+          33.0,
+          35.0
+        ],
+        "actual_values": [
+          33.0,
+          35.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0007874965667724609,
+        "cpu_usage": 2.1,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:04.737828",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "TTS+键盘+命令三重干扰",
+        "input_text": "温度二十五点五度",
+        "expected_values": [
+          25.5
+        ],
+        "actual_values": [
+          25.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.003092527389526367,
+        "cpu_usage": 4.8,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:09.962278",
+        "system_type": "new",
+        "test_category": "tts_interference"
+      },
+      {
+        "test_case": "高频连续干扰",
+        "input_text": "压力一百二十帕斯卡",
+        "expected_values": [
+          120.0
+        ],
+        "actual_values": [
+          120.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0010001659393310547,
+        "cpu_usage": 7.2,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:13.183886",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "系统边界压力测试",
+        "input_text": "湿度百分之七十五",
+        "expected_values": [
+          75.0
+        ],
+        "actual_values": [
+          75.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0031626224517822266,
+        "cpu_usage": 2.7,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:17.408657",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "Print命令中文",
+        "input_text": "Print 当前状态正常",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0011413097381591797,
+        "cpu_usage": 2.2,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": "当前状态正常",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:22.618085",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "Print命令英文",
+        "input_text": "Print system status is normal",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0007290840148925781,
+        "cpu_usage": 9.5,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "system status is normal",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:23.834943",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "Print命令包含数字",
+        "input_text": "Print 温度二十五点五度",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0007719993591308594,
+        "cpu_usage": 7.6,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "温度二十五点五度",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:25.050166",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "纯中文描述",
+        "input_text": "当前状态正常",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 5.7,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:26.770301",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "纯英文描述",
+        "input_text": "system is running normally",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.010620355606079102,
+        "cpu_usage": 12.7,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:27.992340",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "设备状态描述",
+        "input_text": "测量设备已连接",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 0.0,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:29.203044",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "Print警告信息",
+        "input_text": "Print 警告：设备异常",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.001107931137084961,
+        "cpu_usage": 1.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "警告：设备异常",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:30.417833",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "Print错误信息",
+        "input_text": "Print ERROR: Connection failed",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0008389949798583984,
+        "cpu_usage": 5.7,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "ERROR: Connection failed",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:31.636831",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "Print带时间戳",
+        "input_text": "Print 时间戳 2024-01-01 10:30:00",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0005030632019042969,
+        "cpu_usage": 1.7,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "时间戳 2024-01-01 10:30:00",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:32.852105",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "Print复杂格式",
+        "input_text": "Print 测量值：温度25.5°C，湿度65%",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 3.9,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "测量值：温度25.5°C，湿度65%",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:34.070687",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "英文+中文数字",
+        "input_text": "temperature 二十五度",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [
+          25.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0020117759704589844,
+        "cpu_usage": 15.2,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:36.293465",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "中文+英文+数字",
+        "input_text": "温度 is 三十点五 degrees",
+        "expected_values": [
+          30.5
+        ],
+        "actual_values": [
+          30.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0019888877868652344,
+        "cpu_usage": 9.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:38.001853",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "Print命令中英混合",
+        "input_text": "Print current temperature: 二十八点二°C",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0010008811950683594,
+        "cpu_usage": 17.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "current temperature: 二十八点二°C",
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:40.224034",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "中英混合百分比",
+        "input_text": "湿度 humidity 百分之六十五",
+        "expected_values": [
+          65.0
+        ],
+        "actual_values": [
+          65.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 6.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:42.447412",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "中英混合测量",
+        "input_text": "测量值 measurement 一百二十点五 units",
+        "expected_values": [
+          120.5
+        ],
+        "actual_values": [
+          120.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 9.5,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:15:44.653253",
+        "system_type": "new",
+        "test_category": "basic"
+      }
+    ]
+  },
+  "test_categories": {
+    "new": {
+      "basic": {
+        "total": 48,
+        "avg_accuracy": 0.8958333333333334,
+        "avg_response_time": 0.001081595818201701
+      },
+      "tts_interference": {
+        "total": 6,
+        "avg_accuracy": 0.8333333333333334,
+        "avg_response_time": 0.0008629163106282552
+      },
+      "keyboard_interference": {
+        "total": 4,
+        "avg_accuracy": 1.0,
+        "avg_response_time": 0.0012797117233276367
+      },
+      "print_function": {
+        "total": 11,
+        "avg_accuracy": 1.0,
+        "avg_response_time": 0.0015194199301979759
+      }
+    }
+  },
+  "recommendations": [
+    "✅ new系统整体表现良好，各项指标正常"
+  ],
+  "performance_analysis": {},
+  "errors": []
+}

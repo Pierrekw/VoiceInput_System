@@ -1,0 +1,135 @@
+{
+  "timestamp": "2025-10-05T13:13:19.534892",
+  "system_type": "new",
+  "summary": {
+    "new": {
+      "avg_response_time": 0.0017909526824951172,
+      "avg_cpu_usage": 5.0600000000000005,
+      "avg_memory_usage": 46.2,
+      "total_tests": 5,
+      "passed_tests": 5,
+      "accuracy_rate": 1.0,
+      "excel_consistency": 0.0,
+      "print_function_accuracy": 0.2
+    }
+  },
+  "detailed_results": {
+    "new": [
+      {
+        "test_case": "英文+中文数字",
+        "input_text": "temperature 二十五度",
+        "expected_values": [
+          25.0
+        ],
+        "actual_values": [
+          25.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 14.3,
+        "memory_usage": 46.3,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:08.661550",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "中文+英文+数字",
+        "input_text": "温度 is 三十点五 degrees",
+        "expected_values": [
+          30.5
+        ],
+        "actual_values": [
+          30.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 4.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:10.371561",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "Print命令中英混合",
+        "input_text": "Print current temperature: 二十八点二°C",
+        "expected_values": [],
+        "actual_values": [],
+        "accuracy": 1.0,
+        "response_time": 0.0,
+        "cpu_usage": 1.4,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": "current temperature: 二十八点二°C",
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:12.590839",
+        "system_type": "new",
+        "test_category": "print_function"
+      },
+      {
+        "test_case": "中英混合百分比",
+        "input_text": "湿度 humidity 百分之六十五",
+        "expected_values": [
+          65.0
+        ],
+        "actual_values": [
+          65.0
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0018613338470458984,
+        "cpu_usage": 0.0,
+        "memory_usage": 46.1,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:14.806886",
+        "system_type": "new",
+        "test_category": "basic"
+      },
+      {
+        "test_case": "中英混合测量",
+        "input_text": "测量值 measurement 一百二十点五 units",
+        "expected_values": [
+          120.5
+        ],
+        "actual_values": [
+          120.5
+        ],
+        "accuracy": 1.0,
+        "response_time": 0.0070934295654296875,
+        "cpu_usage": 5.3,
+        "memory_usage": 46.2,
+        "excel_output": null,
+        "print_output": null,
+        "errors": [],
+        "timestamp": "2025-10-05T13:13:17.029522",
+        "system_type": "new",
+        "test_category": "basic"
+      }
+    ]
+  },
+  "test_categories": {
+    "new": {
+      "basic": {
+        "total": 4,
+        "avg_accuracy": 1.0,
+        "avg_response_time": 0.0022386908531188965
+      },
+      "print_function": {
+        "total": 1,
+        "avg_accuracy": 1.0,
+        "avg_response_time": 0.0
+      }
+    }
+  },
+  "recommendations": [
+    "✅ new系统整体表现良好，各项指标正常"
+  ],
+  "performance_analysis": {},
+  "errors": []
+}

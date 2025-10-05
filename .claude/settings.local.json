@@ -1,18 +1,35 @@
 {
   "permissions": {
     "allow": [
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(.venvScriptspython.exe:*)",
+      "Bash(\"./.venv/Scripts/python.exe\" tests/run_tests.py)",
+      "Bash(\"./.venv/Scripts/python.exe\" tests/test_event_system.py)",
+      "Bash(\"./.venv/Scripts/python.exe\" -c \"import tests.test_event_system as te; print(dir(te))\")",
+      "Bash(\"./.venv/Scripts/python.exe\" -c \"import tests.test_event_system as te; print([func for func in dir(te) if func.startswith(''run_'')])\")",
+      "Bash(\"./.venv/Scripts/python.exe\" tests/test_integrated_sync.py)",
+      "Bash(\"./.venv/Scripts/python.exe\" -c \"\nimport sys\nsys.path.insert(0, ''.'')\nfrom audio_capture_v import AudioCapture, extract_measurements\nfrom excel_exporter import ExcelExporter\nfrom main import VoiceInputSystem\n\n# 测试基本功能\nprint(''✅ 原始模块导入成功'')\n\n# 测试数字提取功能\ntest_cases = [\n    (''温度二十五点五度'', [25.5]),\n    (''压力一百二十'', [120]),\n    (''暂停录音'', []),\n]\n\nfor text, expected in test_cases:\n    result = extract_measurements(text)\n    status = ''✅'' if result == expected else ''❌''\n    print(f''{status} \"\"{text}\"\" -> {result} (期望: {expected})'')\n\")",
+      "Bash(\"./.venv/Scripts/python.exe\" examples/event_driven_demo.py)",
+      "Bash(\"./.venv/Scripts/python.exe\" -c \"\nimport sys\nsys.path.insert(0, ''.'')\nfrom events.event_bus import AsyncEventBus\nfrom events.event_types import AudioDataReceivedEvent\nprint(''✅ 异步事件系统导入成功'')\n\")",
+      "Bash(\"./.venv/Scripts/python.exe\" -c \"\nimport sys\nsys.path.insert(0, ''.'')\nfrom events.event_bus import AsyncEventBus\nfrom events.event_types import AudioDataReceivedEvent\nprint(''异步事件系统导入成功'')\n\")",
+      "Bash(\"./.venv/Scripts/python.exe\" tests/test_performance_simple.py)",
+      "Bash(\"./.venv/Scripts/python.exe\" tests/test_performance_quick.py)",
+      "Bash(\"./.venv/Scripts/python.exe\" tests/test_system_integration.py)",
+      "Bash(./.venv/Scripts/python.exe:*)",
+      "Bash(./.venv/Scripts/pip:*)",
       "Bash(source:*)",
+      "Bash(..venvScriptsactivate)",
       "Bash(python:*)",
-      "Bash(uv:*)",
-      "Bash(.venv/Scripts/python:*)",
-      "Bash(.venv/scripts/python:*)",
-      "Bash(.venv/scripts/pip:*)",
-      "Bash(timeout:*)",
+      "Bash(uv add:*)",
+      "Bash(./.venv/Scripts/python --version)",
       "Bash(./.venv/Scripts/python:*)",
-      "Read(//c/Users/Administrator/**)",
-      "Bash(tree:*)",
-      "Bash(git --version)"
+      "Bash(find logs/ -name \"*.log\" -type f -exec ls -la {})",
+      "Bash(sort:*)",
+      "Bash(..venvScriptspython.exe testscomparisonenhanced_comparison_framework.py --system new)",
+      "Bash(timeout:*)",
+      "Bash(cat:*)"
     ],
-    "deny": []
+    "deny": [],
+    "ask": []
   }
 }

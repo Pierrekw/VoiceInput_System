@@ -1,0 +1,607 @@
+# 测试配置文件 - 扩展版
+# 用于深度对比测试的配置参数
+
+# 模型配置
+model:
+  default_model: "model/cn"
+  fallback_model: "model/cns"
+
+# 音频配置
+audio:
+  sample_rate: 16000
+  chunk_size: 1024
+  channels: 1
+  format_type: "int16"
+  buffer_size: 8192
+
+# 系统配置
+system:
+  timeout_seconds: 5  # 测试时使用较短超时
+  buffer_size: 1000
+  log_level: "INFO"
+  test_mode: true  # 启用测试模式
+
+# Excel配置
+excel:
+  output_file: "test_comparison_data.xlsx"
+  auto_export: true
+  format_type: "professional"
+
+# 语音命令配置
+voice_commands:
+  pause: ["暂停录音", "暂停", "pause"]
+  resume: ["继续录音", "继续", "恢复", "resume"]
+  stop: ["停止录音", "停止", "结束", "stop", "exit"]
+
+# 错误修正配置
+error_correction:
+  enable_auto_correction: true
+  chinese_number_mapping:
+    "零": "0"
+    "一": "1"
+    "二": "2"
+    "三": "3"
+    "四": "4"
+    "五": "5"
+    "六": "6"
+    "七": "7"
+    "八": "8"
+    "九": "9"
+    "十": "10"
+    "百": "100"
+    "千": "1000"
+    "万": "10000"
+    "点": "."
+
+"voice_data": [
+    {
+      "text": "测量值为十二点五",
+      "values": [12.5],
+      "delay": 2,
+      "description": "基础测量值"
+    },
+    {
+      "text": "测量值为十二点五和三十三点八",
+      "values": [12.5, 33.8],
+      "delay": 2,
+      "description": "多值测量"
+    },
+    {
+      "text": "五十五点五",
+      "values": [55.5],
+      "delay": 1.5,
+      "description": "单值测量"
+    },
+    {
+      "text": "七十七点七和九十九点九",
+      "values": [77.7, 99.9],
+      "delay": 2.5,
+      "description": "暂停后测量1"
+    },
+    {
+      "text": "一百一十一点一",
+      "values": [111.1],
+      "delay": 1,
+      "description": "暂停后测量2"
+    },
+    {
+      "text": "测量数据为一百二十三点四",
+      "values": [123.4],
+      "delay": 2,
+      "description": "最终测量1"
+    },
+    {
+      "text": "二百五十六点七八",
+      "values": [256.78],
+      "delay": 1.5,
+      "description": "最终测量2"
+    },
+    {
+      "text": "",
+      "values": [],
+      "delay": 0.5,
+      "description": "空字符串测试"
+    },
+    {
+      "text": "无数字文本",
+      "values": [],
+      "delay": 1,
+      "description": "纯文本无数字"
+    },
+    {
+      "text": "零点零零一",
+      "values": [0.001],
+      "delay": 1,
+      "description": "极小小数"
+    }
+  ]
+
+# 复杂场景测试数据
+"voice_data_complex": [
+    {
+      "text": "负十度",
+      "values": [-10.0],
+      "delay": 1,
+      "description": "负数测试"
+    },
+    {
+      "text": "温度负二十五点五度",
+      "values": [-25.5],
+      "delay": 2,
+      "description": "负小数测试"
+    },
+    {
+      "text": "一千零二十三点四五六",
+      "values": [1023.456],
+      "delay": 1.5,
+      "description": "大数多小数位"
+    },
+    {
+      "text": "二万三千四百五十六点七八九",
+      "values": [23456.789],
+      "delay": 2,
+      "description": "万位大数"
+    },
+    {
+      "text": "测量值为零点零零一",
+      "values": [0.001],
+      "delay": 1,
+      "description": "极小小数"
+    },
+    {
+      "text": "零",
+      "values": [0.0],
+      "delay": 0.5,
+      "description": "纯零"
+    },
+    {
+      "text": "一百万点一二三四五",
+      "values": [1000000.12345],
+      "delay": 2,
+      "description": "百万级大数"
+    }
+  ]
+
+# 边界情况测试数据
+"voice_data_edge_cases": [
+    {
+      "text": "一百二十和三百四十五",
+      "values": [120.0, 345.0],
+      "delay": 2,
+      "description": "多个整数"
+    },
+    {
+      "text": "零点五和零点八",
+      "values": [0.5, 0.8],
+      "delay": 1.5,
+      "description": "多个小数"
+    },
+    {
+      "text": "负一十和负二十点五",
+      "values": [-10.0, -20.5],
+      "delay": 2,
+      "description": "多个负数"
+    },
+    {
+      "text": "一千二三百",
+      "values": [1200.0, 300.0],
+      "delay": 1.5,
+      "description": "连续中文数字"
+    },
+    {
+      "text": "温度25.5度湿度36度",
+      "values": [25.5, 36.0],
+      "delay": 2,
+      "description": "中英混合"
+    },
+    {
+      "text": "数值为12，34，56.78",
+      "values": [12.0, 34.0, 56.78],
+      "delay": 2,
+      "description": "逗号分隔"
+    }
+  ]
+
+# 错误恢复测试数据
+"voice_data_error_recovery": [
+    {
+      "text": "测量值为一二三点四五度",  # 非标准格式
+      "values": [123.45],
+      "delay": 2,
+      "description": "非标准中文数字"
+    },
+    {
+      "text": "温度大概二十五度左右",  # 模糊表述
+      "values": [25.0],
+      "delay": 2,
+      "description": "模糊量词"
+    },
+    {
+      "text": "二十五或三十度",  # 选择性数值
+      "values": [25.0, 30.0],
+      "delay": 2,
+      "description": "选择性数值"
+    },
+    {
+      "text": "数值为N/A",  # 无效输入
+      "values": [],
+      "delay": 1,
+      "description": "无效数值"
+    },
+    {
+      "text": "测量值是二十五点",  # 不完整小数
+      "values": [25.0],
+      "delay": 1.5,
+      "description": "不完整小数"
+    }
+  ]
+
+# 命令干扰测试数据
+"voice_data_with_commands": [
+    {
+      "text": "暂停录音测量值为二十五点五度继续录音",
+      "values": [25.5],
+      "delay": 3,
+      "description": "命令包围数值"
+    },
+    {
+      "text": "停止录音三十度",
+      "values": [30.0],
+      "delay": 2,
+      "description": "命令后数值"
+    },
+    {
+      "text": "二十五度暂停录音",
+      "values": [25.0],
+      "delay": 2,
+      "description": "数值后命令"
+    },
+    {
+      "text": "恢复录音测量值三十七点八度",
+      "values": [37.8],
+      "delay": 2.5,
+      "description": "恢复命令"
+    }
+  ]
+
+# 性能压力测试数据
+"voice_data_performance": [
+    {
+      "text": "一",
+      "values": [1.0],
+      "delay": 0.1,
+      "description": "快速单数字"
+    },
+    {
+      "text": "二",
+      "values": [2.0],
+      "delay": 0.1,
+      "description": "快速单数字"
+    },
+    {
+      "text": "三",
+      "values": [3.0],
+      "delay": 0.1,
+      "description": "快速单数字"
+    },
+    {
+      "text": "四",
+      "values": [4.0],
+      "delay": 0.1,
+      "description": "快速单数字"
+    },
+    {
+      "text": "五",
+      "values": [5.0],
+      "delay": 0.1,
+      "description": "快速单数字"
+    }
+  ]
+
+# TTS回响干扰测试 - 测试系统在TTS播放期间的抗干扰能力
+"voice_data_tts_interference": [
+    {
+      "text": "温度二十五点五度",
+      "values": [25.5],
+      "delay": 1,
+      "description": "正常测量值1",
+      "tts_playback": true,
+      "tts_text": "测量开始",
+      "tts_before": true
+    },
+    {
+      "text": "语音识别已开始",  # 这是TTS播放的内容，应该被忽略
+      "values": [],
+      "delay": 2,
+      "description": "TTS回响干扰",
+      "tts_playback": true,
+      "tts_text": "语音识别已开始",
+      "tts_concurrent": true
+    },
+    {
+      "text": "成功提取数值二十五点五",  # TTS反馈内容
+      "values": [],
+      "delay": 1.5,
+      "description": "TTS数值反馈干扰",
+      "tts_playback": true,
+      "tts_text": "成功提取数值25.5",
+      "tts_concurrent": true
+    },
+    {
+      "text": "压力一百二十帕斯卡",
+      "values": [120.0],
+      "delay": 1,
+      "description": "TTS后正常输入",
+      "tts_playback": false,
+      "tts_after": true
+    },
+    {
+      "text": "继续录音温度三十七度",  # TTS命令干扰
+      "values": [37.0],
+      "delay": 2,
+      "description": "TTS命令+数值混合",
+      "tts_playback": true,
+      "tts_text": "继续录音",
+      "tts_mixed": true
+    }
+  ]
+
+# 键盘干扰测试 - 测试各阶段键盘乱按的影响
+"keyboard_interference_tests": [
+    {
+      "text": "测量值为二十五度",
+      "values": [25.0],
+      "delay": 2,
+      "description": "正常输入前键盘干扰",
+      "keyboard_interference": {
+        "timing": "before",
+        "keys": ["space", "enter", "escape", "ctrl+c"],
+        "random": true,
+        "count": 5
+      }
+    },
+    {
+      "text": "温度三十点五度",
+      "values": [30.5],
+      "delay": 2,
+      "description": "输入中键盘干扰",
+      "keyboard_interference": {
+        "timing": "during",
+        "keys": ["space", "backspace", "tab", "alt+tab"],
+        "random": true,
+        "count": 3
+      }
+    },
+    {
+      "text": "压力一百帕斯卡",
+      "values": [100.0],
+      "delay": 2,
+      "description": "输入后键盘干扰",
+      "keyboard_interference": {
+        "timing": "after",
+        "keys": ["enter", "space", "escape", "f1", "f2"],
+        "random": true,
+        "count": 4
+      }
+    },
+    {
+      "text": "暂停录音湿度四十五度",  # 命令+数值+键盘干扰
+      "values": [45.0],
+      "delay": 3,
+      "description": "命令期间键盘干扰",
+      "keyboard_interference": {
+        "timing": "command_period",
+        "keys": ["ctrl+p", "ctrl+s", "alt+f4", "windows+q"],
+        "random": true,
+        "count": 6
+      }
+    }
+  ]
+
+# 语音命令乱序测试 - 测试各种语音命令的组合和干扰
+"voice_command_chaos_tests": [
+    {
+      "text": "暂停录音暂停录音继续录音停止录音测量值为二十五度",
+      "values": [25.0],
+      "delay": 4,
+      "description": "连续命令干扰",
+      "expected_behavior": "只提取数值，忽略重复命令"
+    },
+    {
+      "text": "停止录音温度三十七度继续录音压力一百帕",
+      "values": [37.0, 100.0],
+      "delay": 3,
+      "description": "命令包围数值",
+      "expected_behavior": "正确提取两个数值"
+    },
+    {
+      "text": "恢复录音暂停录音恢复录音测量值四十二点五度",
+      "values": [42.5],
+      "delay": 4,
+      "description": "命令冲突测试",
+      "expected_behavior": "系统状态保持一致"
+    },
+    {
+      "text": "exit stop 暂停 pause resume 温度二十八度",
+      "values": [28.0],
+      "delay": 3,
+      "description": "中英文命令混合",
+      "expected_behavior": "识别所有命令变体"
+    },
+    {
+      "text": "测量开始温度三十三度测量结束暂停录音温度三十五度继续录音",
+      "values": [33.0, 35.0],
+      "delay": 5,
+      "description": "自定义命令测试",
+      "expected_behavior": "处理复杂命令序列"
+    }
+  ]
+
+# 综合干扰压力测试 - 多重干扰同时进行
+"comprehensive_stress_tests": [
+    {
+      "text": "温度二十五点五度",
+      "values": [25.5],
+      "delay": 3,
+      "description": "TTS+键盘+命令三重干扰",
+      "interferences": {
+        "tts_playback": true,
+        "tts_text": "系统处理中",
+        "keyboard_interference": {
+          "timing": "during",
+          "keys": ["space", "enter"],
+          "random": true,
+          "count": 3
+        },
+        "voice_commands": ["暂停录音", "继续录音"]
+      }
+    },
+    {
+      "text": "压力一百二十帕斯卡",
+      "values": [120.0],
+      "delay": 4,
+      "description": "高频连续干扰",
+      "interferences": {
+        "rapid_inputs": [
+          {"type": "tts", "text": "识别中", "delay": 0.5},
+          {"type": "keyboard", "keys": ["space"], "delay": 0.3},
+          {"type": "command", "text": "暂停", "delay": 0.7},
+          {"type": "keyboard", "keys": ["enter"], "delay": 0.2}
+        ]
+      }
+    },
+    {
+      "text": "湿度百分之七十五",
+      "values": [75.0],
+      "delay": 5,
+      "description": "系统边界压力测试",
+      "interferences": {
+        "memory_pressure": true,
+        "cpu_load": 80,  # 80% CPU负载
+        "rapid_context_switching": true,
+        "concurrent_commands": 5
+      }
+    }
+  ]
+
+# 非数字输入测试 - 测试系统对纯文本的处理和Print功能
+"non_numeric_input_tests": [
+    {
+      "text": "Print 当前状态正常",
+      "values": [],
+      "delay": 1,
+      "description": "Print命令中文",
+      "print_function": true,
+      "expected_print": "当前状态正常"
+    },
+    {
+      "text": "Print system status is normal",
+      "values": [],
+      "delay": 1,
+      "description": "Print命令英文",
+      "print_function": true,
+      "expected_print": "system status is normal"
+    },
+    {
+      "text": "Print 温度二十五点五度",
+      "values": [],
+      "delay": 1.5,
+      "description": "Print命令包含数字",
+      "print_function": true,
+      "expected_print": "温度二十五点五度"
+    },
+    {
+      "text": "当前状态正常",
+      "values": [],
+      "delay": 1,
+      "description": "纯中文描述",
+      "print_function": false,
+      "should_ignore": true
+    },
+    {
+      "text": "system is running normally",
+      "values": [],
+      "delay": 1,
+      "description": "纯英文描述",
+      "print_function": false,
+      "should_ignore": true
+    },
+    {
+      "text": "测量设备已连接",
+      "values": [],
+      "delay": 1,
+      "description": "设备状态描述",
+      "print_function": false,
+      "should_ignore": true
+    },
+    {
+      "text": "Print 警告：设备异常",
+      "values": [],
+      "delay": 1,
+      "description": "Print警告信息",
+      "print_function": true,
+      "expected_print": "警告：设备异常",
+      "log_level": "warning"
+    },
+    {
+      "text": "Print ERROR: Connection failed",
+      "values": [],
+      "delay": 1,
+      "description": "Print错误信息",
+      "print_function": true,
+      "expected_print": "ERROR: Connection failed",
+      "log_level": "error"
+    },
+    {
+      "text": "Print 时间戳 2024-01-01 10:30:00",
+      "values": [],
+      "delay": 1,
+      "description": "Print带时间戳",
+      "print_function": true,
+      "expected_print": "时间戳 2024-01-01 10:30:00"
+    },
+    {
+      "text": "Print 测量值：温度25.5°C，湿度65%",
+      "values": [],
+      "delay": 2,
+      "description": "Print复杂格式",
+      "print_function": true,
+      "expected_print": "测量值：温度25.5°C，湿度65%"
+    }
+  ]
+
+# 中英混合输入测试
+"mixed_language_tests": [
+    {
+      "text": "temperature 二十五度",
+      "values": [25.0],
+      "delay": 1.5,
+      "description": "英文+中文数字"
+    },
+    {
+      "text": "温度 is 三十点五 degrees",
+      "values": [30.5],
+      "delay": 2,
+      "description": "中文+英文+数字"
+    },
+    {
+      "text": "Print current temperature: 二十八点二°C",
+      "values": [],
+      "delay": 2,
+      "description": "Print命令中英混合",
+      "print_function": true,
+      "expected_print": "current temperature: 二十八点二°C"
+    },
+    {
+      "text": "湿度 humidity 百分之六十五",
+      "values": [65.0],
+      "delay": 2,
+      "description": "中英混合百分比"
+    },
+    {
+      "text": "测量值 measurement 一百二十点五 units",
+      "values": [120.5],
+      "delay": 2.5,
+      "description": "中英混合测量"
+    }
+  ]

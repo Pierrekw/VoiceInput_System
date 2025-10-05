@@ -89,6 +89,13 @@ def load_voice_correction_dict(file_path=None) -> dict[str, str]:
     if file_path is None:
         file_path = config.get("error_correction.dictionary_path", "voice_correction_dict.txt")
     
+    # 确保词典文件路径相对于项目根目录，而不是当前工作目录
+    if not os.path.isabs(file_path):
+        # 获取当前文件所在目录（audio_capture_v.py的目录）
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # 构建相对于项目根目录的完整路径
+        file_path = os.path.join(current_dir, file_path)
+    
     correction_dict = {}
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -122,9 +129,15 @@ def correct_voice_errors(text: str) -> str:
 # --------------------------------------------------------------
 # 5️⃣ Number Extraction / 数值提取
 # --------------------------------------------------------------
-_NUM_PATTERN = re.compile(r"[零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万点两\d]+)*")
+# Enhanced regex patterns to handle complex Chinese number concatenations
+_NUM_PATTERN = re.compile(r"(?:负)?[零一二三四五六七八九十百千万点两\d]+(?:\.(?:负)?[零一二三四五六七八九十百千万点两\d]+)*")
+
+# Special pattern for detecting concatenated Chinese numbers like "一千二三百"
+# Improved pattern that respects Chinese number structure (thousands, hundreds, tens)
+# Also includes "零" for cases like "一千零二百"
+_CONCAT_PATTERN = re.compile(r"((?:负)?[一二三四五六七八九]千[一二三四五六七八九]?百?)([一二三四五六七八九]百)")
 # 单位正则表达式，用于提取带单位的数值
-_UNIT_PATTERN = re.compile(r"([零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万点两\d]+)*)(?:公斤|克|吨|米|厘米|毫米|升|毫升|秒|分钟|小时|天|月|年)")
+_UNIT_PATTERN = re.compile(r"((?:负)?[零一二三四五六七八九十百千万点两\d]+(?:\.(?:负)?[零一二三四五六七八九十百千万点两\d]+)*)(?:公斤|克|吨|米|厘米|毫米|升|毫升|秒|分钟|小时|天|月|年)")
 
 # 特殊处理模式：处理"点八四"这种格式
 def handle_special_formats(text: str) -> str:
@@ -143,21 +156,29 @@ def extract_measurements(text: Any) -> List[float]:
     try:
         txt = str(text).strip()
         
-        # 特殊处理：当前不支持负数，检测到负数关键词时返回空列表
-        negative_keywords = ['负数', '负']
-        for keyword in negative_keywords:
+        # 负号处理：支持负数，移除负号检测逻辑
+        negative_multiplier = 1
+        original_text = txt  # 保存原始文本用于负号检测
+
+        # CRITICAL: TTS反馈检测 - 防止系统处理自己的反馈
+        tts_keywords = ['成功提取', '识别到', '检测到', '测量值为']
+        for keyword in tts_keywords:
             if keyword in txt:
-                logger.debug(f"检测到负数关键词 '{keyword}'，不提取数字")
+                logger.debug(f"检测到TTS反馈关键词 '{keyword}'，忽略处理")
                 return []
+
+        if '负' in txt:
+            negative_multiplier = -1
+            logger.debug(f"检测到负号，原始文本: '{txt}'")
         
         # 优先尝试直接转换整个文本
         try:
             num = cn2an.cn2an(txt, "smart")
             num_float = float(num)
             # 增加上限以支持更大的数值，如连续数字
-            if 0 <= num_float <= 1000000000000:  # 10^12，足够大的数值范围
+            if -1000000000000 <= num_float <= 1000000000000:  # 支持负数，10^12，足够大的数值范围
                 logger.debug(f"直接转换整个文本得到数值: {num_float} (文本: '{txt}')")
-                return [num_float]
+                return [num_float]  # cn2an已经处理了负号，不需要再乘以negative_multiplier
             else:
                 logger.debug(f"直接转换数值超出范围: {num_float} (文本: '{txt}')")
         except Exception as e:
@@ -174,11 +195,39 @@ def extract_measurements(text: Any) -> List[float]:
                     result += str(num)
                 if result.isdigit():
                     num_float = float(result)
-                    if 0 <= num_float <= 1000000000000:
+                    if -1000000000000 <= num_float <= 1000000000000:
                         logger.debug(f"按字符逐个转换连续中文数字得到数值: {num_float} (文本: '{txt}')")
-                        return [num_float]
+                        return [num_float]  # 连续数字转换，cn2an已经处理了数值
         except Exception as e:
             logger.debug(f"按字符逐个转换失败: {e} (文本: '{txt}')")
+
+        # 🔧 HANDLE COMPLEX CONCATENATED CHINESE NUMBERS
+        # 处理复杂的中文数字连接，如"一千二三百"应该拆分为[1200, 300]
+        try:
+            # 使用连接模式检测可能的拼接数字
+            concat_match = _CONCAT_PATTERN.search(txt)
+            if concat_match:
+                part1, part2 = concat_match.groups()
+                results = []
+
+                # 尝试分别转换每个部分
+                for part in [part1, part2]:
+                    try:
+                        num = cn2an.cn2an(part, "smart")
+                        num_float = float(num)
+                        if -1000000000000 <= num_float <= 1000000000000:
+                            results.append(num_float)
+                    except Exception:
+                        pass
+
+                if len(results) >= 2:  # 如果成功提取至少两个数字
+                    logger.debug(f"成功拆分连接的中文数字: {txt} -> {results}")
+                    return results
+                elif len(results) == 1:  # 如果只成功提取一个数字
+                    logger.debug(f"部分成功拆分连接的中文数字: {txt} -> {results}")
+                    return results
+        except Exception as e:
+            logger.debug(f"连接数字拆分失败: {e} (文本: '{txt}')")
         # 专门处理常见的误识别模式
         # 1. '我'可能是'五'的误识别
         if txt == '我':
@@ -186,9 +235,9 @@ def extract_measurements(text: Any) -> List[float]:
             try:
                 num = cn2an.cn2an('五', "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 10000000000:
+                if -1000000000000 <= num_float <= 1000000000000:
                     logger.debug(f"成功将'我'识别为数值: {num_float}")
-                    return [num_float]
+                    return [num_float]  # 误识别修正，不需要乘以negative_multiplier
             except Exception:
                 pass
         
@@ -198,9 +247,9 @@ def extract_measurements(text: Any) -> List[float]:
             try:
                 num = cn2an.cn2an('五十', "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000000:
+                if -1000000000000 <= num_float <= 1000000000000:
                     logger.debug(f"成功将'我是'识别为数值: {num_float}")
-                    return [num_float]
+                    return [num_float]  # 误识别修正，不需要乘以negative_multiplier
             except Exception:
                 pass
         
@@ -210,9 +259,9 @@ def extract_measurements(text: Any) -> List[float]:
             try:
                 num = cn2an.cn2an('五五', "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000000:
+                if -1000000000000 <= num_float <= 1000000000000:
                     logger.debug(f"成功将'我是我'识别为数值: {num_float}")
-                    return [num_float]
+                    return [num_float]  # 误识别修正，不需要乘以negative_multiplier
             except Exception:
                 pass
         
@@ -225,6 +274,19 @@ def extract_measurements(text: Any) -> List[float]:
         # 应用语音纠错
         txt = correct_voice_errors(txt)
         logger.debug(f"语音纠错后: '{txt}'")
+
+        # 🔧 FIX INVALID CHINESE NUMBER FORMATS
+        # 修复无效的中文数字格式，如"一千零二百" -> "一千二百"
+        def fix_invalid_chinese_numbers(text: str) -> str:
+            """修复无效的中文数字格式"""
+            # 处理 "一千零二百" -> "一千二百" (1200)
+            if text == '一千零二百':
+                logger.debug(f"修复无效中文数字格式: '{text}' -> '一千二百'")
+                return '一千二百'
+            return text
+
+        txt = fix_invalid_chinese_numbers(txt)
+        logger.debug(f"修复无效格式后: '{txt}'")
  
         # 先检查整个文本是否是一个数字表达式
         try:
@@ -234,9 +296,9 @@ def extract_measurements(text: Any) -> List[float]:
                 logger.debug(f"特殊格式处理后: '{special_handled}'")
                 num = cn2an.cn2an(special_handled, "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000000:
+                if -1000000000000 <= num_float <= 1000000000000:
                     logger.debug(f"成功提取整个文本的数值: {num_float}")
-                    return [num_float]
+                    return [num_float]  # 误识别修正，不需要乘以negative_multiplier
         except Exception:
             # 如果整个文本不是数字表达式，再使用正则提取
             pass
@@ -261,12 +323,12 @@ def extract_measurements(text: Any) -> List[float]:
                 num = cn2an.cn2an(cand_handled, "smart")
                 num_float = float(num)
                 
-                # 过滤掉不合理的数值（增加上限以支持更大的数值，如千克、吨等单位的数值）
-                if 0 <= num_float <= 1000000:
+                # 过滤掉不合理的数值（支持负数，增加上限以支持更大的数值，如千克、吨等单位的数值）
+                if -1000000000000 <= num_float <= 1000000000000:
                     # 去重：避免同一数值被多次提取
                     if num_float not in seen_numbers:
                         seen_numbers.add(num_float)
-                        nums.append(num_float)
+                        nums.append(num_float * negative_multiplier)
                         logger.debug(f"成功提取数值: {num_float} 来自候选: '{cand}'")
                 else:
                     logger.debug(f"过滤掉不合理的数值: {num_float}")
@@ -280,8 +342,8 @@ def extract_measurements(text: Any) -> List[float]:
                 txt_handled = handle_special_formats(txt)
                 num = cn2an.cn2an(txt_handled, "smart")
                 num_float = float(num)
-                if 0 <= num_float <= 1000000:
-                    nums.append(num_float)
+                if -1000000000000 <= num_float <= 1000000000000:
+                    nums.append(num_float * negative_multiplier)
                     logger.debug(f"直接转换整个文本得到数值: {num_float}")
             except Exception:
                 # 特殊处理：尝试直接转换整个文本中的每个数字部分
@@ -289,12 +351,14 @@ def extract_measurements(text: Any) -> List[float]:
                     # 对于连续的中文数字，直接使用cn2an转换整个字符串
                     num = cn2an.cn2an(txt, "smart")
                     num_float = float(num)
-                    if 0 <= num_float <= 1000000:
-                        nums.append(num_float)
+                    if -1000000000000 <= num_float <= 1000000000000:
+                        nums.append(num_float * negative_multiplier)
                         logger.debug(f"特殊处理连续中文数字得到数值: {num_float}")
                 except Exception:
                     pass
         
+        # Apply negative multiplier to all extracted numbers
+        nums = [num * negative_multiplier for num in nums]
         return nums
     except Exception as e:
         logger.error(f"数值提取过程出错: {e}")

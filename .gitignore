@@ -32,5 +32,5 @@ check_json.py # AI用于检查json文件
 
 tests_develop/
 
-# 忽略 claude 目录及其所有内容
-claude/
+# claude 目录及其所有内容
+# claude/

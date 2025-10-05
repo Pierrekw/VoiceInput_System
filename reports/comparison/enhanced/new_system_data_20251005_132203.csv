@@ -1,0 +1,16 @@
+system_type,test_case,input_text,expected_values,actual_values,accuracy,response_time,cpu_usage,memory_usage,test_category,has_errors
+new,Print命令中文,Print 当前状态正常,[],[],1.0,0.0,2.2,48.3,print_function,False
+new,Print命令英文,Print system status is normal,[],[],1.0,0.0,15.1,48.3,print_function,False
+new,Print命令包含数字,Print 温度二十五点五度,[],[],1.0,0.0,6.4,48.2,print_function,False
+new,纯中文描述,当前状态正常,[],[],1.0,0.0009944438934326172,7.1,48.2,print_function,False
+new,纯英文描述,system is running normally,[],[],1.0,0.0007417201995849609,11.5,48.2,print_function,False
+new,设备状态描述,测量设备已连接,[],[],1.0,0.0010004043579101562,11.2,48.3,print_function,False
+new,Print警告信息,Print 警告：设备异常,[],[],1.0,0.0,6.4,48.2,print_function,False
+new,Print错误信息,Print ERROR: Connection failed,[],[],1.0,0.0,2.1,48.2,print_function,False
+new,Print带时间戳,Print 时间戳 2024-01-01 10:30:00,[],[],1.0,0.0009589195251464844,1.9,48.2,print_function,False
+new,Print复杂格式,Print 测量值：温度25.5°C，湿度65%,[],[],1.0,0.0010974407196044922,4.7,48.2,print_function,False
+new,英文+中文数字,temperature 二十五度,[25.0],[25.0],1.0,0.0,5.7,48.2,basic,False
+new,中文+英文+数字,温度 is 三十点五 degrees,[30.5],[30.5],1.0,0.000997304916381836,9.3,48.2,basic,False
+new,Print命令中英混合,Print current temperature: 二十八点二°C,[],[],1.0,0.0010159015655517578,4.9,48.2,print_function,False
+new,中英混合百分比,湿度 humidity 百分之六十五,[65.0],[65.0],1.0,0.0010290145874023438,10.9,48.2,basic,False
+new,中英混合测量,测量值 measurement 一百二十点五 units,[120.5],[120.5],1.0,0.0,2.9,48.2,basic,False

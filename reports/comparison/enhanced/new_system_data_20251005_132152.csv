@@ -1,0 +1,11 @@
+system_type,test_case,input_text,expected_values,actual_values,accuracy,response_time,cpu_usage,memory_usage,test_category,has_errors
+new,Print命令中文,Print 当前状态正常,[],[],1.0,0.0,2.2,48.3,print_function,False
+new,Print命令英文,Print system status is normal,[],[],1.0,0.0,15.1,48.3,print_function,False
+new,Print命令包含数字,Print 温度二十五点五度,[],[],1.0,0.0,6.4,48.2,print_function,False
+new,纯中文描述,当前状态正常,[],[],1.0,0.0009944438934326172,7.1,48.2,print_function,False
+new,纯英文描述,system is running normally,[],[],1.0,0.0007417201995849609,11.5,48.2,print_function,False
+new,设备状态描述,测量设备已连接,[],[],1.0,0.0010004043579101562,11.2,48.3,print_function,False
+new,Print警告信息,Print 警告：设备异常,[],[],1.0,0.0,6.4,48.2,print_function,False
+new,Print错误信息,Print ERROR: Connection failed,[],[],1.0,0.0,2.1,48.2,print_function,False
+new,Print带时间戳,Print 时间戳 2024-01-01 10:30:00,[],[],1.0,0.0009589195251464844,1.9,48.2,print_function,False
+new,Print复杂格式,Print 测量值：温度25.5°C，湿度65%,[],[],1.0,0.0010974407196044922,4.7,48.2,print_function,False

@@ -1,0 +1,6 @@
+system_type,test_case,input_text,expected_values,actual_values,accuracy,response_time,cpu_usage,memory_usage,test_category,has_errors
+new,英文+中文数字,temperature 二十五度,[25.0],[25.0],1.0,0.0,14.3,46.3,basic,False
+new,中文+英文+数字,温度 is 三十点五 degrees,[30.5],[30.5],1.0,0.0,4.3,46.2,basic,False
+new,Print命令中英混合,Print current temperature: 二十八点二°C,[],[],1.0,0.0,1.4,46.2,print_function,False
+new,中英混合百分比,湿度 humidity 百分之六十五,[65.0],[65.0],1.0,0.0018613338470458984,0.0,46.1,basic,False
+new,中英混合测量,测量值 measurement 一百二十点五 units,[120.5],[120.5],1.0,0.0070934295654296875,5.3,46.2,basic,False

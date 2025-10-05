@@ -27,7 +27,8 @@
       "Bash(sort:*)",
       "Bash(..venvScriptspython.exe testscomparisonenhanced_comparison_framework.py --system new)",
       "Bash(timeout:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

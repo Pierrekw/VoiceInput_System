@@ -53,12 +53,14 @@ This is a system designed specifically for Chinese voice recognition, which can 
 - **线程安全**：正确的并发操作处理
 - **内存管理**：自动资源清理和垃圾回收
 - **全面日志记录**：带有文件和控制台输出的详细操作日志
+- **共享文本处理模块**：新老版本共用统一文本处理逻辑，便于维护和持续改进
 ### 🔧 Technical Features
 - **Unified State Management**: Clean state machine (idle/recording/paused/stopped)
 - **Voice Error Correction**: Customizable dictionary for fixing recognition errors automatically
 - **Thread Safety**: Proper concurrent operation handling
 - **Memory Management**: Automatic resource cleanup and garbage collection
 - **Comprehensive Logging**: Detailed operation logs with file and console output
+- **Shared Text Processing Module**: Both old and new versions share unified text processing logic for easy maintenance and continuous improvement
 
 ## ⚠️ 当前限制
 - **特殊数字序列**："一二三四五六七八九十"现在支持逐字符转换（12345678910）
@@ -74,6 +76,17 @@ This is a system designed specifically for Chinese voice recognition, which can 
 - ✅ **负数支持**: 完整支持负数识别和处理
 - ✅ **性能验证**: 新异步系统与原始系统达到相同的88.4%准确度
 - ✅ **综合测试**: 通过69项对比测试，验证功能一致性
+
+### 📦 文本处理模块统一化
+- ✅ **共享模块**: 新老版本共用统一文本处理逻辑，简化维护
+- ✅ **模块整合**: 将多个文本处理模块整合为单一模块，降低复杂度
+- ✅ **向后兼容**: 保持与原始系统的完全兼容性
+- ✅ **持续改进**: 为后续语音识别准确率优化奠定基础
+### 📦 Text Processing Module Unification
+- ✅ **Shared Module**: Both old and new versions share unified text processing logic for simplified maintenance
+- ✅ **Module Consolidation**: Consolidated multiple text processing modules into single module, reducing complexity
+- ✅ **Backward Compatibility**: Maintains full compatibility with original system
+- ✅ **Continuous Improvement**: Establishes foundation for future voice recognition accuracy improvements
 
 ### 📊 测试验证结果
 - **测试完成时间**: 277.16秒 (4.6分钟) 完成69项全面对比测试
@@ -141,6 +154,7 @@ Voice_Input/
 ├── TTSengine.py                  # 文本转语音引擎
 ├── model_manager.py              # 模型加载和管理
 ├── config_loader.py              # 配置加载
+├── text_processor.py             # 共享文本处理模块（新老版本共用）
 ├── claude/                       # 文档文件夹
 │   ├── PROJECT_SUMMARY.md        # 完整项目概述
 │   ├── QUICK_REFERENCE.md        # 快速命令参考
@@ -162,6 +176,7 @@ Voice_Input/
 ├── TTSengine.py                  # Text-to-Speech engine
 ├── model_manager.py              # Model loading and management
 ├── config_loader.py              # Configuration loading
+├── text_processor.py             # Shared text processing module (both versions)
 ├── claude/                       # Documentation folder
 │   ├── PROJECT_SUMMARY.md        # Complete project overview
 │   ├── QUICK_REFERENCE.md        # Quick commands reference
@@ -308,6 +323,12 @@ python -m pytest test_main_integration.py -v
 
 # 运行完整系统测试
 python -m pytest test_main_full_system.py -v
+
+# 测试文本处理模块
+python text_processor.py
+
+# 测试系统整合
+python -c "from audio_capture_v import extract_measurements; print('测试成功:', extract_measurements('温度二十五点五度'))"
 ```
 ### Run Tests
 ```bash
@@ -319,6 +340,12 @@ python -m pytest test_main_integration.py -v
 
 # Run full system tests
 python -m pytest test_main_full_system.py -v
+
+# Test text processing module
+python text_processor.py
+
+# Test system integration
+python -c "from audio_capture_v import extract_measurements; print('Test successful:', extract_measurements('温度二十五点五度'))"
 ```
 
 ### 测试文件
@@ -397,6 +424,17 @@ System response: ⏸️ Paused recognition
 
 ## 🔧 高级特性
 ## 🔧 Advanced Features
+
+### 共享文本处理模块
+- **模块**: `text_processor.py` - 统一文本处理逻辑
+- **功能**: 中文数字提取、TTS反馈检测、语音错误纠正
+- **优势**: 新老版本共用，简化维护，持续改进语音识别准确率
+- **兼容性**: 完全向后兼容，支持原始系统所有功能
+### Shared Text Processing Module
+- **Module**: `text_processor.py` - Unified text processing logic
+- **Functions**: Chinese number extraction, TTS feedback detection, voice error correction
+- **Benefits**: Shared by both versions, simplified maintenance, continuous improvement of voice recognition accuracy
+- **Compatibility**: Fully backward compatible, supports all original system functions
 
 ### 语音错误纠正
 - **文件**：`voice_correction_dict.txt`
@@ -511,18 +549,19 @@ System response: ⏸️ Paused recognition
 ## 📚 文档
 ## 📚 Documentation
 
-### Claude文档
+### 统一文档 (推荐)
+### Consolidated Documentation (Recommended)
+- **统一文档**: `claude/CONSOLIDATED_DOCUMENTATION.md` - 完整的用户和开发指南
+- **项目摘要**: `claude/PROJECT_SUMMARY_CONCISE.md` - 简洁的项目概述
+- **开发指南**: `claude/DEVELOPMENT_GUIDE.md` - 开发工作流程和规则
+
+### Claude原始文档
+### Original Claude Documentation
 完整文档在`claude/`文件夹中可用：
 - **项目摘要**：完整功能概述
 - **快速参考**：命令和用法
 - **测试结果**：当前测试状态
 - **变更日志**：版本历史
-### Claude Documentation
-Complete documentation available in `claude/` folder:
-- **Project Summary**: Complete feature overview
-- **Quick Reference**: Commands and usage
-- **Test Results**: Current test status
-- **Changelog**: Version history
 
 ## 🤝 贡献
 ## 🤝 Contributing

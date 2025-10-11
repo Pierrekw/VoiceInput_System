@@ -118,27 +118,6 @@ python -m pytest test_main_integration.py -v
 
 ```
 Voice_Input/
-├── main.py                       # 主入口点
-├── audio_capture_v.py            # 音频捕获和识别
-├── excel_exporter.py             # Excel导出功能
-├── TTSengine.py                  # 文本转语音引擎
-├── model_manager.py              # 模型加载和管理
-├── config_loader.py              # 配置加载
-├── claude/                       # 文档文件夹
-│   ├── PROJECT_SUMMARY.md        # 完整项目概述
-│   ├── QUICK_REFERENCE.md        # 快速命令参考
-│   ├── TEST_RESULTS.md           # 测试结果和状态
-│   ├── CHANGELOG.md              # 版本历史
-│   └── README.md                 # 文档导航
-├── test_*.py                     # 测试文件（10+测试文件）
-├── tests/                        # 集成测试目录
-├── voice_correction_dict.txt     # 语音错误纠正
-├── pyproject.toml                # 项目配置
-├── requirements.txt              # Python依赖项
-└── voice_input.log               # 运行时日志
-```
-```
-Voice_Input/
 ├── main.py                       # Main entry point
 ├── audio_capture_v.py            # Audio capture and recognition
 ├── excel_exporter.py             # Excel export functionality

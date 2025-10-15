@@ -55,8 +55,6 @@ class VoiceInputSystem:
         # 预加载模型（只加载一次）
         if not self.audio_capture.load_model():
             print("❌ 模型加载失败，系统可能无法正常工作")
-        else:
-            print("✅ 模型加载成功")
         
         # 设置测试模式
         if self.test_mode:
@@ -164,8 +162,8 @@ if __name__ == "__main__":
             # 仅清除本地模型引用，保留全局模型
             # 这样其他实例仍然可以使用已加载的模型，无需重新加载
             system.audio_capture.unload_model()
-            print("💡 已清除本地模型引用，全局模型仍然可用")
-            print("   提示: 如需完全释放内存，可运行 'python unload_model_global.py' 或使用 '--global-unload' 参数")
+            print("💡 已清除本地模型引用，Python垃圾回收器将在适当时机释放内存")
+            print("   提示: 如需立即完全释放内存，请使用 '--global-unload' 参数")
         
         print("✅ 系统已安全退出")
         sys.exit(0)

@@ -39,7 +39,7 @@ recognition:
     # 长睡眠时间，用于调试和测试场景 e.g. >=0.5s  
    
     # 使用位置: audio_capture_v.py: (701 - 倒计时检测),(757 - 暂停状态检测), (770 - TTS播报时) (1117 - 测试模式 键盘监听循环)
-    production: 0.05      
+    production: 0.01      
     
     # 使用位置: test_keyboard_response.py ; 注意 test_sleep_optimization.py 是硬编码   
     test: 2
@@ -111,3 +111,9 @@ error_correction:
   # 启用自动错误修正
   # 使用位置: audio_capture_v.py
   enabled: true
+
+# ===== TTS配置 =====
+tts:
+  # TTS默认状态: "on"(开启) 或 "off"(关闭)
+  # 使用位置: audio_capture_v.py
+  default_state: "off"

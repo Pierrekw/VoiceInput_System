@@ -118,24 +118,24 @@ python -m pytest test_main_integration.py -v
 
 ```
 Voice_Input/
-├── main.py                       # Main entry point
-├── audio_capture_v.py            # Audio capture and recognition
-├── excel_exporter.py             # Excel export functionality
-├── TTSengine.py                  # Text-to-Speech engine
-├── model_manager.py              # Model loading and management
-├── config_loader.py              # Configuration loading
-├── claude/                       # Documentation folder
-│   ├── PROJECT_SUMMARY.md        # Complete project overview
-│   ├── QUICK_REFERENCE.md        # Quick commands reference
-│   ├── TEST_RESULTS.md           # Test results and status
-│   ├── CHANGELOG.md              # Version history
-│   └── README.md                 # Documentation navigation
-├── test_*.py                     # Test files (10+ test files)
-├── tests/                        # Integration tests directory
-├── voice_correction_dict.txt     # Voice error corrections
-├── pyproject.toml                # Project configuration
-├── requirements.txt              # Python dependencies
-└── voice_input.log               # Runtime logs
+├── main.py                       # 主入口点 / Main entry point
+├── audio_capture_v.py            # 音频捕获和识别 / Audio capture and recognition
+├── excel_exporter.py             # Excel导出功能 / Excel export functionality
+├── TTSengine.py                  # 文本转语音引擎 / Text-to-Speech engine
+├── model_manager.py              # 模型加载和管理 / Model loading and management
+├── config_loader.py              # 配置加载 / Configuration loading
+├── claude/                       # 文档文件夹 / Documentation folder
+│   ├── PROJECT_SUMMARY.md        # 完整项目概述 / Complete project overview
+│   ├── QUICK_REFERENCE.md        # 快速命令参考 / Quick commands reference
+│   ├── TEST_RESULTS.md           # 测试结果和状态 / Test results and status
+│   ├── CHANGELOG.md              # 版本历史 / Version history
+│   └── README.md                 # 文档导航 / Documentation navigation
+├── test_*.py                     # 测试文件（10+测试文件） / Test files (10+ test files)
+├── tests/                        # 集成测试目录 / Integration tests directory
+├── voice_correction_dict.txt     # 语音错误纠正 / Voice error corrections
+├── pyproject.toml                # 项目配置 / Project configuration
+├── requirements.txt              # Python依赖项 / Python dependencies
+└── voice_input.log               # 运行时日志 / Runtime logs
 ```
 
 ## ⚙️ 配置
@@ -267,6 +267,7 @@ python -m pytest test_main_full_system.py -v
 ```
 
 ### 测试文件
+### Test Files
 - `tests/integrated_test.py` - 核心功能测试
 - `test_comprehensive_recognition.py` - 综合语音识别测试
 - `test_five_recognition.py` - 特定数字识别测试
@@ -275,15 +276,7 @@ python -m pytest test_main_full_system.py -v
 - `test_performance_recognition.py` - 性能测试
 - `test_recognition_fix.py` - 识别修复和纠正
 - `test_cn2an.py` - 中文数字转换测试
-### Test Files
-- `tests/integrated_test.py` - Core functionality tests
-- `test_comprehensive_recognition.py` - Comprehensive speech recognition tests
-- `test_five_recognition.py` - Specific number recognition tests
-- `test_keyboard_response.py` - Keyboard control tests
-- `test_model_manager.py` - Model management tests
-- `test_performance_recognition.py` - Performance testing
-- `test_recognition_fix.py` - Recognition fixes and corrections
-- `test_cn2an.py` - Chinese number conversion tests
+
 
 ## 📊 使用示例
 ## 📊 Usage Examples

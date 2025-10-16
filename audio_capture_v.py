@@ -12,8 +12,41 @@ import vosk
 from contextlib import contextmanager
 from TTSengine import TTS
 from config_loader import config  # 导入配置系统
+
+# FunASR相关导入
+try:
+    import numpy as np
+    NP_AVAILABLE = True
+except ImportError as e:
+    print("⚠️ 警告: numpy 模块未安装，某些功能可能不可用")
+    NP_AVAILABLE = False
+    np = None  # type: ignore
+
+try:
+    from funasr import AutoModel
+    from funasr.utils.postprocess_utils import rich_transcription_postprocess
+    FUNASR_AVAILABLE = True
+except ImportError as e:
+    print("⚠️ 警告: FunASR 模块未安装，FunASR功能将不可用")
+    print("请执行: pip install funasr 或 uv add funasr 安装该模块")
+    FUNASR_AVAILABLE = False
+    # 导入时使用类型注解，运行时不影响行为
+    AutoModel = None  # type: ignore
+    rich_transcription_postprocess = None  # type: ignore
  
 logger = logging.getLogger(__name__)
+
+# WeTextProcessing文本处理库 - 尝试导入，失败时保持原有功能
+WETEXTPROCESSING_AVAILABLE = False
+tn = None
+itn = None
+try:
+    from WeTextProcessing import TextNormalizer, InverseTextNormalizer
+    WETEXTPROCESSING_AVAILABLE = True
+    logger.info("✅ 成功导入WeTextProcessing库")
+except ImportError as e:
+    logger.warning(f"⚠️ 无法导入WeTextProcessing库: {e}")
+    logger.warning("⚠️ 将使用备用的cn2an方案进行数值提取")
 # --------------------------------------------------------------
 # 1️⃣ Audio Stream Context Manager / 音频流上下文管理器
 # --------------------------------------------------------------
@@ -31,7 +64,7 @@ def audio_stream():
             channels=1,
             rate=16000,
             input=True,
-            frames_per_buffer=8000,
+            frames_per_buffer=4000, #更改采样缓冲从8000到4000
             start=True,
         )
  
@@ -134,6 +167,25 @@ def handle_special_formats(text: str) -> str:
         # 将"点八四"转换为"零点八四"
         return "零" + text
     return text
+
+# 初始化WeTextProcessing工具
+# 文本标准化器 - 将数字、日期等转换为口语形式
+tn = None
+# 逆向文本标准化器 - 将口语形式转换为标准书面形式
+itn = None
+
+if WETEXTPROCESSING_AVAILABLE:
+    try:
+        # 尝试初始化WeTextProcessing工具
+        tn = TextNormalizer(language="zh")
+        itn = InverseTextNormalizer(language="zh")
+        logger.info("✅ WeTextProcessing工具初始化成功")
+    except Exception as e:
+        logger.warning(f"⚠️ WeTextProcessing初始化失败: {e}，将使用备用方案")
+        tn = None
+        itn = None
+else:
+    logger.info("ℹ️ WeTextProcessing不可用，将使用备用方案进行数值提取")
  
 def extract_measurements(text: Any) -> List[float]:
     """Extract all possible numbers (Chinese or Arabic) from text and return as float list"""
@@ -179,49 +231,7 @@ def extract_measurements(text: Any) -> List[float]:
                         return [num_float]
         except Exception as e:
             logger.debug(f"按字符逐个转换失败: {e} (文本: '{txt}')")
-        # 专门处理常见的误识别模式
-        # 1. '我'可能是'五'的误识别
-        if txt == '我':
-            logger.debug(f"检测到可能的误识别：'我' → 尝试作为'五'处理")
-            try:
-                num = cn2an.cn2an('五', "smart")
-                num_float = float(num)
-                if 0 <= num_float <= 10000000000:
-                    logger.debug(f"成功将'我'识别为数值: {num_float}")
-                    return [num_float]
-            except Exception:
-                pass
-        
-        # 2. '我是'可能是'五十'的误识别
-        elif txt == '我是':
-            logger.debug(f"检测到可能的误识别：'我是' → 尝试作为'五十'处理")
-            try:
-                num = cn2an.cn2an('五十', "smart")
-                num_float = float(num)
-                if 0 <= num_float <= 1000000:
-                    logger.debug(f"成功将'我是'识别为数值: {num_float}")
-                    return [num_float]
-            except Exception:
-                pass
-        
-        # 3. '我是我'可能是'五五'的误识别
-        elif txt == '我是我':
-            logger.debug(f"检测到可能的误识别：'我是我' → 尝试作为'五五'处理")
-            try:
-                num = cn2an.cn2an('五五', "smart")
-                num_float = float(num)
-                if 0 <= num_float <= 1000000:
-                    logger.debug(f"成功将'我是我'识别为数值: {num_float}")
-                    return [num_float]
-            except Exception:
-                pass
-        
-        # 移除常见的误识别前缀
-        for prefix in ['我', '你']:
-            if txt.startswith(prefix):
-                txt = txt[len(prefix):]
-                logger.debug(f"移除前缀 '{prefix}' 后: '{txt}'")
-        
+                
         # 应用语音纠错
         txt = correct_voice_errors(txt)
         logger.debug(f"语音纠错后: '{txt}'")
@@ -299,6 +309,154 @@ def extract_measurements(text: Any) -> List[float]:
     except Exception as e:
         logger.error(f"数值提取过程出错: {e}")
         return []
+
+def extract_measurements_with_wtp(text: Any) -> List[float]:
+    """使用WeTextProcessing进行中文数字提取
+    
+    这是一个替代extract_measurements的实现，使用WeTextProcessing库进行文本处理
+    与传统的cn2an方法相比，WeTextProcessing提供了更专业的文本标准化和逆向标准化功能
+    
+    Args:
+        text: 输入文本，可以是字符串、数字或其他类型
+        
+    Returns:
+        List[float]: 提取到的数值列表
+    """
+    if not isinstance(text, (str, int, float)):
+        return []
+    
+    try:
+        txt = str(text).strip()
+        logger.debug(f"WeTextProcessing处理文本: '{txt}'")
+        
+        # 特殊处理：当前不支持负数，检测到负数关键词时返回空列表
+        negative_keywords = ['负数', '负']
+        for keyword in negative_keywords:
+            if keyword in txt:
+                logger.debug(f"检测到负数关键词 '{keyword}'，不提取数字")
+                return []
+        
+        # 步骤1: 尝试使用WeTextProcessing的逆向文本标准化（如果可用）
+        if WETEXTPROCESSING_AVAILABLE and itn:
+            try:
+                # 使用逆向文本标准化将口语形式转换为标准书面形式
+                normalized_text = itn.normalize(txt)
+                logger.debug(f"WeTextProcessing逆向标准化结果: '{normalized_text}'")
+                
+                # 从标准化文本中提取数字
+                import re
+                numbers = re.findall(r'\d+\.?\d*', normalized_text)
+                if numbers:
+                    # 转换为浮点数并过滤
+                    result = []
+                    for num_str in numbers:
+                        try:
+                            num_float = float(num_str)
+                            if 0 <= num_float <= 1000000000000:  # 10^12，足够大的数值范围
+                                result.append(num_float)
+                                logger.debug(f"从标准化文本中提取数值: {num_float}")
+                        except ValueError:
+                            continue
+                    
+                    if result:
+                        return result
+            except Exception as e:
+                logger.debug(f"WeTextProcessing逆向标准化失败: {e}")
+        elif WETEXTPROCESSING_AVAILABLE:
+            logger.debug("ℹ️ WeTextProcessing已安装但初始化失败，使用备用方案")
+        else:
+            logger.debug("ℹ️ WeTextProcessing不可用，直接使用备用方案")
+        
+        # 步骤2: 如果WeTextProcessing失败或未初始化，使用备用方案（cn2an）
+        # 首先尝试直接转换整个文本
+        try:
+            num = cn2an.cn2an(txt, "smart")
+            num_float = float(num)
+            if 0 <= num_float <= 1000000000000:
+                logger.debug(f"备用方案-直接转换整个文本得到数值: {num_float}")
+                return [num_float]
+        except Exception:
+            logger.debug(f"备用方案-直接转换失败")
+        
+        # 步骤3: 使用正则表达式提取可能的数字部分
+        _NUM_PATTERN = re.compile(r"[零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万点两\d]+)*")
+        _UNIT_PATTERN = re.compile(r"([零一二三四五六七八九十百千万点两\d]+(?:\.[零一二三四五六七八九十百千万点两\d]+)*)(?:公斤|克|吨|米|厘米|毫米|升|毫升|秒|分钟|小时|天|月|年)")
+        
+        # 处理特殊格式
+        def handle_special_formats_wtp(text: str) -> str:
+            if text.startswith("点") and len(text) > 1:
+                return "零" + text
+            return text
+        
+        # 先尝试使用单位正则提取带单位的数值
+        unit_matches = _UNIT_PATTERN.findall(txt)
+        if unit_matches:
+            candidates = unit_matches
+        else:
+            candidates = _NUM_PATTERN.findall(txt)
+        
+        nums = []
+        seen_numbers = set()
+        
+        for cand in candidates:
+            try:
+                cand_handled = handle_special_formats_wtp(cand)
+                num = cn2an.cn2an(cand_handled, "smart")
+                num_float = float(num)
+                
+                if 0 <= num_float <= 1000000000000 and num_float not in seen_numbers:
+                    seen_numbers.add(num_float)
+                    nums.append(num_float)
+                    logger.debug(f"备用方案-成功提取数值: {num_float} 来自候选: '{cand}'")
+            except Exception:
+                continue
+        
+        # 如果使用正则没有提取到数值，尝试直接转换整个文本
+        if not nums and txt:
+            try:
+                txt_handled = handle_special_formats_wtp(txt)
+                num = cn2an.cn2an(txt_handled, "smart")
+                num_float = float(num)
+                if 0 <= num_float <= 1000000000000:
+                    nums.append(num_float)
+                    logger.debug(f"备用方案-最终直接转换得到数值: {num_float}")
+            except Exception:
+                pass
+        
+        return nums
+    except Exception as e:
+        logger.error(f"WeTextProcessing数值提取过程出错: {e}")
+        return []
+
+def compare_extraction_methods(text: str) -> Tuple[List[float], List[float]]:
+    """比较extract_measurements和extract_measurements_with_wtp的提取结果
+    
+    Args:
+        text: 要比较的文本
+        
+    Returns:
+        Tuple[List[float], List[float]]: (原始方法结果, WeTextProcessing方法结果)
+    """
+    try:
+        # 使用原始方法
+        original_result = extract_measurements(text)
+        # 使用WeTextProcessing方法
+        wtp_result = extract_measurements_with_wtp(text)
+        
+        # 记录比较结果
+        logger.info(f"文本: '{text}'")
+        logger.info(f"原始方法结果: {original_result}")
+        logger.info(f"WeTextProcessing方法结果: {wtp_result}")
+        
+        if set(original_result) == set(wtp_result):
+            logger.info("✅ 两种方法提取结果一致")
+        else:
+            logger.info("⚠️ 两种方法提取结果不一致")
+        
+        return original_result, wtp_result
+    except Exception as e:
+        logger.error(f"比较提取方法时出错: {e}")
+        return [], []
 # --------------------------------------------------------------
 # 6️⃣ Main Class: AudioCapture / 主类：AudioCapture
 # --------------------------------------------------------------
@@ -344,6 +502,10 @@ class AudioCapture:
         self._pause_start_time: Optional[float] = None
         # 从配置系统获取暂停超时乘数
         self._pause_timeout_multiplier: int = config.get("recognition.pause_timeout_multiplier", 3)
+        
+        # 数值提取方法选择
+        self.use_wtp_extraction: bool = False  # 默认使用原始提取方法
+        self.compare_extraction_methods_flag: bool = False  # 是否比较两种方法
 
         self.callback_function: Callable[[list[float]], None] | None = None
         # 从配置系统获取缓冲区大小
@@ -366,11 +528,17 @@ class AudioCapture:
                     logger.warning("⚠️ 无法导入Excel导出器")
                     self._exporter = None
 
-        # ---------- 模型相关（使用全局模型管理器）----------
+        # ---------- Vosk模型相关 ----------
         self._model: Optional['Model'] = None
         self._recognizer: Optional['KaldiRecognizer'] = None
         self._model_loaded: bool = False
         self._model_load_time: float = 0.0  # 记录模型加载时间
+
+        # ---------- FunASR模型相关 ----------
+        self._funasr_model: Optional['AutoModel'] = None
+        self._funasr_model_loaded: bool = False
+        self._funasr_model_load_time: float = 0.0
+        self._funasr_model_path: str = "paraformer-zh-streaming"  # 默认使用paraformer-zh-streaming模型
  
     # ----------------------------------------------------------
     # 动态设置音频块大小
@@ -447,6 +615,88 @@ class AudioCapture:
         import gc
         gc.collect()
         logger.info(f"🧹 模型 '{self.model_path}' 已卸载")
+
+    # ----------------------------------------------------------
+    # FunASR模型管理方法
+    # ----------------------------------------------------------
+    def load_funasr_model(self, model_path: Optional[str] = None) -> bool:
+        """加载FunASR流式识别模型"""
+        if not FUNASR_AVAILABLE:
+            logger.error("❌ FunASR模块不可用，无法加载模型")
+            return False
+
+        # 如果已加载，直接返回
+        if self._funasr_model_loaded and self._funasr_model is not None:
+            logger.info("✅ FunASR模型已加载，无需重复加载")
+            return True
+
+        # 使用指定的模型路径或默认路径
+        target_model_path = model_path if model_path is not None else self._funasr_model_path
+
+        logger.info(f"📦 开始加载FunASR模型: {target_model_path}")
+        start_time = time.time()
+
+        try:
+            # 创建FunASR模型，使用用户指定的model_revision
+            self._funasr_model = AutoModel(
+                model=target_model_path,
+                model_revision="v2.0.4",  # 使用指定的版本
+                vad_model="fsmn-vad",  # 语音活动检测模型
+                vad_model_revision=None,
+                punc_model="ct-transformer-zh",  # 标点模型
+                punc_model_revision=None,
+                device="cpu"  # 可根据需要修改为"cuda"
+            )
+            
+            logger.info(f"✅ FunASR模型配置已优化，使用model_revision: v2.0.4")
+
+            self._funasr_model_loaded = True
+            self._funasr_model_load_time = time.time() - start_time
+
+            logger.info(f"✅ FunASR模型加载完成: {target_model_path} (耗时: {self._funasr_model_load_time:.2f}秒)")
+
+            if self.test_mode:
+                print(f"[FunASR] 模型 '{target_model_path}' 已加载")
+                print(f"[FunASR] 加载耗时: {self._funasr_model_load_time:.2f}秒")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ FunASR模型加载失败: {e}")
+            self._funasr_model = None
+            self._funasr_model_loaded = False
+            return False
+
+    def unload_funasr_model(self) -> None:
+        """卸载FunASR模型以释放内存"""
+        if not FUNASR_AVAILABLE:
+            return
+
+        # 清除FunASR模型引用
+        self._funasr_model = None
+        self._funasr_model_loaded = False
+        import gc
+        gc.collect()
+        logger.info(f"🧹 FunASR模型 '{self._funasr_model_path}' 已卸载")
+
+        if self.test_mode:
+            print(f"[FunASR] 模型已卸载")
+
+    def set_funasr_model_path(self, model_path: str) -> None:
+        """设置FunASR模型路径"""
+        self._funasr_model_path = model_path
+        logger.info(f"📝 FunASR模型路径已设置为: {model_path}")
+        if self.test_mode:
+            print(f"[FunASR] 模型路径: {model_path}")
+
+    def get_funasr_model_status(self) -> dict:
+        """获取FunASR模型状态信息"""
+        return {
+            "loaded": self._funasr_model_loaded,
+            "model_path": self._funasr_model_path,
+            "load_time": self._funasr_model_load_time,
+            "available": FUNASR_AVAILABLE
+        }
  
     # ----------------------------------------------------------
     # 新增TTS控制方法
@@ -471,6 +721,81 @@ class AudioCapture:
     def get_tts_status(self) -> str:
         """获取当前TTS状态"""
         return self.tts_state
+    
+    # 数值提取方法控制
+    def toggle_wtp_extraction(self) -> bool:
+        """切换是否使用WeTextProcessing进行数值提取
+        
+        Returns:
+            bool: 切换后的状态
+        """
+        self.use_wtp_extraction = not self.use_wtp_extraction
+        method_name = "WeTextProcessing" if self.use_wtp_extraction else "原始(cn2an)"
+        logger.info(f"📊 数值提取方法已切换至: {method_name}")
+        if self.test_mode:
+            print(f"[数值提取] 方法: {method_name}")
+        return self.use_wtp_extraction
+    
+    def enable_wtp_extraction(self) -> None:
+        """启用WeTextProcessing数值提取方法"""
+        self.use_wtp_extraction = True
+        logger.info("📊 已启用WeTextProcessing数值提取方法")
+    
+    def disable_wtp_extraction(self) -> None:
+        """禁用WeTextProcessing数值提取方法，使用原始方法"""
+        self.use_wtp_extraction = False
+        logger.info("📊 已禁用WeTextProcessing数值提取方法，使用原始方法")
+    
+    def toggle_compare_extraction(self) -> bool:
+        """切换是否比较两种数值提取方法
+        
+        Returns:
+            bool: 切换后的状态
+        """
+        self.compare_extraction_methods_flag = not self.compare_extraction_methods_flag
+        state = "开启" if self.compare_extraction_methods_flag else "关闭"
+        logger.info(f"🔍 数值提取方法比较功能已{state}")
+        if self.test_mode:
+            print(f"[比较模式] {state}")
+        return self.compare_extraction_methods_flag
+    
+    def test_extraction_methods(self, test_texts: Optional[List[str]] = None) -> None:
+        """测试并比较两种数值提取方法的效果
+        
+        Args:
+            test_texts: 要测试的文本列表，如果为None则使用默认测试文本
+        """
+        if test_texts is None:
+            test_texts = [
+                "二十五点五",
+                "三公斤五克",
+                "十点八五",
+                "一百二十三点四五",
+                "零点八四",
+                "一点二米",
+                "三点一四一五九",
+                "两万五千元"
+            ]
+        
+        print("\n🔍 数值提取方法测试")
+        print("-" * 50)
+        print(f"{'测试文本':<15} {'原始方法':<15} {'WeTextProcessing方法':<20} {'结果一致?'}")
+        print("-" * 50)
+        
+        for text in test_texts:
+            original_nums, wtp_nums = compare_extraction_methods(text)
+            
+            # 格式化输出结果
+            original_str = str(original_nums)[:15]
+            wtp_str = str(wtp_nums)[:20]
+            match = "✅" if set(original_nums) == set(wtp_nums) else "❌"
+            
+            print(f"{text:<15} {original_str:<15} {wtp_str:<20} {match}")
+        
+        print("-" * 50)
+        print("测试完成。请查看详细日志获取更多信息。")
+        print("提示：使用toggle_wtp_extraction()可切换默认使用的提取方法")
+        print("提示：使用toggle_compare_extraction()可开启实时比较模式")
     
     # 6.1 回调 & 过滤
     # ----------------------------------------------------------
@@ -511,11 +836,30 @@ class AudioCapture:
         """
         对识别文本进行过滤、提取数值并回调。
         返回写入Excel的记录列表 [(ID, 数值, 原始文本)]
+        
+        支持两种数值提取方法：
+        1. 原始方法：使用cn2an库进行中文数字转换
+        2. WeTextProcessing方法：使用专业的文本处理库进行标准化处理
         """
         if not isinstance(text, str):
             return []
         
-        nums = extract_measurements(text)
+        # 根据配置选择提取方法
+        if self.compare_extraction_methods_flag:
+            # 比较两种方法的结果
+            original_nums, wtp_nums = compare_extraction_methods(text)
+            # 默认使用原始方法的结果
+            nums = original_nums
+            # 如果设置了使用WeTextProcessing方法且有结果，则使用其结果
+            if self.use_wtp_extraction and wtp_nums:
+                nums = wtp_nums
+        elif self.use_wtp_extraction:
+            # 使用WeTextProcessing方法
+            nums = extract_measurements_with_wtp(text)
+        else:
+            # 使用原始方法
+            nums = extract_measurements(text)
+        
         written_records = []
         
         if self.test_mode:
@@ -672,19 +1016,8 @@ class AudioCapture:
                     "session_data": []
                 }
         else:
-            logger.info("✅ 模型已加载")
+            logger.info("✅ 模型已加载")      
         
-        if self._model:
-            if self.test_mode:
-                print("[系统] 预热模型...")
-            
-            # 用一个空的音频数据预热模型
-            dummy_data = bytes(self.audio_chunk_size * 2)  # 空音频数据
-            if self._recognizer and hasattr(self._recognizer, 'AcceptWaveform'):
-                self._recognizer.AcceptWaveform(dummy_data)
-            
-            if self.test_mode:
-                print("[系统] 模型预热完成")
 
 
         # 从配置系统获取倒计时秒数
@@ -824,116 +1157,195 @@ class AudioCapture:
                 logger.info("🧹 识别会话结束，预加载模型仍保留在内存中")
  
     # ----------------------------------------------------------
- 
-    def test_voice_recognition_pipeline(self) -> dict[str, Any]:
-        """Comprehensive test function to debug voice recognition pipeline"""
-        from typing import Dict, List, Any
-        test_results: Dict[str, Any] = {
-            "audio_input_working": False,
-            "model_loading_success": False,
-            "recognition_attempts": 0,
-            "successful_recognitions": 0,
-            "audio_frames_processed": 0,
-            "partial_results": [],
-            "final_results": [],
-            "errors": [],
-            "audio_device_info": [],
-            "test_duration": 0,
-            "vosk_result": {}
+    # FunASR流式识别功能
+def listen_realtime_funasr(self) -> dict[str, Union[str, List[float], List[str], List[Tuple[int | str | float, Any, str]]]]:
+    """使用FunASR进行实时语音识别"""
+    import time
+    import numpy as np
+
+    if not FUNASR_AVAILABLE:
+        logger.error("❌ FunASR模块不可用")
+        return {
+            "final": "",
+            "buffered_values": [],
+            "collected_text": [],
+            "session_data": []
         }
- 
-        import time
-        start_time = time.time()
- 
-        try:
-            # Test 1: Audio Input Device
-            try:
-                p = pyaudio.PyAudio()
-                device_count = p.get_device_count()
- 
-                for i in range(device_count):
-                    try:
-                        device_info = p.get_device_info_by_index(i)
-                        max_channels = device_info['maxInputChannels']
-                        if isinstance(max_channels, (int, float)) and max_channels > 0:
-                            test_results["audio_device_info"].append({"index": i, "name": device_info['name']})
-                    except:
-                        continue
- 
+
+    logger.info("=" * 60)
+    logger.info("🎤 开始FunASR实时语音识别流程...")
+    logger.info(f"🎯 FunASR模型: {self._funasr_model_path}")
+    logger.info(f"⏱️  超时时间: {self.timeout_seconds}秒")
+    logger.info(f"🧪 测试模式: {'开启' if self.test_mode else '关闭'}")
+
+    # 检查FunASR模型是否已加载
+    if not self._funasr_model_loaded or self._funasr_model is None:
+        logger.warning("⚠️ FunASR模型未加载，尝试重新加载...")
+        if not self.load_funasr_model():
+            logger.error("❌ 无法加载FunASR模型")
+            return {
+                "final": "",
+                "buffered_values": [],
+                "collected_text": [],
+                "session_data": []
+            }
+    else:
+        logger.info("✅ FunASR模型已加载")
+
+    # 倒计时
+    countdown_seconds = 5
+    logger.info(f"🚀 系统将在 {countdown_seconds} 秒后开始识别...")
+    print(f"⏰ {countdown_seconds}秒后自动开始录音...")
+
+    for i in range(countdown_seconds, 0, -1):
+        print(f"⏰ 倒计时: {i}秒 ", end="\r")
+        time.sleep(1)
+
+    print()
+    print("⏰ 倒计时结束，开始识别！       ")
+    logger.info("✅ 倒计时结束，系统已开始识别！")
+
+    self.state = "recording"
+    logger.info("✅ 系统状态已设置为 recording")
+    if self.test_mode:
+        print(f"状态: paused -> recording")
+
+    try:
+        with audio_stream() as stream:
+            logger.info("🎤 开始FunASR音频流监听...")
+
+            audio_frames = 0
+            collected_text = []
+            recognition_start_time = time.time()
+            session_records: List[Tuple[int | str | float, Any, str]] = []
+
+                    # FunASR流式处理参数设置
+            chunk_size = [0, 10, 5]  # 600ms的上屏粒度
+            encoder_chunk_look_back = 4  # 编码器回看块数
+            decoder_chunk_look_back = 1  # 解码器回看块数
+            chunk_stride = chunk_size[1] * 960  # 计算块步长（600ms）
+            
+            # 流式处理的缓存，需要在整个会话中保持以提高上下文理解
+            funasr_cache: dict[str, Any] = {}
+
+            while self.state != "stopped":
+                # 检查暂停超时
+                if self.state == "paused":
+                    if self._pause_start_time is not None:
+                        pause_duration = time.time() - self._pause_start_time
+                        if pause_duration > self.timeout_seconds:
+                            logger.info(f"⏰ 暂停超时（{pause_duration:.1f}秒），自动停止")
+                            self.stop()
+                            break
+
                 try:
-                    default_device = p.get_default_input_device_info()
-                    test_results["audio_input_working"] = True
+                    command_handled = False
+                    text = ""
+
+                    # 如果TTS正在播报，跳过音频处理
+                    if self._tts_playing:
+                        if self.test_mode and audio_frames % 1000 == 0:
+                            print("[调试] TTS播报中，跳过音频处理")
+                        time.sleep(config.get("recognition.sleep_times.production", 0.05))
+                        continue
+
+                    # 读取音频数据
+                    data = stream.read(self.audio_chunk_size, exception_on_overflow=False)
+                    audio_frames += 1
+
+                    if audio_frames % 50 == 0:
+                        logger.debug(f"🎧 音频流正常 - 帧数: {audio_frames}")
+
+                    # 在暂停状态下，如果有音频输入，重置暂停计时器
+                    if self.state == "paused" and data and any(b != 0 for b in data):
+                        if self.test_mode and audio_frames % 5000 == 0:
+                            print("[调试] 检测到音频输入，重置暂停计时器")
+                        self._pause_start_time = time.time()
+
+                    # 将音频数据转换为numpy数组
+                    audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+
+                    # 使用FunASR进行流式识别，按照用户提供的参数
+                    try:
+                        result = self._funasr_model.generate(
+                            input=audio_data,
+                            cache=funasr_cache,
+                            is_final=False,
+                            chunk_size=chunk_size,
+                            encoder_chunk_look_back=encoder_chunk_look_back,
+                            decoder_chunk_look_back=decoder_chunk_look_back
+                        )
+
+                        if result and isinstance(result, list) and len(result) > 0 and "text" in result[0]:
+                            text = result[0]["text"].strip()
+                            if text:
+                                collected_text.append(text)
+                                logger.debug(f"FunASR识别结果: '{text}'")
+
+                                # 处理语音命令
+                                command_handled = self._process_voice_commands(text)
+
+                    except Exception as e:
+                        logger.debug(f"FunASR识别异常: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                    # 只有在非暂停状态且命令未处理时，才处理数值提取
+                    if not command_handled and self.state == "recording" and text:
+                        written_records = self.filtered_callback(text)
+                        session_records.extend(written_records)
+
                 except Exception as e:
-                    test_results["errors"].append(f"Audio device error: {str(e)}")
- 
-                p.terminate()
-            except Exception as e:
-                test_results["errors"].append(f"Audio device test failed: {str(e)}")
- 
-            # Test 2: Use existing listen_realtime_vosk() function
-            logger.info("🎤 语音识别测试中... 请对着麦克风说话")
- 
-            original_state = self.state
-            original_pause_event = self._pause_event.is_set()
-            original_start_event = self._start_event.is_set()
- 
-            self.state = "recording"
-            self._pause_event.set()
-            self._start_event.set()
- 
+                    logger.error(f"❌ 音频流读取错误: {e}")
+                    continue
+
+            # 处理最后的音频数据，标记为最终结果
             try:
-                vosk_result = self.listen_realtime_vosk()
-                test_results["vosk_result"] = vosk_result
- 
-                if vosk_result["final"]:
-                    test_results["final_results"].append(vosk_result["final"])
-                    test_results["successful_recognitions"] += 1
-                    logger.info(f"🎯 识别成功: '{vosk_result['final']}'")
- 
-                if vosk_result["buffered_values"]:
-                    logger.info(f"🔢 提取到的数字: {vosk_result['buffered_values']}")
- 
-                test_results["model_loading_success"] = True
- 
-                logger.info(f"📊 Vosk 测试结果: 最终文本='{vosk_result['final']}', 数字={vosk_result['buffered_values']}")
- 
+                result = self._funasr_model.generate(
+                    input=np.array([0]),  # 空输入，但标记为final
+                    cache=funasr_cache,
+                    is_final=True,
+                    chunk_size=chunk_size,
+                    encoder_chunk_look_back=encoder_chunk_look_back,
+                    decoder_chunk_look_back=decoder_chunk_look_back
+                )
+
+                if result and isinstance(result, list) and len(result) > 0 and "text" in result[0]:
+                    final_text = result[0]["text"].strip()
+                    if final_text:
+                            collected_text.append(final_text)
             except Exception as e:
-                error_msg = f"Vosk 测试失败: {str(e)}"
-                logger.error(f"❌ {error_msg}")
-                test_results["errors"].append(error_msg)
- 
-            finally:
-                self.state = original_state
-                if not original_pause_event:
-                    self._pause_event.clear()
-                if not original_start_event:
-                    self._start_event.clear()
- 
-            # Test 3: Voice Commands
-            logger.info("🎤 测试3: 语音命令识别测试...")
-            voice_commands = ["开始录音", "暂停录音", "继续录音", "停止录音"]
-            for cmd in voice_commands:
-                logger.info(f"🗣️ 测试命令: '{cmd}'")
-                is_command = self._process_voice_commands(cmd)
-                logger.info(f"{'✅' if is_command else '❌'} 命令识别: {cmd} -> {'成功' if is_command else '失败'}")
- 
-        except Exception as e:
-            error_msg = f"综合测试异常: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            test_results["errors"].append(error_msg)
- 
-        finally:
-            test_duration = time.time() - start_time
-            test_results["test_duration"] = round(test_duration, 2)
- 
-            if test_results["successful_recognitions"] > 0:
-                logger.info("🎉 语音识别功能正常")
-            elif test_results["audio_input_working"]:
-                logger.info("✅ 音频输入正常")
-            else:
-                logger.error("❌ 语音识别功能异常")
- 
-        return test_results
+                logger.debug(f"FunASR最终识别异常: {e}")
+
+            final_text = " ".join(collected_text) if collected_text else ""
+
+            # 获取会话数据
+            if self._exporter:
+                session_records = self._exporter.get_session_data()
+
+            result_dict: dict[str, Union[str, List[float], List[str], List[Tuple[int | str | float, Any, str]]]] = {
+                "final": final_text,
+                "buffered_values": list(self.buffered_values),
+                "collected_text": collected_text,
+                "session_data": session_records
+            }
+
+            return result_dict
+
+    except Exception as e:
+        logger.error(f"❌ FunASR实时识别过程中发生错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "final": "",
+            "buffered_values": list(self.buffered_values),
+            "collected_text": [],
+            "session_data": []
+        }
+    finally:
+        if self.test_mode:
+            logger.info("🧹 FunASR识别会话结束，模型仍保留在内存中")
+    
 # --------------------------------------------------------------
 # 7️⃣ Minimal Keyboard Listener Thread / 极简键盘监听线程
 # --------------------------------------------------------------

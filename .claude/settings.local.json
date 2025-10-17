@@ -8,7 +8,9 @@
       "Bash(.venv/scripts/python:*)",
       "Bash(.venv/scripts/pip:*)",
       "Bash(timeout:*)",
-      "Bash(./.venv/Scripts/python:*)"
+      "Bash(./.venv/Scripts/python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

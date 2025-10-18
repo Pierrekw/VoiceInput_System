@@ -10,6 +10,23 @@ model/
 # 忽略所有 Excel 文件
 *.xlsx
 
+# 忽略 reports 目录及其所有内容（生成的Excel报告）
+reports/
+
+# 忽略 logs 目录及其所有内容（生成的日志文件）
+logs/
+
+# 忽略 FunASR 部署依赖文件（大文件）
+FunASR_Deployment/dependencies/
+FunASR_Deployment/*.zip
+FunASR_Deployment/*.tar.gz
+FunASR_Deployment/*.7z
+
+# 忽略 FFmpeg 相关大文件
+*.ffmpeg
+ffmpeg*.exe
+ffmpeg*.dll
+
 # 忽略 Python 编译产生的缓存目录
 __pycache__/
 

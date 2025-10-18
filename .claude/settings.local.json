@@ -23,7 +23,8 @@
       "Bash(chmod:*)",
       "Bash(where:*)",
       "Bash(F:/04_AI/01_Workplace/Voice_Input/FunASR_Deployment/dependencies/ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(git push)"
     ],
     "deny": []
   }

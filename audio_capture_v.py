@@ -637,15 +637,13 @@ class AudioCapture:
         start_time = time.time()
 
         try:
-            # 创建FunASR模型，使用用户指定的model_revision
+            # 创建FunASR模型，不指定vad_model和punc_model参数
+            # 让系统自动使用configuration.json中的配置，避免从网上下载
             self._funasr_model = AutoModel(
                 model=target_model_path,
-                model_revision="v2.0.4",  # 使用指定的版本
-                vad_model="fsmn-vad",  # 语音活动检测模型
-                vad_model_revision=None,
-                punc_model="ct-transformer-zh",  # 标点模型
-                punc_model_revision=None,
-                device="cpu"  # 可根据需要修改为"cuda"
+                device="cpu",  # 可根据需要修改为"cuda"
+                trust_remote_code=False,  # 确保使用本地代码
+                disable_update=True  # 禁用自动更新检查
             )
             
             logger.info(f"✅ FunASR模型配置已优化，使用model_revision: v2.0.4")
@@ -1219,7 +1217,7 @@ def listen_realtime_funasr(self) -> dict[str, Union[str, List[float], List[str],
             recognition_start_time = time.time()
             session_records: List[Tuple[int | str | float, Any, str]] = []
 
-                    # FunASR流式处理参数设置
+            # FunASR流式处理参数设置
             chunk_size = [0, 10, 5]  # 600ms的上屏粒度
             encoder_chunk_look_back = 4  # 编码器回看块数
             decoder_chunk_look_back = 1  # 解码器回看块数
@@ -1265,12 +1263,12 @@ def listen_realtime_funasr(self) -> dict[str, Union[str, List[float], List[str],
                     # 将音频数据转换为numpy数组
                     audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
 
-                    # 使用FunASR进行流式识别，按照用户提供的参数
+                    # 使用FunASR进行流式识别
                     try:
                         result = self._funasr_model.generate(
                             input=audio_data,
                             cache=funasr_cache,
-                            is_final=False,
+                            is_final=False,  # 流式处理时设置为False
                             chunk_size=chunk_size,
                             encoder_chunk_look_back=encoder_chunk_look_back,
                             decoder_chunk_look_back=decoder_chunk_look_back
@@ -1304,7 +1302,7 @@ def listen_realtime_funasr(self) -> dict[str, Union[str, List[float], List[str],
                 result = self._funasr_model.generate(
                     input=np.array([0]),  # 空输入，但标记为final
                     cache=funasr_cache,
-                    is_final=True,
+                    is_final=True,  # 最终结果时设置为True，会自动进行标点符号处理
                     chunk_size=chunk_size,
                     encoder_chunk_look_back=encoder_chunk_look_back,
                     decoder_chunk_look_back=decoder_chunk_look_back
@@ -1313,7 +1311,7 @@ def listen_realtime_funasr(self) -> dict[str, Union[str, List[float], List[str],
                 if result and isinstance(result, list) and len(result) > 0 and "text" in result[0]:
                     final_text = result[0]["text"].strip()
                     if final_text:
-                            collected_text.append(final_text)
+                        collected_text.append(final_text)
             except Exception as e:
                 logger.debug(f"FunASR最终识别异常: {e}")
 

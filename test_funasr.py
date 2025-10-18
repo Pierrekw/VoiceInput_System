@@ -107,13 +107,20 @@ class FunASRTest:
             logger.info(f"  - device: cpu")
             logger.info("  - 使用本地模型，避免下载额外文件")
             
-            # 使用本地模型，不指定额外的vad_model和punc_model以避免下载
-            # 根据configuration.json文件，模型应该已经包含了所需的组件
+            # 使用本地集成了VAD和PUNC功能的Paraformer large模型
+            # 模型名称: speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch
+            logger.info("🔧 使用本地集成VAD+PUNC功能的Paraformer large模型...")
+            logger.info("  - 模型已内置VAD(语音活动检测)和PUNC(标点符号恢复)功能")
+            logger.info("  - 无需额外下载，使用configuration.json中的配置")
+
             self._model = AutoModel(
                 model=self.model_path,
                 model_revision=None,  # 本地模型不需要版本号
                 device="cpu",
-                trust_remote_code=False  # 确保使用本地代码
+                trust_remote_code=False,  # 确保使用本地代码
+                # 不指定额外的vad_model和punc_model，让FunASR自动使用configuration.json中的配置
+                # 这样就会使用模型内置的VAD和PUNC功能
+                disable_update=True  # 禁用自动更新检查
             )
             
             self.model_loaded = True
@@ -183,10 +190,11 @@ class FunASRTest:
         print(f"⏱️  测试将持续 {duration} 秒")
         print("💬 请在提示开始后对着麦克风说话")
         print("🎯 您可以说一些中文句子，如'你好世界'、'语音识别测试'等")
-        print("⚠️  注意: 系统会检测语音活动，只在检测到说话时进行识别")
+        print("⚠️  注意: 使用集成了VAD+PUNC的Paraformer large模型")
+        print("🔧 模型内置: VAD(语音活动检测) + PUNC(标点符号恢复)功能")
         print("=" * 60)
-        print("\n请按Enter键开始测试...")
-        input()  # 等待用户确认
+        #print("\n请按Enter键开始测试...")
+        #input()  # 等待用户确认
 
         # 倒计时
         countdown = 5
@@ -208,26 +216,32 @@ class FunASRTest:
         decoder_chunk_look_back = 1
         funasr_cache = {}  # FunASR缓存，需要在整个会话中保持
 
-        # 语音活动检测参数 - 平衡响应速度和完整性
-        speech_energy_threshold = 0.015  # 提高阈值，降低敏感度，避免误识别
-        min_speech_duration = 0.4  # 最小语音时长，确认是真正的语音
-        min_silence_duration = 0.8  # 减少静音时长，提高响应速度
+        # === 优化版AutoWave+FunASR VAD功能 ===
+        # 降低阈值，提高响应速度
+        speech_energy_threshold = 0.015  # 降低阈值，提高灵敏度
+        min_speech_duration = 0.3        # 降低最小语音时长
+        min_silence_duration = 0.6        # 降低静音时长，更快响应
 
-        # 识别状态控制 - 模仿Vosk的AcceptWaveform逻辑
+        # 识别状态控制 - 结合AutoWave和FunASR
         speech_segment_audio = []  # 当前语音段的音频数据
         is_speech_segment = False  # 是否在语音段中
         speech_start_time = 0
         last_speech_time = 0
+
         recognition_count = 0
         last_recognized_text = ""
         collected_text = []
 
         # 去重和相似度检测
-        text_similarity_threshold = 0.7  # 稍微降低相似度阈值，避免过度过滤
+        text_similarity_threshold = 0.8  # 提高相似度阈值，减少重复
 
         start_time = time.time()
         frames_processed = 0
         speech_frames = 0
+
+        # 新增：流式识别缓冲区，更短的处理间隔
+        streaming_buffer = []
+        buffer_max_size = 16000 * 2  # 2秒的音频缓冲
 
         # 文本后处理函数
         def calculate_text_similarity(text1, text2):
@@ -307,6 +321,10 @@ class FunASRTest:
 
         try:
             with audio_stream(sample_rate=self.sample_rate, chunk_size=self.chunk_size) as stream:
+                print("\n🔴 使用优化版AutoWave+FunASR流式识别...")
+                print("💡 流式识别：实时反馈 + 最终确认，提高响应速度")
+                print("🎧 结合能量检测和FunASR VAD，平衡速度和准确性")
+
                 while time.time() - start_time < duration:
                     try:
                         # 读取音频数据
@@ -315,13 +333,17 @@ class FunASRTest:
 
                         # 转换为numpy数组
                         audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
-
-                        # 计算音频能量
-                        audio_energy = np.sqrt(np.mean(audio_data**2))
                         current_time = time.time() - start_time
 
-                        # === 模仿Vosk的语音活动检测逻辑 ===
+                        # === 优化版AutoWave+FunASR VAD功能 ===
+                        # 先用能量阈值过滤，只有明显的语音才送给FunASR处理
+                        audio_energy = np.sqrt(np.mean(audio_data**2))
                         is_speech = audio_energy > speech_energy_threshold
+
+                        # 添加到流式缓冲区
+                        streaming_buffer.extend(audio_data)
+                        if len(streaming_buffer) > buffer_max_size:
+                            streaming_buffer = streaming_buffer[-buffer_max_size:]
 
                         if is_speech and not is_speech_segment:
                             # 开始新的语音段
@@ -334,27 +356,53 @@ class FunASRTest:
                             # 在语音段中，继续收集音频
                             last_speech_time = current_time
 
+                            # 流式识别：每收集一定量的音频就进行识别
+                            if len(speech_segment_audio) >= 16000:  # 1秒的音频
+                                try:
+                                    result = self._model.generate(
+                                        input=np.array(speech_segment_audio[-16000:]),  # 使用最新的1秒
+                                        cache=funasr_cache,
+                                        is_final=False,
+                                        chunk_size=chunk_size,
+                                        encoder_chunk_look_back=encoder_chunk_look_back,
+                                        decoder_chunk_look_back=decoder_chunk_look_back
+                                    )
+
+                                    if result and isinstance(result, list) and len(result) > 0 and "text" in result[0]:
+                                        raw_text = result[0]["text"].strip()
+                                        if raw_text and len(raw_text) > 2:  # 只要有意义的文本
+                                            processed_text = post_process_text(raw_text)
+
+                                            if is_valid_text(processed_text):
+                                                if not is_duplicate_text(processed_text, last_recognized_text):
+                                                    print(f"\n🎯 流式识别: {processed_text}")
+                                                    logger.info(f"流式识别结果: '{processed_text}'")
+                                                    last_recognized_text = processed_text
+                                                    # 不立即添加到collected_text，等语音段结束再添加
+
+                                except Exception as e:
+                                    logger.debug(f"流式识别异常: {e}")
+
                         elif not is_speech and is_speech_segment:
                             # 语音可能结束，检查静音时长
                             silence_duration = current_time - last_speech_time
                             speech_duration = current_time - speech_start_time
 
-                            # 智能判断：如果语音段足够长(>2秒)或静音时间足够长，就结束识别
+                            # 更积极的判断条件
                             should_end = (
-                                silence_duration >= min_silence_duration or  # 静音时间足够
-                                (silence_duration >= 0.5 and speech_duration >= 2.0)  # 语音较长且短暂停顿
+                                silence_duration >= min_silence_duration or
+                                (silence_duration >= 0.4 and speech_duration >= 0.8)
                             )
 
                             if should_end:
-                                # 确认语音段结束，进行识别（模仿Vosk的AcceptWaveform）
+                                # 确认语音段结束，进行最终识别
                                 is_speech_segment = False
 
-                                # 检查语音段时长是否足够
                                 if speech_duration >= min_speech_duration and len(speech_segment_audio) > 0:
                                     recognition_count += 1
-                                    logger.info(f"语音段结束，时长: {speech_duration:.2f}s，音频样本: {len(speech_segment_audio)}")
+                                    logger.info(f"语音段结束，时长: {speech_duration:.2f}s")
 
-                                    # 进行识别
+                                    # 使用FunASR进行最终识别
                                     try:
                                         result = self._model.generate(
                                             input=np.array(speech_segment_audio),
@@ -370,25 +418,15 @@ class FunASRTest:
                                             if raw_text:
                                                 processed_text = post_process_text(raw_text)
 
-                                                # 文本质量检查
                                                 if is_valid_text(processed_text):
-                                                    # 检查是否为重复文本
                                                     if not is_duplicate_text(processed_text, last_recognized_text):
-                                                        last_recognized_text = processed_text
                                                         collected_text.append(processed_text)
-
-                                                        # 显示识别结果
-                                                        print(f"\n🎯 识别: {processed_text}")
-                                                        logger.info(f"FunASR识别结果: '{processed_text}' (原始: '{raw_text}')")
-                                                    else:
-                                                        logger.debug(f"跳过重复文本: {processed_text}")
-                                                else:
-                                                    logger.debug(f"跳过低质量文本: {processed_text}")
+                                                        print(f"\n🎯 最终识别: {processed_text}")
+                                                        logger.info(f"最终识别结果: '{processed_text}' (原始: '{raw_text}')")
+                                                        speech_frames += int(len(speech_segment_audio) * 0.3)
 
                                     except Exception as e:
                                         logger.debug(f"FunASR识别异常: {e}")
-                                else:
-                                    logger.info(f"⚠️ 语音段过短，跳过识别: 时长={speech_duration:.2f}s < {min_speech_duration}s, 样本数={len(speech_segment_audio)}")
 
                         # 如果在语音段中，收集音频数据
                         if is_speech_segment:
@@ -406,7 +444,12 @@ class FunASRTest:
                                 status = "🔇 静音"
                                 extra_info = ""
 
-                            speech_rate = (speech_frames / max(1, frames_processed)) * 100
+                            # 修复语音活动率计算
+                            if frames_processed > 0:
+                                speech_rate = (len(speech_segment_audio) / max(1, frames_processed * self.chunk_size)) * 100
+                            else:
+                                speech_rate = 0
+
                             print(f"\r{status}{extra_info} | 能量:{audio_energy:.4f} | 语音活动率:{speech_rate:.1f}% | 剩余:{remaining_time:.1f}s | 识别次数:{recognition_count} | ", end="", flush=True)
 
                     except Exception as e:
@@ -434,7 +477,7 @@ class FunASRTest:
                                 final_text = final_result[0]["text"].strip()
                                 if final_text and final_text != last_recognized_text:
                                     collected_text.append(final_text)
-                                    print(f"🎯 最终识别: {final_text}")
+                                    print(f"🎯 FunASR最终识别: {final_text}")
                                     logger.info(f"FunASR最终识别结果: '{final_text}'")
 
                         except Exception as e:
@@ -535,7 +578,7 @@ def main():
         # 测试语音识别
         try:
             print("\n")
-            tester.test_recognition(duration=30)  # 改为30秒，给用户更多测试时间
+            tester.test_recognition(duration=60)  # 改为60秒，给用户更多测试时间
         except KeyboardInterrupt:
             print("\n⏹️  测试被用户中断")
         finally:

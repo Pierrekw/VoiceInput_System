@@ -10,7 +10,20 @@
       "Bash(timeout:*)",
       "Bash(./.venv/Scripts/python:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Read(//f/04_AI/01_Workplace/FunASR/**)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(ffmpeg:*)",
+      "Read(//f/onnx_deps/**)",
+      "Bash(curl:*)",
+      "Bash(unzip:*)",
+      "Bash(export PATH=\"F:/onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin:$PATH\":*)",
+      "Bash(F:/onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe:*)",
+      "Bash(chmod:*)",
+      "Bash(where:*)",
+      "Bash(F:/04_AI/01_Workplace/Voice_Input/FunASR_Deployment/dependencies/ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": []
   }

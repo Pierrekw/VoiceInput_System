@@ -368,40 +368,73 @@ class FunASRVoiceRecognizer:
 
     @contextmanager
     def _audio_stream(self):
-        """音频流上下文管理器"""
+        """音频流上下文管理器，增强异常处理和重连机制"""
         if not PYAUDIO_AVAILABLE:
             raise RuntimeError("PyAudio不可用")
 
-        p = pyaudio.PyAudio()
-        stream = None
+        max_retries = 3
+        retry_count = 0
 
-        try:
-            # 获取默认音频设备
-            default_device = p.get_default_input_device_info()
-            logger.info(f"🎤 使用音频设备: {default_device['name']}")
+        while retry_count < max_retries:
+            p = None
+            stream = None
 
-            # 打开音频流
-            stream = p.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=self.sample_rate,
-                input=True,
-                frames_per_buffer=self.chunk_size,
-                start=True
-            )
+            try:
+                p = pyaudio.PyAudio()
 
-            logger.info("🎧 音频流创建成功")
-            yield stream
+                # 获取默认音频设备
+                try:
+                    default_device = p.get_default_input_device_info()
+                    logger.info(f"🎤 使用音频设备: {default_device['name']} (索引: {default_device['index']})")
+                except Exception as device_error:
+                    logger.error(f"❌ 无法获取音频设备信息: {device_error}")
+                    raise RuntimeError("音频设备不可用")
 
-        except Exception as e:
-            logger.error(f"❌ 音频流创建失败: {e}")
-            raise
-        finally:
-            if stream:
-                if stream.is_active():
-                    stream.stop_stream()
-                stream.close()
-            p.terminate()
+                # 打开音频流，增加错误容错
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=self.sample_rate,
+                    input=True,
+                    input_device_index=default_device['index'],
+                    frames_per_buffer=self.chunk_size,
+                    start=True
+                )
+
+                # 验证音频流是否正常工作
+                if not stream.is_active():
+                    raise RuntimeError("音频流创建失败：流未激活")
+
+                logger.info(f"🎧 音频流创建成功 (重试 {retry_count + 1}/{max_retries})")
+                yield stream
+                break  # 成功则退出重试循环
+
+            except Exception as e:
+                retry_count += 1
+                error_msg = f"❌ 音频流创建失败 (重试 {retry_count}/{max_retries}): {e}"
+
+                if retry_count >= max_retries:
+                    logger.error(error_msg + " - 已达到最大重试次数")
+                    raise RuntimeError(f"音频流创建失败，已重试{max_retries}次: {e}")
+                else:
+                    logger.warning(error_msg + " - 正在重试...")
+                    time.sleep(1)  # 重试前等待1秒
+
+            finally:
+                # 确保资源正确释放
+                if stream:
+                    try:
+                        if stream.is_active():
+                            stream.stop_stream()
+                        stream.close()
+                    except Exception as cleanup_error:
+                        logger.warning(f"⚠️ 音频流清理异常: {cleanup_error}")
+
+                if p:
+                    try:
+                        p.terminate()
+                    except Exception as cleanup_error:
+                        logger.warning(f"⚠️ PyAudio清理异常: {cleanup_error}")
 
     def _detect_vad(self, audio_data: np.ndarray, current_time: float) -> Tuple[bool, Optional[str]]:
         """
@@ -591,7 +624,8 @@ class FunASRVoiceRecognizer:
 
         try:
             with self._audio_stream() as stream:
-                while time.time() - start_time < duration and not self._stop_event.is_set():
+                # 支持duration=-1表示无限时模式
+                while (duration == -1 or time.time() - start_time < duration) and not self._stop_event.is_set():
                     try:
                         # 读取音频数据
                         data = stream.read(self.chunk_size, exception_on_overflow=False)
@@ -605,12 +639,35 @@ class FunASRVoiceRecognizer:
 
                         # 实时显示
                         if real_time_display and self._current_text:
-                            remaining = duration - current_time
-                            print(f"\r🗣️ 识别中: '{self._current_text}' | 剩余: {remaining:.1f}s",
-                                 end="", flush=True)
+                            if duration == -1:
+                                # 无限时模式：显示运行时间
+                                print(f"\r🗣️ 识别中: '{self._current_text}' | 运行时间: {current_time:.1f}s",
+                                     end="", flush=True)
+                            else:
+                                # 限时模式：显示剩余时间
+                                remaining = duration - current_time
+                                print(f"\r🗣️ 识别中: '{self._current_text}' | 剩余: {remaining:.1f}s",
+                                     end="", flush=True)
+
+                    except OSError as audio_error:
+                        # 专门处理音频流相关的系统错误
+                        logger.error(f"🎤 音频流异常: {audio_error}")
+                        # 检查是否是设备断开连接
+                        if "Input overflowed" in str(audio_error):
+                            logger.warning("⚠️ 音频缓冲区溢出，继续处理...")
+                            continue
+                        elif "No such device" in str(audio_error) or "Device unavailable" in str(audio_error):
+                            logger.error("❌ 音频设备断开连接或不可用")
+                            raise RuntimeError("音频设备断开连接")
+                        else:
+                            logger.warning(f"⚠️ 音频流错误，尝试继续: {audio_error}")
+                            continue
 
                     except Exception as e:
-                        logger.error(f"音频处理错误: {e}")
+                        logger.error(f"❌ 音频处理错误: {e}")
+                        # 对于其他异常，记录详细信息但尝试继续
+                        import traceback
+                        logger.debug(f"错误详情: {traceback.format_exc()}")
                         continue
 
                 # 处理最后的音频
@@ -618,10 +675,23 @@ class FunASRVoiceRecognizer:
                     self._perform_final_recognition()
 
         except KeyboardInterrupt:
-            logger.info("⏹️ 识别被用户中断")
+            logger.info("⏹️ 识别被用户中断 (KeyboardInterrupt)")
         except Exception as e:
-            logger.error(f"识别过程出错: {e}")
+            logger.error(f"❌ 识别过程出错: {e}")
             raise
+
+        # 记录识别结束原因
+        end_time = time.time()
+        actual_duration = end_time - start_time
+
+        if self._stop_event.is_set():
+            logger.info(f"⏹️ 识别被系统停止信号中断 (运行时间: {actual_duration:.2f}秒)")
+        elif duration == -1:
+            logger.info(f"⏹️ 无限时模式识别结束 (运行时间: {actual_duration:.2f}秒)")
+        elif actual_duration >= duration:
+            logger.info(f"⏹️ 识别达到指定时长 (设定: {duration}秒, 实际: {actual_duration:.2f}秒)")
+        else:
+            logger.info(f"⏹️ 识别提前结束 (设定: {duration}秒, 实际: {actual_duration:.2f}秒)")
 
         # 返回最终结果
         if self._final_results:
@@ -678,8 +748,26 @@ class FunASRVoiceRecognizer:
                             audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
                             self._process_audio_chunk(audio_data, current_time)
 
+                        except OSError as audio_error:
+                            # 专门处理音频流相关的系统错误
+                            logger.error(f"🎤 连续识别音频流异常: {audio_error}")
+
+                            # 检查严重错误类型
+                            if "No such device" in str(audio_error) or "Device unavailable" in str(audio_error):
+                                logger.error("❌ 音频设备断开连接，停止连续识别")
+                                self._is_running = False
+                                break
+                            elif "Input overflowed" in str(audio_error):
+                                logger.warning("⚠️ 音频缓冲区溢出，继续处理...")
+                                continue
+                            else:
+                                logger.warning(f"⚠️ 音频流错误，尝试继续: {audio_error}")
+                                continue
+
                         except Exception as e:
-                            logger.error(f"连续识别错误: {e}")
+                            logger.error(f"❌ 连续识别错误: {e}")
+                            import traceback
+                            logger.debug(f"错误详情: {traceback.format_exc()}")
                             continue
 
             except Exception as e:

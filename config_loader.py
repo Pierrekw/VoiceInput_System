@@ -70,9 +70,14 @@ class ConfigLoader:
                 }
             },
             "voice_commands": {
-                "pause_commands": ["暂停", "暂停录音", "暂停识别", "pause"],
-                "resume_commands": ["继续", "继续录音", "恢复", "恢复识别", "resume"],
-                "stop_commands": ["停止", "停止录音", "结束", "exit", "stop"]
+                "pause_commands": ["暂停", "暂停录音", "暂停识别", "pause", "暂停一下"],
+                "resume_commands": ["继续", "继续录音", "恢复", "恢复识别", "resume", "继续识别"],
+                "stop_commands": ["停止", "停止录音", "结束", "exit", "stop", "停止识别", "结束识别"],
+                "config": {
+                    "match_mode": "fuzzy",
+                    "min_match_length": 2,
+                    "confidence_threshold": 0.8
+                }
             },
             "error_correction": {
                 "dictionary_path": "voice_correction_dict.txt",
@@ -233,6 +238,26 @@ class ConfigLoader:
     def get_funasr_path(self) -> str:
         """获取FunASR模型路径"""
         return self.get("model.funasr.path", "")
+
+    def get_voice_commands_config(self) -> dict:
+        """获取语音命令配置"""
+        return self.get("voice_commands", {})
+
+    def get_pause_commands(self) -> list:
+        """获取暂停命令列表"""
+        return self.get("voice_commands.pause_commands", [])
+
+    def get_resume_commands(self) -> list:
+        """获取继续命令列表"""
+        return self.get("voice_commands.resume_commands", [])
+
+    def get_stop_commands(self) -> list:
+        """获取停止命令列表"""
+        return self.get("voice_commands.stop_commands", [])
+
+    def get_voice_command_config(self) -> dict:
+        """获取语音命令识别配置"""
+        return self.get("voice_commands.config", {})
 
 # 全局配置实例
 config = ConfigLoader()

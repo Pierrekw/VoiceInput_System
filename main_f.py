@@ -43,6 +43,26 @@ warnings.filterwarnings('ignore')
 from funasr_voice_module import FunASRVoiceRecognizer
 from text_processor_clean import TextProcessor
 
+# 导入性能监控模块
+from performance_monitor import performance_monitor, PerformanceStep
+
+# 导入Debug性能追踪模块
+from debug_performance_tracker import debug_tracker
+
+# 导入生产环境延迟记录器
+try:
+    from production_latency_logger import (
+        start_latency_session, end_latency_session,
+        log_voice_input_end, log_asr_complete, log_terminal_display
+    )
+except ImportError:
+    # 如果导入失败，提供空函数
+    def start_latency_session() -> None: pass
+    def end_latency_session() -> None: pass
+    def log_voice_input_end(audio_duration: float) -> None: pass
+    def log_asr_complete(text: str, asr_latency: float) -> None: pass
+    def log_terminal_display(text: str, display_latency: float = 0.0) -> None: pass
+
 # 导入Excel导出模块
 try:
     from excel_exporter import ExcelExporter
@@ -111,6 +131,10 @@ class FunASRVoiceSystem:
         self.recognition_duration = recognition_duration
         self.continuous_mode = continuous_mode
         self.debug_mode = debug_mode
+
+        # 启用性能监控
+        performance_monitor.enable()
+        logger.info("🔍 性能监控已启用")
 
         # 系统状态
         self.state = SystemState.STOPPED
@@ -382,18 +406,37 @@ class FunASRVoiceSystem:
             processed_text: 处理后文本
             numbers: 提取的数字
         """
-        # 添加到结果缓冲区
-        self.results_buffer.append({
+        # 添加性能监控
+        with PerformanceStep("结果处理", {
+            'original_length': len(original_text),
+            'processed_length': len(processed_text),
+            'numbers_count': len(numbers)
+        }):
+            # 添加到结果缓冲区
+            self.results_buffer.append({
             'original': original_text,
             'processed': processed_text,
             'numbers': numbers,
             'timestamp': time.time()
         })
 
-        # 记录调试日志
+        # 终端显示（记录时间戳）
+        terminal_start = time.time()
+        print(f"\n🎤 识别: {processed_text}")
+        if numbers and len(numbers) > 0:
+            print(f"🔢 数字: {numbers[0]}")
+        terminal_time = time.time() - terminal_start
+
+        # 记录终端显示时间
+        debug_tracker.record_terminal_display(processed_text)
+
+        # 记录生产环境终端显示
+        log_terminal_display(processed_text, float(terminal_time))
+
+        # 记录调试日志（包含时间信息）
         if hasattr(self, 'recognition_logger'):
-            # 改为debug级别
-            debug_message = f"识别文本: '{processed_text}'"
+            # 改为debug级别并添加时间信息
+            debug_message = f"识别文本: '{processed_text}' | 终端显示: {terminal_time*1000:.2f}ms"
             if numbers and len(numbers) > 0:
                 debug_message += f" -> 提取数字: {numbers[0]}"
             self.recognition_logger.debug(debug_message)
@@ -422,8 +465,21 @@ class FunASRVoiceSystem:
                     result_type = "特定文本"
                     result_value = special_text_match
                 
+                # Excel写入开始
+                excel_start = time.time()
+
                 # 使用Excel导出器生成ID并保存
-                excel_result = self.excel_exporter.append_with_text(excel_data)
+                with PerformanceStep("Excel写入", {
+                    'data_type': result_type,
+                    'data_count': len(excel_data),
+                    'result_value': result_value
+                }):
+                    excel_result = self.excel_exporter.append_with_text(excel_data)
+
+                # Excel写入结束
+                excel_time = time.time() - excel_start
+                debug_tracker.record_excel_write(processed_text, excel_time)
+
                 if excel_result:
                     record_id, record_number, record_text = excel_result[0]
                     # 确保record_number是数值类型
@@ -460,8 +516,25 @@ class FunASRVoiceSystem:
             return
 
         if result.text.strip():
+            # 记录ASR结果完成
+            debug_tracker.record_asr_result(result.text, getattr(result, 'confidence', 0.0))
+
+            # 记录生产环境ASR完成
+            log_asr_complete(result.text, 0.0)  # 这里可以传入实际的ASR处理时间
+
+            # 文本处理开始
+            debug_tracker.record_text_processing_start(result.text)
+            text_processing_start = time.time()
+
             processed = self.processor.process_text(result.text)
             numbers = self.processor.extract_numbers(result.text, processed)
+
+            # 文本处理结束
+            text_processing_time = time.time() - text_processing_start
+            debug_tracker.record_text_processing_end(processed, len(numbers) > 0)
+
+            # 记录详细处理时间到日志
+            logger.debug(f"[LATENCY] ASR结果: '{result.text}' | 文本处理: {text_processing_time*1000:.2f}ms")
 
             # 检查是否为语音命令
             command_type = self.recognize_voice_command(processed)
@@ -585,6 +658,25 @@ class FunASRVoiceSystem:
         except:
             pass
 
+        # 输出性能分析报告
+        try:
+            performance_report = performance_monitor.export_performance_report()
+            if performance_report:
+                print("\n" + "="*80)
+                print("📊 系统性能分析报告")
+                print("="*80)
+                print(performance_report)
+                print("="*80)
+
+                # 将性能报告写入日志文件
+                performance_logger = logging.getLogger("performance")
+                performance_logger.info(performance_report)
+        except Exception as e:
+            logger.error(f"性能报告生成失败: {e}")
+
+        # 清理性能监控数据
+        performance_monitor.clear_records()
+
     def run_recognition_cycle(self):
         """运行识别循环"""
         # 设置回调
@@ -633,6 +725,12 @@ class FunASRVoiceSystem:
         # 启动键盘监听
         self.start_keyboard_listener()
 
+        # 启动debug性能追踪
+        debug_tracker.start_debug_session(f"funasr_session_{int(time.time())}")
+
+        # 启动生产环境延迟记录
+        start_latency_session()
+
         try:
             # 直接开始识别
             print(f"\n🎯 开始语音识别")
@@ -656,6 +754,12 @@ class FunASRVoiceSystem:
         finally:
             # 停止键盘监听
             self.stop_keyboard_listener()
+
+            # 停止debug追踪并生成报告
+            debug_tracker.stop_debug_session()
+
+            # 停止生产环境延迟记录
+            end_latency_session()
 
             # 清理资源
             try:

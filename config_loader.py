@@ -91,10 +91,45 @@ class ConfigLoader:
                         "variants": ["OK", "ok", "Okay", "okay", "好", "可以", "确认"]
                     },
                     {
-                        "base_text": "Not OK", 
+                        "base_text": "Not OK",
                         "variants": ["Not OK", "not ok", "note ok", "Note OK", "不", "不行", "错误", "NG"]
                     }
                 ]
+            },
+            "vad": {
+                "energy_threshold": 0.015,
+                "min_speech_duration": 0.3,
+                "min_silence_duration": 0.6,
+                "speech_padding": 0.3,
+                "description": {
+                    "energy_threshold": "检测语音的最小能量阈值，较小值更敏感但可能误检测",
+                    "min_speech_duration": "有效语音的最小持续时间（秒）",
+                    "min_silence_duration": "语音结束后的静音等待时间（秒）- 🔑 影响延迟的关键参数",
+                    "speech_padding": "语音前后的额外音频填充时间（秒）"
+                },
+                "presets": {
+                    "fast": {
+                        "energy_threshold": 0.01,
+                        "min_speech_duration": 0.1,
+                        "min_silence_duration": 0.2,
+                        "speech_padding": 0.2,
+                        "description": "快速响应模式 - 减少延迟但可能误检测"
+                    },
+                    "balanced": {
+                        "energy_threshold": 0.015,
+                        "min_speech_duration": 0.3,
+                        "min_silence_duration": 0.6,
+                        "speech_padding": 0.3,
+                        "description": "平衡模式 - 默认设置"
+                    },
+                    "accuracy": {
+                        "energy_threshold": 0.02,
+                        "min_speech_duration": 0.5,
+                        "min_silence_duration": 1.0,
+                        "speech_padding": 0.4,
+                        "description": "高准确性模式 - 增加稳定性但延迟较高"
+                    }
+                }
             }
         }
         
@@ -114,7 +149,10 @@ class ConfigLoader:
         
         # 应用环境变量覆盖
         self._apply_environment_overrides(default_config)
-        
+
+        # 应用VAD预设模式
+        self._apply_vad_mode(default_config)
+
         # 保存最终配置
         self._config = default_config
     
@@ -155,7 +193,35 @@ class ConfigLoader:
                 config["system"]["vosk_log_level"] = int(vosk_log_level_env)
             except ValueError:
                 logger.error("环境变量VOSK_LOG_LEVEL不是有效的整数")
-    
+
+    def _apply_vad_mode(self, config: Dict[str, Any]) -> None:
+        """应用VAD预设模式"""
+        try:
+            vad_config = config.get("vad", {})
+            if not vad_config:
+                return
+
+            mode = vad_config.get("mode", "balanced")
+            if mode == "customized":
+                logger.info("VAD使用自定义配置")
+                return
+
+            presets = vad_config.get("presets", {})
+            preset = presets.get(mode)
+
+            if preset:
+                # 应用预设参数（跳过description和use_case字段）
+                for key, value in preset.items():
+                    if key not in ["description", "use_case"]:
+                        vad_config[key] = value
+
+                logger.info(f"VAD已应用预设模式: {mode} - {preset.get('description', '')}")
+            else:
+                logger.warning(f"VAD预设模式不存在: {mode}，使用默认配置")
+
+        except Exception as e:
+            logger.warning(f"应用VAD预设模式失败: {e}")
+
     def get(self, path: str, default: Any = None) -> Any:
         """
         获取指定路径的配置值
@@ -258,6 +324,53 @@ class ConfigLoader:
     def get_voice_command_config(self) -> dict:
         """获取语音命令识别配置"""
         return self.get("voice_commands.config", {})
+
+    def get_vad_config(self) -> dict:
+        """获取VAD配置"""
+        return self.get("vad", {})
+
+    def get_vad_energy_threshold(self) -> float:
+        """获取VAD能量阈值"""
+        return self.get("vad.energy_threshold", 0.015)
+
+    def get_vad_min_speech_duration(self) -> float:
+        """获取VAD最小语音持续时间"""
+        return self.get("vad.min_speech_duration", 0.3)
+
+    def get_vad_min_silence_duration(self) -> float:
+        """获取VAD最小静音持续时间"""
+        return self.get("vad.min_silence_duration", 0.6)
+
+    def get_vad_speech_padding(self) -> float:
+        """获取VAD语音填充时间"""
+        return self.get("vad.speech_padding", 0.3)
+
+    def get_vad_preset(self, preset_name: str) -> dict:
+        """获取VAD预设配置"""
+        presets = self.get("vad.presets", {})
+        return presets.get(preset_name, {})
+
+    def apply_vad_preset(self, preset_name: str) -> bool:
+        """应用VAD预设配置"""
+        preset = self.get_vad_preset(preset_name)
+        if preset:
+            # 更新VAD配置
+            if "vad" not in self._config:
+                self._config["vad"] = {}
+
+            for key, value in preset.items():
+                if key != "description":  # 跳过描述字段
+                    self._config["vad"][key] = value
+
+            logger.info(f"已应用VAD预设: {preset_name}")
+            return True
+        else:
+            logger.warning(f"VAD预设不存在: {preset_name}")
+            return False
+
+    def get_vad_description(self) -> dict:
+        """获取VAD参数说明"""
+        return self.get("vad.description", {})
 
 # 全局配置实例
 config = ConfigLoader()

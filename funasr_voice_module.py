@@ -18,6 +18,15 @@ import os
 import sys
 import warnings
 
+# 导入性能监控
+from performance_monitor import performance_monitor, PerformanceStep
+
+# 导入Debug性能追踪模块
+try:
+    from debug_performance_tracker import debug_tracker
+except ImportError:
+    debug_tracker = None
+
 # 彻底抑制FunASR的进度条和调试输出
 os.environ['TQDM_DISABLE'] = '1'
 os.environ['PYTHONWARNINGS'] = 'ignore'
@@ -180,7 +189,7 @@ class FunASRVoiceRecognizer:
                  model_path: Optional[str] = None,
                  device: str = "cpu",
                  sample_rate: int = 16000,
-                 chunk_size: int = 1600,
+                 chunk_size: int = 400,
                  silent_mode: bool = True):
         """
         初始化语音识别器
@@ -204,8 +213,8 @@ class FunASRVoiceRecognizer:
             device=device
         )
 
-        # VAD配置
-        self.vad_config = VADConfig()
+        # VAD配置 - 支持从配置文件加载
+        self.vad_config = self._load_vad_config()
 
         # 模型相关
         self._model: Optional[Any] = None
@@ -241,6 +250,22 @@ class FunASRVoiceRecognizer:
         self._on_partial_result: Optional[Callable[[str], None]] = None
         self._on_final_result: Optional[Callable[[RecognitionResult], None]] = None
         self._on_vad_event: Optional[Callable[[str, Dict], None]] = None
+
+    def _load_vad_config(self):
+        """从配置加载器加载VAD设置"""
+        try:
+            from config_loader import config
+
+            return VADConfig(
+                energy_threshold=config.get_vad_energy_threshold(),
+                min_speech_duration=config.get_vad_min_speech_duration(),
+                min_silence_duration=config.get_vad_min_silence_duration(),
+                speech_padding=config.get_vad_speech_padding()
+            )
+
+        except Exception as e:
+            logger.warning(f"加载VAD配置失败: {e}，使用默认配置")
+            return VADConfig()
 
     def set_callbacks(self,
                      on_partial_result: Optional[Callable[[str], None]] = None,
@@ -485,14 +510,21 @@ class FunASRVoiceRecognizer:
         # VAD检测
         is_speech, vad_event = self._detect_vad(audio_data, current_time)
 
+        # 计算音频能量
+        audio_energy = np.sqrt(np.mean(audio_data ** 2))
+
         if vad_event and self._on_vad_event:
             self._on_vad_event(vad_event, {
                 'time': current_time,
-                'energy': np.sqrt(np.mean(audio_data ** 2))
+                'energy': audio_energy
             })
 
         # 如果检测到语音，添加到语音缓冲区
         if is_speech:
+            # 记录语音输入开始（如果是新的语音段）
+            if vad_event == "speech_start" and debug_tracker:
+                debug_tracker.record_voice_input_start(audio_energy)
+
             self._speech_buffer.extend(audio_data)
 
             # 定期进行流式识别
@@ -505,6 +537,11 @@ class FunASRVoiceRecognizer:
                 current_time - self._last_speech_time >= self.vad_config.min_silence_duration):
 
                 if len(self._speech_buffer) >= self.sample_rate * self.vad_config.min_speech_duration:
+                    # 记录语音输入结束和ASR开始
+                    if debug_tracker:
+                        debug_tracker.record_voice_input_end(len(self._speech_buffer) / self.sample_rate)
+                        debug_tracker.record_asr_start(len(self._speech_buffer))
+
                     self._perform_final_recognition()
 
     def _perform_streaming_recognition(self):
@@ -621,18 +658,29 @@ class FunASRVoiceRecognizer:
         self._partial_results = []
 
         start_time = time.time()
+        current_time = 0.0  # 初始化current_time变量
 
         try:
             with self._audio_stream() as stream:
                 # 支持duration=-1表示无限时模式
                 while (duration == -1 or time.time() - start_time < duration) and not self._stop_event.is_set():
                     try:
-                        # 读取音频数据
-                        data = stream.read(self.chunk_size, exception_on_overflow=False)
+                        # 更新当前时间
                         current_time = time.time() - start_time
 
+                        # 读取音频数据
+                        with PerformanceStep("音频输入", {
+                            'chunk_size': self.chunk_size,
+                            'current_time': current_time
+                        }):
+                            data = stream.read(self.chunk_size, exception_on_overflow=False)
+
                         # 转换为numpy数组
-                        audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                        with PerformanceStep("音频处理", {
+                            'data_length': len(data),
+                            'current_time': current_time
+                        }):
+                            audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
 
                         # 处理音频
                         self._process_audio_chunk(audio_data, current_time)

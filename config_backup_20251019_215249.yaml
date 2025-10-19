@@ -1,0 +1,186 @@
+# FunASR语音输入系统配置文件
+# 修改配置后重启系统生效
+# 详细使用说明请参考README.md
+
+# ===== 模型配置 =====
+model:
+  # 默认模型路径
+  # 相对于程序运行目录的路径
+  # 可选值: "./model/cn" (中文标准), "./model/cns" (中文小型), "./model/fun" (FunASR)
+  default_path: "./model/cn"
+
+  # 模型设备类型
+  # 可选值: "cpu", "cuda", "cuda:0"等
+  # cpu: 兼容性最好，所有电脑可用
+  # cuda: 速度更快，需要NVIDIA显卡和CUDA支持
+  device: "cpu"
+
+  # FunASR特定模型配置
+  funasr:
+    # FunASR模型路径 - 必须指向有效的模型目录
+    # 应包含model.pt、config.yaml等必要文件
+    path: "./model/fun"
+
+    # 流式处理参数 - 控制识别延迟和准确性的平衡
+    # 格式: [起始延迟, 块大小, 回溯长度]
+    # [0, 10, 5] 为推荐值，适合大多数场景
+    chunk_size: [0, 10, 5]
+
+    # 编码器块回溯数量 - 影响识别准确性
+    # 增大可提高准确性但增加延迟
+    encoder_chunk_look_back: 4
+
+    # 解码器块回溯数量 - 影响识别流畅性
+    # 推荐值1，不建议修改
+    decoder_chunk_look_back: 1
+
+    # 禁用自动更新 - 避免下载新模型影响稳定性
+    # 建议保持true，手动管理模型版本
+    disable_update: true
+
+    # 是否信任远程代码 - 安全设置
+    # 建议保持false，避免安全风险
+    trust_remote_code: false
+
+# ===== 识别配置 =====
+recognition:
+  # 语音识别超时时间（秒）- ⚠️ 重要配置项
+  # timeout_seconds = -1  : 无限时模式（连续识别，推荐日常使用）
+  # timeout_seconds = 0    : 立即结束（仅用于调试）
+  # timeout_seconds > 0    : 单次识别时长（秒），适合定时任务
+  timeout_seconds: -1
+
+  # 音频缓冲区大小 - 影响内存使用和识别延迟
+  # 较大值可提高识别稳定性但增加内存占用
+  buffer_size: 10000
+
+  # 暂停超时乘数 - 暂停状态下的超时倍数
+  # 当用户暂停后，系统会等待此倍数时间后自动停止
+  pause_timeout_multiplier: 3
+
+# ===== 系统配置 =====
+system:
+  # 日志级别 - 控制日志输出的详细程度
+  # 可选值: DEBUG(最详细), INFO(标准), WARNING(警告), ERROR(仅错误), CRITICAL(严重错误)
+  # 生产环境建议INFO，调试时可用DEBUG
+  log_level: "INFO"
+
+  # 全局卸载控制 - 是否在识别完成后自动卸载模型
+  # true: 节省内存，但下次启动较慢
+  # false: 保持模型加载，下次启动快但占用内存
+  global_unload: false
+
+  # 测试模式 - 启用测试相关的特殊行为
+  # 仅开发调试时使用，日常使用请保持false
+  test_mode: false
+
+  # VOSK日志级别 - 兼容性配置（当前版本已不使用VOSK）
+  vosk_log_level: 0
+
+# ===== 音频配置 =====
+audio:
+  # 音频采样率 - 音频数据的质量标准
+  # 16000: 语音识别标准采样率，推荐保持
+  # 44100: 高质量音频，但增加处理负担
+  sample_rate: 16000
+
+  # 音频块大小 - 影响音频处理的实时性和准确性
+  # 较小值: 实时性好但可能影响识别准确性
+  # 较大值: 识别准确但实时性较差
+  chunk_size: 8000
+
+# ===== Excel导出配置 =====
+excel:
+  # Excel文件基础名称
+  # 实际文件会在reports目录下并添加时间戳，如: report_20231019_143022.xlsx
+  file_name: "report"
+
+  # 自动导出控制 - 是否自动将识别结果写入Excel
+  auto_export: true
+
+  # 格式设置
+  formatting:
+    # 自动编号 - 为每条识别结果添加序号
+    auto_numbering: true
+
+    # 包含时间戳 - 记录识别结果的时间
+    include_timestamp: true
+
+    # 表头语言 - Excel表头的语言
+    # "zh": 中文表头 (序号, 数值, 原文, 处理后文本, 时间)
+    # "en": 英文表头 (ID, Number, Original, Processed, Time)
+    header_language: "zh"
+
+    # 原文信息 - 是否在Excel中保留原始识别文本
+    include_original: true
+
+# ===== 语音命令配置 =====
+voice_commands:
+  # 暂停命令 - 说这些词可以暂停识别
+  # 支持中英文混合，可以根据需要添加或修改
+  pause_commands: ["暂停", "暂停录音", "暂停识别", "pause", "暂停一下", "等一下"]
+
+  # 继续命令 - 说这些词可以恢复识别
+  resume_commands: ["继续", "继续录音", "恢复", "恢复识别", "resume", "继续识别", "开始"]
+
+  # 停止命令 - 说这些词可以完全停止系统
+  stop_commands: ["停止", "停止录音", "结束", "exit", "stop", "停止识别", "结束识别", "退出"]
+
+  # 命令识别配置
+  config:
+    # 命令匹配模式
+    # "exact": 精确匹配，必须完全匹配命令词
+    # "fuzzy": 模糊匹配，支持相似度计算，推荐
+    match_mode: "fuzzy"
+
+    # 最小匹配长度 - 小于此长度的文本不进行命令匹配
+    # 避免误识别短文本为命令
+    min_match_length: 2
+
+    # 命令识别置信度阈值 (0.0-1.0)
+    # 较高值: 减少误识别但可能漏掉命令
+    # 较低值: 更容易识别命令但可能误识别
+    confidence_threshold: 0.8
+
+# ===== 错误修正配置 =====
+error_correction:
+  # 错误修正字典文件路径
+  # 当前版本未启用，保留用于未来功能扩展
+  dictionary_path: "voice_correction_dict.txt"
+
+  # 启用自动错误修正
+  # 当前版本未启用，保留用于未来功能扩展
+  enabled: true
+
+# ===== 特定文本配置 =====
+special_texts:
+  # 特定文本导出功能 - 识别特定词汇时自动写入Excel
+  # 用于质量检查、合格判断等场景
+  exportable_texts:
+    # OK状态及其变体 - 识别到这些词汇时写入1.0到Excel
+    - base_text: "OK"
+      variants: ["OK", "ok", "Okay", "okay", "好", "可以", "确认", "合格", "通过"]
+
+    # Not OK状态及其变体 - 识别到这些词汇时写入0.0到Excel
+    - base_text: "NOT OK"
+      variants: ["Not OK", "not ok", "note ok", "Note OK", "NG", "不合格", "不OK", "不行", "错误", "失败", "拒绝"]
+
+  # 是否启用特定文本导出功能
+  enabled: true
+
+# ===== 使用说明 =====
+#
+# 启动方式:
+#   python start_funasr.py                    # 使用此配置文件的所有设置
+#   python start_funasr.py -d 60              # 临时使用60秒识别（覆盖配置文件）
+#   python start_funasr.py --debug           # 启用调试模式
+#   python start_funasr.py --show-config     # 显示当前配置
+#
+# 常用配置调整:
+#   1. 日常使用: timeout_seconds: -1 (无限时模式)
+#   2. 定时任务: timeout_seconds: 300 (5分钟)
+#   3. 调试测试: timeout_seconds: 10 (10秒)
+#   4. 提高准确性: 增大encoder_chunk_look_back
+#   5. 减少延迟: 减小chunk_size的中间值
+#
+# 配置修改后需要重启系统才能生效。

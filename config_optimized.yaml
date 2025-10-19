@@ -1,0 +1,108 @@
+
+# ===== 性能优化配置 =====
+# 基于性能测试结果自动生成
+# 生成时间: 2025-10-19 21:52:49
+#
+# 主要优化项:
+# 1. audio.chunk_size: 8000 -> 1600 (减少5倍音频输入延迟)
+# 2. funasr.chunk_size: [0,10,5] -> [0,5,2] (减少流式处理延迟)
+# 3. encoder_chunk_look_back: 4 -> 2 (平衡准确性和延迟)
+# 4. recognition.buffer_size: 10000 -> 5000 (减少内存占用)
+#
+# 预期效果:
+# - 音频输入延迟从 ~100ms 降低到 ~20ms
+# - 端到端响应速度提升 3-5倍
+# - 内存占用略有减少
+
+audio:
+  chunk_size: 1600
+  sample_rate: 16000
+error_correction:
+  dictionary_path: voice_correction_dict.txt
+  enabled: true
+excel:
+  auto_export: true
+  file_name: report
+  formatting:
+    auto_numbering: true
+    header_language: zh
+    include_original: true
+    include_timestamp: true
+model:
+  default_path: ./model/cn
+  device: cpu
+  funasr:
+    chunk_size:
+    - 0
+    - 5
+    - 2
+    decoder_chunk_look_back: 1
+    disable_update: true
+    encoder_chunk_look_back: 2
+    path: ./model/fun
+    trust_remote_code: false
+recognition:
+  buffer_size: 5000
+  pause_timeout_multiplier: 3
+  timeout_seconds: -1
+special_texts:
+  enabled: true
+  exportable_texts:
+  - base_text: OK
+    variants:
+    - OK
+    - ok
+    - Okay
+    - okay
+    - 好
+    - 可以
+    - 确认
+    - 合格
+    - 通过
+  - base_text: NOT OK
+    variants:
+    - Not OK
+    - not ok
+    - note ok
+    - Note OK
+    - NG
+    - 不合格
+    - 不OK
+    - 不行
+    - 错误
+    - 失败
+    - 拒绝
+system:
+  global_unload: false
+  log_level: INFO
+  test_mode: false
+  vosk_log_level: 0
+voice_commands:
+  config:
+    confidence_threshold: 0.8
+    match_mode: fuzzy
+    min_match_length: 2
+  pause_commands:
+  - 暂停
+  - 暂停录音
+  - 暂停识别
+  - pause
+  - 暂停一下
+  - 等一下
+  resume_commands:
+  - 继续
+  - 继续录音
+  - 恢复
+  - 恢复识别
+  - resume
+  - 继续识别
+  - 开始
+  stop_commands:
+  - 停止
+  - 停止录音
+  - 结束
+  - exit
+  - stop
+  - 停止识别
+  - 结束识别
+  - 退出

@@ -8,8 +8,8 @@ import sys
 import os
 import time
 
-# 添加当前目录到路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main_f import FunASRVoiceSystem
 
@@ -48,17 +48,3 @@ def test_basic_functionality():
         print("\n⚠️ 用户中断")
     except Exception as e:
         print(f"\n❌ 测试异常: {e}")
-
-    finally:
-        # 清理
-        try:
-            system.stop_keyboard_listener()
-            system.recognizer.stop_recognition()
-            system.recognizer.unload_model()
-        except:
-            pass
-
-    print("\n🧪 测试完成")
-
-if __name__ == "__main__":
-    test_basic_functionality()

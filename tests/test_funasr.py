@@ -13,6 +13,9 @@ import pyaudio
 import numpy as np
 from contextlib import contextmanager
 
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -204,9 +207,9 @@ class FunASRTest:
             time.sleep(1)
         print()
         print("""
-==================================================================
+===================================================================
 🔵 正在录音！请对着麦克风说话...🔵
-==================================================================
+===================================================================
         """)
         logger.info(f"✅ 开始录音测试，持续{duration}秒")
 
@@ -397,7 +400,7 @@ class FunASRTest:
                             if should_end:
                                 # 确认语音段结束，进行最终识别
                                 is_speech_segment = False
-
+                                
                                 if speech_duration >= min_speech_duration and len(speech_segment_audio) > 0:
                                     recognition_count += 1
                                     logger.info(f"语音段结束，时长: {speech_duration:.2f}s")

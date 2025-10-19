@@ -12,7 +12,10 @@ import threading
 import time
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Callable, Any
+from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type
+
+# 类型别名
+ExcelExporterType = Union[Type['ExcelExporter'], None]
 from enum import Enum
 
 # 配置基础设置
@@ -46,17 +49,36 @@ try:
     EXCEL_AVAILABLE = True
 except ImportError:
     EXCEL_AVAILABLE = False
-    ExcelExporter = None
+    ExcelExporter: ExcelExporterType = None
 
 # 配置日志
 logging.basicConfig(
-    level=logging.WARNING,  # 减少日志输出
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('voice_input_funasr.log', encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
+
+# 导入配置加载模块
+try:
+    from config_loader import config as config_loader
+except ImportError:
+    logger.error("配置加载模块不可用，使用默认配置")
+    
+    # 创建简单的配置替代
+    class ConfigPlaceholder:
+        def get_special_texts_config(self):
+            return {"enabled": True, "exportable_texts": []}
+        
+        def is_special_text_export_enabled(self):
+            return True
+            
+        def get_exportable_texts(self):
+            return []
+    
+    config_loader: Union[ConfigPlaceholder, Any] = ConfigPlaceholder()
 
 class SystemState(Enum):
     """系统状态枚举"""
@@ -93,7 +115,7 @@ class FunASRVoiceSystem:
         # 系统状态
         self.state = SystemState.STOPPED
         self.results_buffer: List[Dict[str, Any]] = []
-        self.number_results: List[Tuple[int, float, str]] = []  # (ID, number, original_text)
+        self.number_results: List[Tuple[int, Union[int, float], str]] = []  # (ID, number, original_text)
 
         # 创建核心组件
         self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
@@ -112,6 +134,11 @@ class FunASRVoiceSystem:
             VoiceCommandType.RESUME: ["继续", "继续录音", "恢复", "恢复识别", "resume"],
             VoiceCommandType.STOP: ["停止", "停止录音", "结束", "exit", "stop"]
         }
+        
+        # 加载特定文本配置
+        self.special_text_config = config_loader.get_special_texts_config()
+        self.export_special_texts = config_loader.is_special_text_export_enabled()
+        self.exportable_texts = config_loader.get_exportable_texts()
 
         # 键盘监听线程和停止标志
         self.keyboard_thread = None
@@ -137,6 +164,8 @@ class FunASRVoiceSystem:
             filepath = os.path.join(reports_dir, filename)
 
             self.excel_exporter = ExcelExporter(filename=filepath)
+            # 预先创建Excel文件，避免在首次识别后才创建
+            self.excel_exporter.create_new_file()
             logger.info(f"Excel导出器已设置: {filepath}")
         except Exception as e:
             logger.error(f"设置Excel导出器失败: {e}")
@@ -202,12 +231,50 @@ class FunASRVoiceSystem:
         """
         text_lower = text.lower().strip()
 
+        # 精确匹配语音命令，避免误识别
+        # 对stop命令要求更严格，需要精确匹配或完全包含命令词
         for command_type, keywords in self.voice_commands.items():
-            if any(keyword in text_lower for keyword in keywords):
-                return command_type
+            # 对于停止命令，要求更精确的匹配
+            if command_type == VoiceCommandType.STOP:
+                # 只有当文本完全等于命令词或者文本就是命令词加上感叹号等标点时才匹配
+                if text_lower in keywords or any(text_lower == keyword for keyword in keywords) or \
+                   any(text_lower == keyword + '!' or text_lower == keyword + '.' for keyword in keywords):
+                    return command_type
+            # 对于其他命令，可以稍微宽松一些
+            else:
+                # 只有当文本主要内容是命令词时才匹配
+                if any(keyword == text_lower or text_lower == keyword + '!' or text_lower == keyword + '.' 
+                       for keyword in keywords):
+                    return command_type
 
         return VoiceCommandType.UNKNOWN
 
+    def _check_special_text(self, text: str) -> Optional[str]:
+        """
+        检查文本是否匹配特定文本配置
+        
+        Args:
+            text: 要检查的文本
+            
+        Returns:
+            如果匹配，返回对应的基础文本；否则返回None
+        """
+        if not self.export_special_texts or not self.exportable_texts:
+            return None
+        
+        text_lower = text.lower().strip()
+        
+        for text_config in self.exportable_texts:
+            base_text = text_config.get('base_text')
+            variants = text_config.get('variants', [])
+            
+            # 检查文本是否匹配任何变体
+            for variant in variants:
+                if variant.lower() == text_lower or text_lower in variant.lower():
+                    return base_text
+        
+        return None
+        
     def process_recognition_result(self, original_text: str, processed_text: str, numbers: List[float]):
         """
         处理识别结果
@@ -225,57 +292,68 @@ class FunASRVoiceSystem:
             'timestamp': time.time()
         })
 
-        # 记录日志
+        # 记录调试日志
         if hasattr(self, 'recognition_logger'):
-            log_message = f"识别结果: '{original_text}' -> '{processed_text}'"
-            if numbers:
-                log_message += f" -> 数字: {numbers[0]}"
-            self.recognition_logger.info(log_message)
+            # 改为debug级别
+            debug_message = f"识别文本: '{processed_text}'"
+            if numbers and len(numbers) > 0:
+                debug_message += f" -> 提取数字: {numbers[0]}"
+            self.recognition_logger.debug(debug_message)
 
-        # 处理纯数字结果
-        if numbers and self.excel_exporter:
-            # 添加到数字结果列表
+        # 检查是否为特定文本
+        special_text_match = self._check_special_text(processed_text)
+        
+        # 处理纯数字结果或特定文本结果
+        if (numbers and self.excel_exporter) or (special_text_match and self.excel_exporter):
+            # 添加到结果列表
             try:
+                # 准备要写入Excel的数据
+                excel_data = []
+                
+                if numbers:
+                    # 数字结果
+                    excel_data.append((numbers[0], original_text, processed_text))
+                    result_type = "数字"
+                    result_value = numbers[0]
+                else:
+                    # 特定文本结果
+                    # 将特定文本作为数值的替代写入Excel
+                    # 使用1代表OK，0代表Not OK或其他特殊文本
+                    text_value = 1.0 if special_text_match == "OK" else 0.0
+                    excel_data.append((text_value, original_text, special_text_match))
+                    result_type = "特定文本"
+                    result_value = special_text_match
+                
                 # 使用Excel导出器生成ID并保存
-                excel_result = self.excel_exporter.append_with_text([(numbers[0], original_text)])
+                excel_result = self.excel_exporter.append_with_text(excel_data)
                 if excel_result:
                     record_id, record_number, record_text = excel_result[0]
-                    self.number_results.append((record_id, record_number, record_text))
+                    # 确保record_number是数值类型
+                    number_value = float(record_number) if isinstance(record_number, (int, float)) else 0.0
+                    self.number_results.append((record_id, number_value, record_text))
 
-                    # 显示结果（根据debug模式决定显示内容）
-                    if self.debug_mode:
-                        print(f"\n{original_text}")
-                        print(f"{record_id}: {record_number}")
-                    else:
-                        # 生产环境只显示ID和数字
-                        print(f"{record_id}: {record_number}")
+                    # 统一使用logger.info记录识别结果
+                    if hasattr(self, 'recognition_logger'):
+                        log_message = f"识别文本: '{processed_text}' -> {result_type}: {record_id}: {result_value}"
+                        self.recognition_logger.info(log_message)
                 else:
-                    # Excel写入失败，只显示数字
-                    if self.debug_mode:
-                        print(f"\n{original_text}")
-                        print(f"{numbers[0]}")
-                    else:
-                        print(f"-: {numbers[0]}")
+                    # Excel写入失败，使用logger.info记录
+                    if hasattr(self, 'recognition_logger'):
+                        log_message = f"识别文本: '{processed_text}' -> {result_type}: -: {result_value}"
+                        self.recognition_logger.info(log_message)
             except Exception as e:
                 logger.error(f"Excel导出失败: {e}")
-                # 回退显示
-                if self.debug_mode:
-                    print(f"\n{original_text}")
-                    print(f"{numbers[0]}")
-                else:
-                    print(f"-: {numbers[0]}")
-        else:
-            # 非数字结果，只显示文本
-            if self.debug_mode or not numbers:
-                print(f"\n{original_text}")
-                if numbers:
-                    print(f"{numbers[0]}")
-                elif processed_text != original_text:
-                    if self.processor.is_pure_number_or_with_unit(original_text):
-                        print(f"{processed_text}")
+                # 回退记录
+                if hasattr(self, 'recognition_logger'):
+                    if numbers:
+                        log_message = f"识别文本: '{processed_text}' -> 数字: -: {numbers[0]}"
                     else:
-                        clean_text = self.processor.remove_spaces(original_text)
-                        print(f"{clean_text}")
+                        log_message = f"识别文本: '{processed_text}' -> 特定文本: -: {special_text_match}"
+                    self.recognition_logger.info(log_message)
+        else:
+            # 非数字结果，也非特定文本结果，记录到日志
+            if hasattr(self, 'recognition_logger'):
+                self.recognition_logger.info(f"识别文本: '{processed_text}'")
 
     def on_recognition_result(self, result):
         """识别结果回调函数"""
@@ -448,12 +526,13 @@ class FunASRVoiceSystem:
 
             self.run_recognition_cycle()
 
-            # 显示汇总
-            print("\n" + "=" * 50)
-            print("识别汇总")
-            print("=" * 50)
-
-            self.show_results_summary()
+            # 显示汇总（只显示一次）
+            if not self.system_should_stop:  # 只有当系统没有被命令停止时才显示汇总
+                print("\n" + "=" * 50)
+                print("识别汇总")
+                print("=" * 50)
+                
+                self.show_results_summary()
 
         except KeyboardInterrupt:
             print(f"\n⚠️ 用户中断")
@@ -535,9 +614,6 @@ def main():
     try:
         # 运行系统
         system.run_continuous()
-
-        # 显示汇总
-        system.show_results_summary()
 
     except Exception as e:
         logger.error(f"❌ 系统运行异常: {e}")

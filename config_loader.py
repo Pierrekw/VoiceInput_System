@@ -33,20 +33,21 @@ class ConfigLoader:
                     {"name": "中文小模型（快速加载）", "path": "model/cns", "description": "精简版中文语音识别模型，启动速度快，占用内存少"},
                     {"name": "英文标准模型", "path": "model/us", "description": "完整的英文语音识别模型"},
                     {"name": "英文小模型", "path": "model/uss", "description": "精简版英文语音识别模型"}
-                ]
+                ],
+                "device": "cpu",
+                "funasr": {
+                    "path": "f:/04_AI/01_Workplace/Voice_Input/model/fun",
+                    "chunk_size": [0, 10, 5],
+                    "encoder_chunk_look_back": 4,
+                    "decoder_chunk_look_back": 1,
+                    "disable_update": True,
+                    "trust_remote_code": False
+                }
             },
             "recognition": {
                 "timeout_seconds": 60,
                 "buffer_size": 10000,
-                "pause_timeout_multiplier": 3,
-                "sleep_times": {
-                    "small": 0.01,
-                    "short": 0.05,
-                    "medium": 0.1,
-                    "long": 0.5,
-                    "production": 0.05,
-                    "test": 2
-                }
+                "pause_timeout_multiplier": 3
             },
             "system": {
                 "log_level": "INFO",
@@ -59,7 +60,7 @@ class ConfigLoader:
                 "chunk_size": 8000
             },
             "excel": {
-                "file_name": "measurement_data.xlsx",
+                "file_name": "report",
                 "auto_export": True,
                 "formatting": {
                     "auto_numbering": True,
@@ -69,13 +70,26 @@ class ConfigLoader:
                 }
             },
             "voice_commands": {
-                "pause_commands": ["暂停录音", "暂停"],
-                "resume_commands": ["继续录音", "继续", "恢复"],
-                "stop_commands": ["停止录音", "停止", "结束"]
+                "pause_commands": ["暂停", "暂停录音", "暂停识别", "pause"],
+                "resume_commands": ["继续", "继续录音", "恢复", "恢复识别", "resume"],
+                "stop_commands": ["停止", "停止录音", "结束", "exit", "stop"]
             },
             "error_correction": {
                 "dictionary_path": "voice_correction_dict.txt",
                 "enabled": True
+            },
+            "special_texts": {
+                "enabled": True,
+                "exportable_texts": [
+                    {
+                        "base_text": "OK",
+                        "variants": ["OK", "ok", "Okay", "okay", "好", "可以", "确认"]
+                    },
+                    {
+                        "base_text": "Not OK", 
+                        "variants": ["Not OK", "not ok", "note ok", "Note OK", "不", "不行", "错误", "NG"]
+                    }
+                ]
             }
         }
         
@@ -168,10 +182,6 @@ class ConfigLoader:
         """获取测试模式设置"""
         return self.get("system.test_mode")
     
-    def get_sleep_time(self, sleep_type: str) -> float:
-        """获取指定类型的睡眠时间"""
-        return self.get(f"recognition.sleep_times.{sleep_type}", 0.1)
-    
     def get_excel_file_name(self) -> str:
         """获取Excel文件名"""
         return self.get("excel.file_name")
@@ -203,6 +213,26 @@ class ConfigLoader:
     def get_error_correction_dict_path(self) -> str:
         """获取错误修正字典路径"""
         return self.get("error_correction.dictionary_path", "voice_correction_dict.txt")
+    
+    def get_special_texts_config(self) -> dict:
+        """获取特定文本配置"""
+        return self.get("special_texts", {})
+    
+    def is_special_text_export_enabled(self) -> bool:
+        """获取特定文本导出是否启用"""
+        return self.get("special_texts.enabled", True)
+    
+    def get_exportable_texts(self) -> list:
+        """获取可导出的特定文本列表"""
+        return self.get("special_texts.exportable_texts", [])
+    
+    def get_funasr_config(self) -> dict:
+        """获取FunASR相关配置"""
+        return self.get("model.funasr", {})
+    
+    def get_funasr_path(self) -> str:
+        """获取FunASR模型路径"""
+        return self.get("model.funasr.path", "")
 
 # 全局配置实例
 config = ConfigLoader()

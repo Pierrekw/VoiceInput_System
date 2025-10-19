@@ -37,51 +37,52 @@ warnings.filterwarnings('ignore')
 # ============================================================================
 def setup_ffmpeg_environment():
     """设置FFmpeg环境（必须在导入FunASR之前调用）"""
+    # 方法1：使用环境变量永久设置（最快）
+    # 如果已经设置过FFmpeg路径，直接跳过
+    if os.environ.get('FFMPEG_PATH_SET') == '1':
+        return True
+    
     try:
-        # 获取当前脚本目录
+        # 方法2：配置固定路径（推荐用于快速启动）
+        # 这里设置一个固定的FFmpeg路径，避免多次检查
+        # 用户可以根据实际情况修改这个路径
+        FIXED_FFMPEG_PATH = "F:/onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin"
+        
+        if FIXED_FFMPEG_PATH and os.path.exists(FIXED_FFMPEG_PATH):
+            current_path = os.environ.get('PATH', '')
+            if FIXED_FFMPEG_PATH not in current_path:
+                os.environ['PATH'] = FIXED_FFMPEG_PATH + os.pathsep + current_path
+            # 标记FFmpeg路径已设置
+            os.environ['FFMPEG_PATH_SET'] = '1'
+            return True
+        
+        # 方法3：快速检查（仅检查最可能的位置）
         script_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # 尝试多个可能的FFmpeg路径
-        ffmpeg_paths = [
-            # 1. FunASR_Deployment目录下的FFmpeg
+        fast_check_paths = [
+            # 主要检查FunASR_Deployment目录
             os.path.join(script_dir, "FunASR_Deployment", "dependencies",
                         "ffmpeg-master-latest-win64-gpl-shared", "bin"),
-            # 2. F盘根目录下的FFmpeg
-            "F:/onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin",
-            # 3. 系统PATH中的FFmpeg（如果已安装）
-            ""
         ]
-
-        ffmpeg_found = False
-        for ffmpeg_path in ffmpeg_paths:
-            if ffmpeg_path and os.path.exists(ffmpeg_path):
+        
+        for ffmpeg_path in fast_check_paths:
+            if os.path.exists(ffmpeg_path):
                 current_path = os.environ.get('PATH', '')
                 if ffmpeg_path not in current_path:
                     os.environ['PATH'] = ffmpeg_path + os.pathsep + current_path
-                    print(f"🔧 设置FFmpeg路径: {ffmpeg_path}")
-                    ffmpeg_found = True
-                    break
-            elif not ffmpeg_path:  # 空字符串表示检查系统PATH
-                # 检查系统是否已有FFmpeg
-                try:
-                    import subprocess
-                    result = subprocess.run(['ffmpeg', '-version'],
-                                          capture_output=True, text=True, timeout=3)
-                    if result.returncode == 0:
-                        print("✅ 系统PATH中已存在FFmpeg")
-                        ffmpeg_found = True
-                        break
-                except:
-                    pass
+                os.environ['FFMPEG_PATH_SET'] = '1'
+                return True
+        
+        # 注意：系统PATH检查已移除，因为它较慢
+        # 建议：将FFmpeg添加到系统环境变量PATH中
+        print("⚠️ 未找到FFmpeg快速路径")
+        print("💡 性能优化建议：")
+        print("  1. 将FFmpeg安装到系统PATH环境变量中")
+        print(f"  2. 或修改代码中的FIXED_FFMPEG_PATH为您的FFmpeg路径")
+        
+        return False
 
-        if not ffmpeg_found:
-            print("⚠️ 未找到FFmpeg，某些功能可能不可用")
-            print("💡 建议：将FFmpeg安装到系统PATH或放置在FunASR_Deployment/dependencies/目录下")
-
-        return ffmpeg_found
-
-    except Exception as e:
-        print(f"⚠️ FFmpeg环境设置失败: {e}")
+    except Exception:
+        # 静默失败，避免影响启动速度
         return False
 
 # 立即执行FFmpeg环境设置

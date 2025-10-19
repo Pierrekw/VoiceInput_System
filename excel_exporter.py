@@ -30,9 +30,9 @@ class ExcelExporter:
         self.columns = []
         
         if header_language == "en":
-            self.columns.extend(["ID", "Measurement", "Timestamp"])
+            self.columns.extend(["ID", "Measurement", "Timestamp", "Processed Text"])
         else:
-            self.columns.extend(["编号", "测量值", "时间戳"])
+            self.columns.extend(["编号", "测量值", "时间戳", "处理文本"])
             
         # 根据配置决定是否添加原始语音列
         if include_original:
@@ -106,7 +106,7 @@ class ExcelExporter:
 
     def append_with_text(
             self,
-            data: List[Tuple[float, str]],  # (数值, 原始语音文本)
+            data: List[Tuple[float, str, str]],  # (数值, 原始语音文本, 处理文本)
             auto_generate_ids: bool = True
         ) -> List[Tuple[int, float, str]]:  # 返回 [(ID, 数值, 原始文本)]
             """
@@ -131,7 +131,7 @@ class ExcelExporter:
                     
                     # 生成新记录
                     new_records = []
-                    for val, original_text in data:
+                    for val, original_text, processed_text in data:
                         new_record: Dict[str, Union[int, float, str]] = {}
                         
                         # 根据配置决定是否添加编号
@@ -145,6 +145,9 @@ class ExcelExporter:
                         # 根据配置决定是否添加时间戳
                         if include_timestamp:
                             new_record["时间戳"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 添加处理文本
+                        new_record["处理文本"] = processed_text
                         
                         # 根据配置决定是否添加原始语音字段
                         if include_original:

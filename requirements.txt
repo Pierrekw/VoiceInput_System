@@ -45,3 +45,6 @@ omegaconf==2.3.0
 # 日志和调试
 colorama==0.4.6
 coloredlogs==15.0.1
+
+# GUI界面
+PySide6==6.8.2

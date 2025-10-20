@@ -26,7 +26,8 @@
       "Bash(taskkill:*)",
       "Bash(git push)",
       "Bash(git rm:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

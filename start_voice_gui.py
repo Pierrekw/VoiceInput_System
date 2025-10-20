@@ -18,8 +18,8 @@ def main():
     try:
         print("🎤 启动FunASR语音识别系统GUI...")
 
-        # 直接启动工作版GUI
-        from working_simple_gui import main as gui_main
+        # 直接启动主GUI
+        from voice_gui import main as gui_main
         gui_main()
 
     except ImportError as e:

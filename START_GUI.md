@@ -6,6 +6,12 @@
 python start_voice_gui.py
 ```
 
+## 📁 文件结构
+
+- `voice_gui.py` - 主GUI界面文件
+- `start_voice_gui.py` - 简单启动脚本
+- `funasr_voice_module.py` - 语音识别核心模块
+
 ## 📋 使用说明
 
 1. **启动系统**

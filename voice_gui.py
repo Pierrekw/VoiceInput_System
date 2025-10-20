@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FunASR语音识别系统 GUI界面
-基于PySide6的现代图形用户界面
+工作简化版GUI
+直接集成语音识别功能，确保稳定工作
 """
 
 import sys
@@ -11,252 +11,144 @@ import time
 import threading
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any, List
-from enum import Enum
-from io import StringIO
+from typing import Optional, List
 
 # PySide6导入
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QTextEdit, QLabel, QPushButton, QProgressBar,
-    QGroupBox, QSplitter, QFrame, QScrollArea, QStatusBar,
-    QMessageBox, QFileDialog, QCheckBox, QSpinBox, QComboBox,
-    QTabWidget
+    QTextEdit, QLabel, QPushButton, QGroupBox, QStatusBar,
+    QMessageBox, QSplitter, QTabWidget
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize
-from PySide6.QtGui import QFont, QTextCursor, QPalette, QColor, QIcon
-
-# 导入核心模块
-try:
-    from main_f import FunASRVoiceSystem, VoiceCommandType
-except ImportError:
-    logger.warning("无法导入main_f模块，使用简化版本")
-    FunASRVoiceSystem = None
-    VoiceCommandType = None
-
-try:
-    from funasr_voice_module import FunASRVoiceRecognizer, RecognitionResult
-except ImportError:
-    logger.warning("无法导入funasr_voice_module模块")
-    FunASRVoiceRecognizer = None
-    RecognitionResult = None
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtGui import QFont, QTextCursor
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-class SystemState(Enum):
-    """系统状态枚举"""
-    STOPPED = "stopped"
-    RUNNING = "running"
-    PAUSED = "paused"
+# 抑制输出
+os.environ['TQDM_DISABLE'] = '1'
+os.environ['PYTHONWARNINGS'] = 'ignore'
+os.environ['FUNASR_LOG_LEVEL'] = 'ERROR'
 
 
-class VoiceRecognitionThread(QThread):
-    """语音识别工作线程"""
+class WorkingVoiceWorker(QThread):
+    """工作语音识别线程"""
 
     # 信号定义
-    status_changed = Signal(str)  # 状态变化
-    recognition_result = Signal(str, str, float)  # 识别结果 (文本, 类型, 置信度)
-    partial_result = Signal(str)  # 部分识别结果
-    error_occurred = Signal(str)  # 错误信息
-    log_message = Signal(str)  # 日志信息
-    performance_data = Signal(str)  # 性能数据
-    recognition_stopped = Signal()  # 识别停止
+    log_message = Signal(str)
+    recognition_result = Signal(str)
+    status_changed = Signal(str)
+    finished = Signal()
 
     def __init__(self):
         super().__init__()
-        self.voice_system = None
         self._should_stop = False
+        self._is_paused = False
+        self.recognizer = None
 
     def run(self):
         """运行语音识别"""
         try:
-            # 初始化语音系统
-            if FunASRVoiceSystem is None:
-                self.error_occurred.emit("语音系统模块不可用")
+            self.log_message.emit("🚀 正在初始化语音识别器...")
+
+            # 直接导入和初始化识别器
+            from funasr_voice_module import FunASRVoiceRecognizer
+            self.recognizer = FunASRVoiceRecognizer()
+
+            if not self.recognizer.initialize():
+                self.log_message.emit("❌ 语音识别器初始化失败")
                 return
 
-            self.voice_system = FunASRVoiceSystem()
-            if not self.voice_system.initialize():
-                self.error_occurred.emit("语音系统初始化失败")
-                return
+            self.log_message.emit("✅ 语音识别器初始化成功")
+            self.status_changed.emit("系统就绪")
 
-            self.status_changed.emit("系统初始化完成")
-            self.log_message.emit("🎤 FunASR语音系统初始化完成")
-
-            # 设置回调（通过recognizer）
-            if hasattr(self.voice_system, 'recognizer'):
-                # 直接设置回调函数，避免信号连接问题
-                original_callback = getattr(self.voice_system, 'on_recognition_result', None)
-
-                # 重写回调方法来发送信号
-                def safe_recognition_callback(result):
-                    try:
-                        self.log_message.emit(f"📥 收到识别回调: {type(result)} - {result}")
-                        self._on_recognition_result(result)
-                        if original_callback:
-                            original_callback(result)
-                    except Exception as e:
-                        logger.error(f"识别回调错误: {e}")
-                        self.log_message.emit(f"❌ 识别回调错误: {e}")
-
-                # 设置回调
-                self.voice_system.recognizer.set_callbacks(
-                    on_final_result=safe_recognition_callback
-                )
-                self.log_message.emit("✅ 识别回调设置完成")
-            else:
-                self.log_message.emit("⚠️ 无法设置回调：recognizer不可用")
+            # 设置识别时长
+            recognition_duration = 60  # 60秒
 
             # 开始识别
-            self.voice_system.start_recognition()
+            self.log_message.emit(f"🎙️ 开始{recognition_duration}秒语音识别...")
             self.status_changed.emit("正在识别...")
-            self.log_message.emit("🎙️ 开始语音识别...")
 
-            # 运行识别循环
-            self.voice_system.run_recognition_cycle()
+            # 执行识别
+            result = self.recognizer.recognize_speech(duration=recognition_duration)
+
+            if result and hasattr(result, 'text') and result.text.strip():
+                self.recognition_result.emit(result.text)
+                self.log_message.emit(f"✅ 识别成功: {result.text}")
+            else:
+                self.log_message.emit("⚠️ 未识别到有效语音内容")
 
         except Exception as e:
-            self.error_occurred.emit(f"语音识别异常: {str(e)}")
-            logger.error(f"语音识别异常: {e}")
+            self.log_message.emit(f"❌ 识别过程错误: {e}")
+            logger.error(f"识别过程错误: {e}")
             import traceback
             logger.error(traceback.format_exc())
         finally:
-            self.recognition_stopped.emit()
+            self.status_changed.emit("已停止")
+            self.finished.emit()
 
-    def stop_recognition(self):
+    def stop(self):
         """停止识别"""
         self._should_stop = True
-        if self.voice_system:
-            self.voice_system.system_stop()
+        if self.recognizer:
+            try:
+                self.recognizer.stop_recognition()
+            except:
+                pass
 
-    def pause_recognition(self):
-        """暂停识别"""
-        if self.voice_system:
-            self.voice_system.pause()
-            self.status_changed.emit("已暂停")
+    def pause(self):
+        """暂停"""
+        self._is_paused = True
+        self.status_changed.emit("已暂停")
 
-    def resume_recognition(self):
-        """恢复识别"""
-        if self.voice_system:
-            self.voice_system.resume()
-            self.status_changed.emit("正在识别...")
-
-    def _on_recognition_result(self, result):
-        """识别结果回调"""
-        try:
-            # 处理不同类型的结果
-            if isinstance(result, str):
-                text = result
-                confidence = 0.0
-            elif hasattr(result, 'text'):
-                text = result.text
-                confidence = getattr(result, 'confidence', 0.0)
-            else:
-                # 尝试转换为字符串
-                text = str(result)
-                confidence = 0.0
-
-            if text and text.strip():
-                # 判断是否包含数字
-                if any(char.isdigit() for char in text):
-                    result_type = "数字"
-                else:
-                    result_type = "文本"
-
-                self.log_message.emit(f"🗣️ 识别结果: {text}")
-                self.recognition_result.emit(text, result_type, confidence)
-            else:
-                self.log_message.emit("⚠️ 识别结果为空")
-
-        except Exception as e:
-            self.log_message.emit(f"❌ 处理识别结果错误: {e}")
-            logger.error(f"处理识别结果错误: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-    def _on_voice_command(self, command_type):
-        """语音命令回调"""
-        if VoiceCommandType is None:
-            return
-
-        if command_type == VoiceCommandType.PAUSE:
-            self.status_changed.emit("语音命令：暂停")
-            self.log_message.emit("🎤 语音命令：暂停")
-        elif command_type == VoiceCommandType.RESUME:
-            self.status_changed.emit("语音命令：恢复")
-            self.log_message.emit("🎤 语音命令：恢复")
-        elif command_type == VoiceCommandType.STOP:
-            self.status_changed.emit("语音命令：停止")
-            self.log_message.emit("🎤 语音命令：停止")
-            self.stop_recognition()
+    def resume(self):
+        """恢复"""
+        self._is_paused = False
+        self.status_changed.emit("正在识别...")
 
 
-class LogStreamHandler(StringIO):
-    """自定义日志流处理器，将日志重定向到GUI"""
-
-    def __init__(self, log_callback):
-        super().__init__()
-        self.log_callback = log_callback
-
-    def write(self, text):
-        if text.strip():  # 只处理非空文本
-            # 检查回调是否为信号对象或普通函数
-            if hasattr(self.log_callback, 'emit'):
-                # 是PyQt信号，使用emit方法
-                self.log_callback.emit(text.strip())
-            else:
-                # 是普通函数，直接调用
-                self.log_callback(text.strip())
-        return len(text)
-
-    def flush(self):
-        pass
-
-
-class MainWindow(QMainWindow):
-    """主窗口类"""
+class WorkingSimpleMainWindow(QMainWindow):
+    """工作简化版主窗口"""
 
     def __init__(self):
         super().__init__()
-        self.voice_thread = None
+        self.worker = None
         self.init_ui()
-        self.setup_logging()
+        self.setup_timer()
 
     def init_ui(self):
-        """初始化用户界面"""
+        """初始化界面"""
         self.setWindowTitle("FunASR语音识别系统 v2.3")
-        self.setMinimumSize(1200, 800)
-
-        # 设置应用图标（如果有的话）
-        # self.setWindowIcon(QIcon("icon.png"))
+        self.setMinimumSize(900, 600)
 
         # 创建中央部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # 创建主布局
+        # 主布局
         main_layout = QHBoxLayout(central_widget)
 
-        # 创建分割器
+        # 左侧控制面板
+        left_panel = self.create_control_panel()
+        main_layout.addWidget(left_panel)
+
+        # 右侧显示面板
+        right_panel = self.create_display_panel()
+        main_layout.addWidget(right_panel)
+
+        # 设置比例
         splitter = QSplitter(Qt.Horizontal)
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([300, 600])
+
         main_layout.addWidget(splitter)
 
-        # 左侧：控制面板和状态显示
-        left_panel = self.create_control_panel()
-        splitter.addWidget(left_panel)
-
-        # 右侧：日志和识别结果
-        right_panel = self.create_display_panel()
-        splitter.addWidget(right_panel)
-
-        # 设置分割器比例
-        splitter.setSizes([400, 800])
-
         # 创建状态栏
-        self.create_status_bar()
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("就绪")
 
         # 应用样式
         self.apply_styles()
@@ -266,101 +158,78 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
-        # 系统状态组
+        # 状态显示
         status_group = QGroupBox("系统状态")
         status_layout = QVBoxLayout(status_group)
 
-        self.status_label = QLabel("🔴 系统未启动")
-        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #d32f2f;")
+        self.status_label = QLabel("🔴 未启动")
+        self.status_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold; color: #d32f2f; padding: 10px;"
+        )
         status_layout.addWidget(self.status_label)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        status_layout.addWidget(self.progress_bar)
 
         layout.addWidget(status_group)
 
-        # 控制按钮组
-        control_group = QGroupBox("控制面板")
-        control_layout = QGridLayout(control_group)
+        # 控制按钮
+        control_group = QGroupBox("控制")
+        control_layout = QVBoxLayout(control_group)
 
-        self.start_button = QPushButton("🎙️ 开始识别")
-        self.start_button.setMinimumHeight(50)
+        self.start_button = QPushButton("🎙️ 开始识别(60秒)")
+        self.start_button.setMinimumHeight(45)
         self.start_button.clicked.connect(self.start_recognition)
-        control_layout.addWidget(self.start_button, 0, 0, 1, 2)
+        control_layout.addWidget(self.start_button)
+
+        button_row = QHBoxLayout()
 
         self.pause_button = QPushButton("⏸️ 暂停")
-        self.pause_button.setMinimumHeight(40)
         self.pause_button.setEnabled(False)
-        self.pause_button.clicked.connect(self.pause_recognition)
-        control_layout.addWidget(self.pause_button, 1, 0)
+        self.pause_button.clicked.connect(self.toggle_pause)
+        button_row.addWidget(self.pause_button)
 
         self.stop_button = QPushButton("🛑 停止")
-        self.stop_button.setMinimumHeight(40)
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop_recognition)
-        control_layout.addWidget(self.stop_button, 1, 1)
+        button_row.addWidget(self.stop_button)
 
+        control_layout.addLayout(button_row)
         layout.addWidget(control_group)
 
-        # 识别设置组
-        settings_group = QGroupBox("识别设置")
-        settings_layout = QGridLayout(settings_group)
+        # 使用说明
+        info_group = QGroupBox("使用说明")
+        info_layout = QVBoxLayout(info_group)
 
-        settings_layout.addWidget(QLabel("识别模式:"), 0, 0)
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["连续识别", "单次识别"])
-        settings_layout.addWidget(self.mode_combo, 0, 1)
-
-        settings_layout.addWidget(QLabel("识别时长(秒):"), 1, 0)
-        self.duration_spin = QSpinBox()
-        self.duration_spin.setRange(5, 300)
-        self.duration_spin.setValue(30)
-        self.duration_spin.setEnabled(False)  # 单次识别时启用
-        settings_layout.addWidget(self.duration_spin, 1, 1)
-
-        self.vad_checkbox = QCheckBox("启用VAD语音活动检测")
-        self.vad_checkbox.setChecked(True)
-        settings_layout.addWidget(self.vad_checkbox, 2, 0, 1, 2)
-
-        layout.addWidget(settings_group)
-
-        # 语音命令组
-        command_group = QGroupBox("语音命令")
-        command_layout = QVBoxLayout(command_group)
-
-        command_info = QLabel(
-            "🎯 语音命令:\n"
-            "• 暂停: 暂停, 停一下, 等一下\n"
-            "• 继续: 继续, 开始, 重新开始\n"
-            "• 停止: 停止, 结束, 关闭"
+        info_text = QLabel(
+            "📖 使用说明:\n\n"
+            "1. 点击'开始识别'启动60秒识别\n"
+            "2. 对着麦克风清晰说话\n"
+            "3. 系统会自动识别语音内容\n"
+            "4. 识别结果显示在右侧\n\n"
+            "💡 提示:\n"
+            "• 确保麦克风工作正常\n"
+            "• 说话时保持清晰音量\n"
+            "• 安静环境有助于识别准确度\n\n"
+            "⌨️ 快捷键:\n"
+            "• ESC键 - 停止识别"
         )
-        command_info.setWordWrap(True)
-        command_layout.addWidget(command_info)
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet("color: #555; padding: 5px;")
+        info_layout.addWidget(info_text)
 
-        layout.addWidget(command_group)
+        layout.addWidget(info_group)
 
-        # 统计信息组
-        stats_group = QGroupBox("识别统计")
-        stats_layout = QGridLayout(stats_group)
+        # 系统信息
+        system_group = QGroupBox("系统信息")
+        system_layout = QVBoxLayout(system_group)
 
-        self.total_count_label = QLabel("总识别次数: 0")
-        stats_layout.addWidget(self.total_count_label, 0, 0)
+        self.runtime_label = QLabel("运行时间: 0s")
+        system_layout.addWidget(self.runtime_label)
 
-        self.number_count_label = QLabel("数字识别: 0")
-        stats_layout.addWidget(self.number_count_label, 0, 1)
+        self.recognition_count_label = QLabel("识别次数: 0")
+        system_layout.addWidget(self.recognition_count_label)
 
-        self.text_count_label = QLabel("文本识别: 0")
-        stats_layout.addWidget(self.text_count_label, 1, 0)
+        layout.addWidget(system_group)
 
-        self.elapsed_time_label = QLabel("运行时间: 0s")
-        stats_layout.addWidget(self.elapsed_time_label, 1, 1)
-
-        layout.addWidget(stats_group)
-
-        # 添加弹性空间
         layout.addStretch()
-
         return panel
 
     def create_display_panel(self):
@@ -368,7 +237,7 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
 
-        # 创建标签页容器
+        # 创建标签页
         tab_widget = QTabWidget()
 
         # 识别结果标签页
@@ -396,7 +265,7 @@ class MainWindow(QMainWindow):
 
         self.history_text = QTextEdit()
         self.history_text.setReadOnly(True)
-        self.history_text.setFont(QFont("Consolas", 10))
+        self.history_text.setFont(QFont("Consolas", 11))
         history_layout.addWidget(self.history_text)
 
         results_layout.addWidget(history_group)
@@ -406,44 +275,33 @@ class MainWindow(QMainWindow):
         log_tab = QWidget()
         log_layout = QVBoxLayout(log_tab)
 
-        # 日志控制按钮
-        log_control_layout = QHBoxLayout()
+        # 日志控制
+        log_control = QHBoxLayout()
         self.clear_log_button = QPushButton("清空日志")
         self.clear_log_button.clicked.connect(self.clear_log)
-        log_control_layout.addWidget(self.clear_log_button)
-        log_control_layout.addStretch()
+        log_control.addWidget(self.clear_log_button)
+        log_control.addStretch()
 
-        log_layout.addLayout(log_control_layout)
+        log_layout.addLayout(log_control)
 
-        # 日志显示区域
+        # 日志显示
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Consolas", 9))
+        self.log_text.document().setMaximumBlockCount(500)
         log_layout.addWidget(self.log_text)
 
         tab_widget.addTab(log_tab, "系统日志")
 
         layout.addWidget(tab_widget)
-
         return panel
-
-    def create_status_bar(self):
-        """创建状态栏"""
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-
-        self.status_bar.showMessage("就绪")
 
     def apply_styles(self):
         """应用样式"""
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-
             QGroupBox {
                 font-weight: bold;
-                border: 2px solid #cccccc;
+                border: 2px solid #ddd;
                 border-radius: 8px;
                 margin-top: 1ex;
                 padding-top: 10px;
@@ -456,7 +314,7 @@ class MainWindow(QMainWindow):
             }
 
             QPushButton {
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: bold;
                 border: none;
                 border-radius: 6px;
@@ -474,8 +332,8 @@ class MainWindow(QMainWindow):
             }
 
             QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
+                background-color: #ccc;
+                color: #666;
             }
 
             QPushButton#stop_button {
@@ -498,154 +356,116 @@ class MainWindow(QMainWindow):
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 background-color: white;
-            }
-
-            QLabel {
-                color: #333333;
-            }
-
-            QProgressBar {
-                border: 2px solid #cccccc;
-                border-radius: 4px;
-                text-align: center;
-            }
-
-            QProgressBar::chunk {
-                background-color: #4caf50;
-                border-radius: 2px;
+                font-family: 'Consolas', monospace;
             }
         """)
 
-        # 设置按钮对象名称
         self.stop_button.setObjectName("stop_button")
         self.pause_button.setObjectName("pause_button")
 
-    def setup_logging(self):
-        """设置日志重定向"""
-        # 创建日志流处理器
-        self.log_stream = LogStreamHandler(self.append_log)
-
-        # 重定向stdout和stderr
-        sys.stdout = self.log_stream
-        sys.stderr = self.log_stream
+    def setup_timer(self):
+        """设置定时器"""
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_runtime)
+        self.start_time = None
+        self.recognition_count = 0
 
     def start_recognition(self):
-        """开始语音识别"""
-        if self.voice_thread and self.voice_thread.isRunning():
+        """开始识别"""
+        if self.worker and self.worker.isRunning():
             return
 
-        # 更新UI状态
+        # 更新UI
         self.start_button.setEnabled(False)
         self.pause_button.setEnabled(True)
         self.stop_button.setEnabled(True)
         self.status_label.setText("🟢 正在启动...")
-        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50;")
+        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50; padding: 10px;")
 
-        # 清空历史记录
+        # 清空结果
         self.history_text.clear()
-        self.current_text_label.setText("正在初始化系统...")
+        self.log_text.clear()
+        self.current_text_label.setText("正在初始化...")
+        self.recognition_count = 0
+        self.start_time = time.time()
 
-        # 创建并启动语音识别线程
-        self.voice_thread = VoiceRecognitionThread()
-        self.voice_thread.status_changed.connect(self.update_status)
-        self.voice_thread.recognition_result.connect(self.display_recognition_result)
-        self.voice_thread.partial_result.connect(self.display_partial_result)
-        self.voice_thread.error_occurred.connect(self.display_error)
-        self.voice_thread.log_message.connect(self.append_log)
-        self.voice_thread.performance_data.connect(self.display_performance_data)
-        self.voice_thread.recognition_stopped.connect(self.on_recognition_stopped)
+        # 创建并启动工作线程
+        self.worker = WorkingVoiceWorker()
+        self.worker.log_message.connect(self.append_log)
+        self.worker.recognition_result.connect(self.display_result)
+        self.worker.status_changed.connect(self.update_status)
+        self.worker.finished.connect(self.on_worker_finished)
 
-        self.voice_thread.start()
+        self.worker.start()
+        self.timer.start(1000)  # 每秒更新
 
         self.append_log("🚀 启动语音识别系统...")
 
-    def pause_recognition(self):
-        """暂停/恢复识别"""
-        if not self.voice_thread:
+    def toggle_pause(self):
+        """切换暂停状态"""
+        if not self.worker:
             return
 
         if self.pause_button.text() == "⏸️ 暂停":
-            self.voice_thread.pause_recognition()
-            self.pause_button.setText("▶️ 恢复")
+            self.worker.pause()
+            self.pause_button.setText("▶️ 继续")
+            self.append_log("⏸️ 已暂停识别")
         else:
-            self.voice_thread.resume_recognition()
+            self.worker.resume()
             self.pause_button.setText("⏸️ 暂停")
+            self.append_log("▶️ 已恢复识别")
 
     def stop_recognition(self):
         """停止识别"""
-        if self.voice_thread:
-            self.voice_thread.stop_recognition()
+        if self.worker:
+            self.worker.stop()
+            self.timer.stop()
 
-    def on_recognition_stopped(self):
-        """识别停止回调"""
-        # 更新UI状态
+    def on_worker_finished(self):
+        """工作线程完成"""
         self.start_button.setEnabled(True)
         self.pause_button.setEnabled(False)
         self.stop_button.setEnabled(False)
         self.pause_button.setText("⏸️ 暂停")
-        self.status_label.setText("🔴 系统已停止")
-        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #d32f2f;")
+        self.timer.stop()
+
+        self.status_label.setText("🔴 已停止")
+        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #d32f2f; padding: 10px;")
         self.current_text_label.setText("等待识别...")
+
+        if self.worker:
+            self.worker.wait(1000)
+            self.worker = None
 
         self.append_log("🛑 语音识别已停止")
 
-        # 清理线程
-        if self.voice_thread:
-            self.voice_thread.wait(2000)  # 等待2秒
-            self.voice_thread = None
-
     def update_status(self, status):
-        """更新状态显示"""
+        """更新状态"""
         self.status_label.setText(f"🟢 {status}")
         self.status_bar.showMessage(status)
 
-    def display_recognition_result(self, text, result_type, confidence):
+    def display_result(self, result):
         """显示识别结果"""
         # 更新当前识别文本
-        self.current_text_label.setText(f"{text}")
+        self.current_text_label.setText(f"识别结果: {result}")
 
         # 添加到历史记录
         timestamp = datetime.now().strftime("%H:%M:%S")
-        icon = "🔢" if result_type == "数字" else "📝"
-        history_entry = f"[{timestamp}] {icon} {text}"
+        history_entry = f"[{timestamp}] 📝 {result}"
 
         self.history_text.append(history_entry)
+        self.recognition_count += 1
 
         # 滚动到底部
         cursor = self.history_text.textCursor()
         cursor.movePosition(QTextCursor.End)
         self.history_text.setTextCursor(cursor)
 
-        # 更新统计信息
-        self.update_statistics(result_type)
-
-    def display_partial_result(self, text):
-        """显示部分识别结果"""
-        if text.strip():
-            self.current_text_label.setText(f"🗣️ {text}...")
-
-    def display_error(self, error_message):
-        """显示错误信息"""
-        self.append_log(f"❌ 错误: {error_message}")
-        QMessageBox.critical(self, "错误", error_message)
-
-    def display_performance_data(self, data):
-        """显示性能数据"""
-        self.append_log(f"📊 {data}")
-
     def append_log(self, message):
-        """添加日志消息"""
+        """添加日志"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_entry = f"[{timestamp}] {message}"
         self.log_text.append(log_entry)
-
-        # 限制日志行数，避免内存占用过多
-        if self.log_text.document().blockCount() > 1000:
-            cursor = self.log_text.textCursor()
-            cursor.movePosition(QTextCursor.Start)
-            cursor.select(QTextCursor.BlockUnderCursor)
-            cursor.removeSelectedText()
-            cursor.deleteChar()  # 删除换行符
 
         # 滚动到底部
         cursor = self.log_text.textCursor()
@@ -657,14 +477,21 @@ class MainWindow(QMainWindow):
         self.log_text.clear()
         self.append_log("📋 日志已清空")
 
-    def update_statistics(self, result_type):
-        """更新统计信息"""
-        # 这里可以实现统计逻辑
-        pass
+    def update_runtime(self):
+        """更新运行时间"""
+        if self.start_time:
+            elapsed = int(time.time() - self.start_time)
+            self.runtime_label.setText(f"运行时间: {elapsed}s")
+            self.recognition_count_label.setText(f"识别次数: {self.recognition_count}")
+
+    def keyPressEvent(self, event):
+        """处理按键事件"""
+        if event.key() == Qt.Key_Escape:
+            self.stop_recognition()
 
     def closeEvent(self, event):
-        """关闭事件处理"""
-        if self.voice_thread and self.voice_thread.isRunning():
+        """关闭事件"""
+        if self.worker and self.worker.isRunning():
             reply = QMessageBox.question(
                 self, '确认退出',
                 '语音识别正在运行，确定要退出吗？',
@@ -673,8 +500,8 @@ class MainWindow(QMainWindow):
             )
 
             if reply == QMessageBox.Yes:
-                self.voice_thread.stop_recognition()
-                self.voice_thread.wait(2000)
+                self.worker.stop()
+                self.worker.wait(2000)
                 event.accept()
             else:
                 event.ignore()
@@ -685,17 +512,11 @@ class MainWindow(QMainWindow):
 def main():
     """主函数"""
     app = QApplication(sys.argv)
-
-    # 设置应用信息
     app.setApplicationName("FunASR语音识别系统")
-    app.setApplicationVersion("2.3")
-    app.setOrganizationName("Voice Input System")
 
-    # 创建并显示主窗口
-    window = MainWindow()
+    window = WorkingSimpleMainWindow()
     window.show()
 
-    # 运行应用
     sys.exit(app.exec())
 
 

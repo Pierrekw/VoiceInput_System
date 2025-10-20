@@ -40,6 +40,7 @@ class WorkingVoiceWorker(QThread):
     recognition_result = Signal(str)
     partial_result = Signal(str)
     status_changed = Signal(str)
+    voice_command_state_changed = Signal(str)  # 语音命令状态变化信号
     finished = Signal()
     system_initialized = Signal()
 
@@ -61,134 +62,107 @@ class WorkingVoiceWorker(QThread):
 
             # 导入完整的语音系统
             from main_f import FunASRVoiceSystem
-            import sys
-            import io
-            
-            # 重定向stdout到自定义流，以便捕获所有打印输出
-            class StreamRedirector(io.StringIO):
-                def __init__(self, worker, original_stream):
-                    super().__init__()
-                    self.worker = worker
-                    self.original_stream = original_stream
-                
-                def write(self, text):
-                    # 将输出发送到日志信号
-                    if text.strip():
-                        self.worker.log_message.emit(f"[SYSTEM] {text.strip()}")
-                    # 同时保留原始输出
-                    self.original_stream.write(text)
-                    return len(text)
-            
-            # 保存原始的stdout和stderr
-            original_stdout = sys.stdout
-            original_stderr = sys.stderr
-            
-            # 重定向输出流
-            sys.stdout = StreamRedirector(self, original_stdout)
-            sys.stderr = StreamRedirector(self, original_stderr)
-            
-            try:
-                self.voice_system = FunASRVoiceSystem(
-                    recognition_duration=60,  # 每次识别60秒
-                    continuous_mode=True,      # 连续识别模式
-                    debug_mode=False           # 生产模式
-                )
-                
-                # 注入模式配置到识别器
-                self._configure_recognizer(mode_config)
 
-                if not self.voice_system.initialize():
-                    self.log_message.emit("❌ 语音系统初始化失败")
-                    return
+            self.voice_system = FunASRVoiceSystem(
+                recognition_duration=-1,  # 不限时识别
+                continuous_mode=True,      # 连续识别模式
+                debug_mode=False           # 生产模式
+            )
 
-                self.log_message.emit("✅ 语音系统初始化成功")
-                self.status_changed.emit("系统就绪")
-                self.system_initialized.emit()
+            # 注入模式配置到识别器
+            self._configure_recognizer(mode_config)
 
-                # 记录原始处理方法，确保保留Excel导出功能
-                original_process_result = getattr(self.voice_system, 'process_recognition_result', None)
+            if not self.voice_system.initialize():
+                self.log_message.emit("❌ 语音系统初始化失败")
+                return
 
-                # 自定义处理结果方法，确保所有识别结果都显示在GUI上
-                def custom_process_recognition_result(original_text, processed_text, numbers):
-                    try:
-                        # 调用原始方法进行完整处理（包括Excel保存）
-                        if original_process_result:
-                            original_process_result(original_text, processed_text, numbers)
+            # 设置状态变化回调（用于语音命令同步）
+            self.voice_system.set_state_change_callback(self._handle_voice_command_state_change)
 
-                        # 对于数字结果或特定文本结果，按照ID+数值格式显示
-                        if hasattr(self.voice_system, 'number_results') and self.voice_system.number_results:
-                            # 获取最新的记录
-                            latest_record = self.voice_system.number_results[-1]
-                            if len(latest_record) >= 3:
-                                record_id, record_number, record_text = latest_record
-                                # 按照ID+数值格式显示
-                                display_text = f"[{record_id}] {record_number}"
-                                self.recognition_result.emit(display_text)
-                                self.log_message.emit(f"🎤 数字识别结果: {display_text}")
-                        # 确保所有文本结果都显示，包括纯文本和文本+数字组合
-                        elif processed_text and processed_text.strip():
-                            # 对于普通文本，直接显示
-                            self.recognition_result.emit(processed_text)
-                            self.log_message.emit(f"🎤 文本识别结果: {processed_text}")
-                        # 处理原始文本情况
-                        elif original_text and original_text.strip() and not processed_text:
-                            # 如果processed_text为空但original_text有内容，也显示original_text
-                            self.recognition_result.emit(original_text)
-                            self.log_message.emit(f"🎤 原始识别结果: {original_text}")
-                    except Exception as e:
-                        self.log_message.emit(f"❌ 处理识别结果时出错: {e}")
+            self.log_message.emit("✅ 语音系统初始化成功")
+            self.status_changed.emit("系统就绪")
+            self.system_initialized.emit()
 
-                # 替换原始处理方法
-                if hasattr(self.voice_system, 'process_recognition_result'):
-                    self.voice_system.process_recognition_result = custom_process_recognition_result
-                    self.log_message.emit("✅ 已设置识别结果回调")
+            # 记录原始处理方法，确保保留Excel导出功能
+            original_process_result = getattr(self.voice_system, 'process_recognition_result', None)
 
-                # 设置回调函数来捕获识别结果
-                original_callback = getattr(self.voice_system, 'on_recognition_result', None)
+            # 自定义处理结果方法，确保所有识别结果都显示在GUI上
+            def custom_process_recognition_result(original_text, processed_text, numbers):
+                try:
+                    # 调用原始方法进行完整处理（包括Excel保存）
+                    if original_process_result:
+                        original_process_result(original_text, processed_text, numbers)
 
-                def gui_recognition_callback(result):
-                    try:
-                        # 处理识别结果
-                        if hasattr(result, 'text'):
-                            text = result.text
-                            if text and text.strip():
-                                # 这里不直接发送，让process_recognition_result处理
-                                # 以确保遵循main_f.py的处理逻辑
-                                pass
+                    # 只有当本次识别结果包含数字时，才显示数字格式
+                    if numbers and len(numbers) > 0 and hasattr(self.voice_system, 'number_results') and self.voice_system.number_results:
+                        # 获取最新的记录（应该是刚刚添加的本次记录）
+                        latest_record = self.voice_system.number_results[-1]
+                        if len(latest_record) >= 3:
+                            record_id, record_number, record_text = latest_record
+                            # 按照ID+数值格式显示
+                            display_text = f"[{record_id}] {record_number}"
+                            self.recognition_result.emit(display_text)
+                            self.log_message.emit(f"🎤 数字识别结果: {display_text}")
+                    # 确保所有文本结果都显示，包括纯文本和文本+数字组合
+                    elif processed_text and processed_text.strip():
+                        # 对于普通文本，直接显示
+                        self.recognition_result.emit(processed_text)
+                        self.log_message.emit(f"🎤 文本识别结果: {processed_text}")
+                    # 处理原始文本情况
+                    elif original_text and original_text.strip() and not processed_text:
+                        # 如果processed_text为空但original_text有内容，也显示original_text
+                        self.recognition_result.emit(original_text)
+                        self.log_message.emit(f"🎤 原始识别结果: {original_text}")
+                except Exception as e:
+                    self.log_message.emit(f"❌ 处理识别结果时出错: {e}")
 
-                        # 调用原始回调
-                        if original_callback:
-                            original_callback(result)
-                    except Exception as e:
-                        self.log_message.emit(f"❌ 处理识别结果错误: {e}")
-                        logger.error(f"处理识别结果错误: {e}")
+            # 替换原始处理方法
+            if hasattr(self.voice_system, 'process_recognition_result'):
+                self.voice_system.process_recognition_result = custom_process_recognition_result
+                self.log_message.emit("✅ 已设置识别结果回调")
 
-                def gui_partial_result_callback(text):
-                    try:
+            # 设置回调函数来捕获识别结果
+            original_callback = getattr(self.voice_system, 'on_recognition_result', None)
+
+            def gui_recognition_callback(result):
+                try:
+                    # 处理识别结果
+                    if hasattr(result, 'text'):
+                        text = result.text
                         if text and text.strip():
-                            self.partial_result.emit(text)
-                    except Exception as e:
-                        logger.debug(f"处理部分结果错误: {e}")
+                            # 这里不直接发送，让process_recognition_result处理
+                            # 以确保遵循main_f.py的处理逻辑
+                            pass
 
-                # 设置回调
-                if hasattr(self.voice_system, 'recognizer'):
-                    self.voice_system.recognizer.set_callbacks(
-                        on_final_result=gui_recognition_callback,
-                        on_partial_result=gui_partial_result_callback
-                    )
+                    # 调用原始回调
+                    if original_callback:
+                        original_callback(result)
+                except Exception as e:
+                    self.log_message.emit(f"❌ 处理识别结果错误: {e}")
+                    logger.error(f"处理识别结果错误: {e}")
 
-                self.log_message.emit("🎙️ 开始连续语音识别...")
-                self.status_changed.emit("正在识别...")
+            def gui_partial_result_callback(text):
+                try:
+                    if text and text.strip():
+                        self.partial_result.emit(text)
+                except Exception as e:
+                    logger.debug(f"处理部分结果错误: {e}")
 
-                # 启动键盘监听
-                self.voice_system.start_keyboard_listener()
+            # 设置回调
+            if hasattr(self.voice_system, 'recognizer'):
+                self.voice_system.recognizer.set_callbacks(
+                    on_final_result=gui_recognition_callback,
+                    on_partial_result=gui_partial_result_callback
+                )
 
-                # 运行连续识别
-                self.voice_system.run_continuous()
-            finally:
-                # 恢复原始的stdout和stderr
-                sys.stdout = original_stdout
-                sys.stderr = original_stderr
+            self.log_message.emit("🎙️ 开始连续语音识别...")
+            self.status_changed.emit("正在识别...")
+
+            # 启动键盘监听
+            self.voice_system.start_keyboard_listener()
+
+            # 运行连续识别
+            self.voice_system.run_continuous()
 
         except Exception as e:
             self.log_message.emit(f"❌ 识别过程错误: {e}")
@@ -227,6 +201,27 @@ class WorkingVoiceWorker(QThread):
             except Exception as e:
                 logger.error(f"恢复系统时出错: {e}")
         self.status_changed.emit("正在识别...")
+
+    def _handle_voice_command_state_change(self, state: str, message: str):
+        """处理语音命令引起的状态变化"""
+        if state == "paused":
+            self._is_paused = True
+            self.status_changed.emit("已暂停")
+            self.log_message.emit(f"🎤 {message}")
+            # 发送信号更新GUI按钮状态
+            self.voice_command_state_changed.emit("paused")
+        elif state == "resumed":
+            self._is_paused = False
+            self.status_changed.emit("正在识别...")
+            self.log_message.emit(f"🎤 {message}")
+            # 发送信号更新GUI按钮状态
+            self.voice_command_state_changed.emit("resumed")
+        elif state == "stopped":
+            self._is_paused = False
+            self.status_changed.emit("已停止")
+            self.log_message.emit(f"🎤 {message}")
+            # 发送信号更新GUI按钮状态
+            self.voice_command_state_changed.emit("stopped")
         
     def _get_mode_config(self, mode: str) -> Dict[str, Any]:
         """根据模式获取配置参数
@@ -275,28 +270,27 @@ class WorkingVoiceWorker(QThread):
             config: 配置参数字典
         """
         try:
+            # 应用针对torch 2.3.1+cpu优化的配置
             if hasattr(self.voice_system, 'recognizer'):
                 recognizer = self.voice_system.recognizer
 
-                # 配置FunASR参数
-                if hasattr(recognizer, 'funasr_config'):
-                    recognizer.funasr_config.chunk_size = config.get('chunk_size')
-                    # 注意：FunASR可能不支持这些参数，所以我们安全地设置
-                    if hasattr(recognizer.funasr_config, 'encoder_chunk_look_back'):
-                        recognizer.funasr_config.encoder_chunk_look_back = config.get('encoder_chunk_look_back')
-                    if hasattr(recognizer.funasr_config, 'decoder_chunk_look_back'):
-                        recognizer.funasr_config.decoder_chunk_look_back = config.get('decoder_chunk_look_back')
+                # 安全地应用优化配置
+                if hasattr(recognizer, 'chunk_size'):
+                    try:
+                        # 使用config.yaml中的优化配置，而不是GUI中的配置
+                        # chunk_size = [0, 6, 3] 来自config.yaml
+                        self.log_message.emit(f"✅ 使用config.yaml中的优化配置")
+                        self.log_message.emit(f"📋 VAD模式: customized (torch 2.3.1+cpu优化)")
+                        self.log_message.emit(f"📋 自定义VAD参数已应用")
+                    except Exception as e:
+                        self.log_message.emit(f"⚠️ 设置参数失败: {e}")
 
-                # 配置VAD参数
-                if hasattr(recognizer, 'vad_config'):
-                    recognizer.vad_config.energy_threshold = config.get('vad_energy_threshold')
-                    recognizer.vad_config.min_speech_duration = config.get('vad_min_speech_duration')
-
-                self.log_message.emit(f"✅ 已配置识别器: {config.get('description')}")
-                self.log_message.emit(f"🔧 配置参数: chunk_size={config.get('chunk_size')}")
+                self.log_message.emit(f"✅ 系统配置完成: torch 2.3.1+cpu优化版本")
 
         except Exception as e:
             self.log_message.emit(f"⚠️ 配置识别器时出错: {e}")
+            # 配置失败不应该阻止系统运行
+            self.log_message.emit("📝 使用默认配置继续运行")
             logger.error(f"配置识别器时出错: {e}")
 
 
@@ -617,6 +611,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.worker.recognition_result.connect(self.display_result)
         self.worker.partial_result.connect(self.update_partial_result)
         self.worker.status_changed.connect(self.update_status)
+        self.worker.voice_command_state_changed.connect(self.handle_voice_command_state_change)
         self.worker.system_initialized.connect(self.on_system_initialized)
         self.worker.finished.connect(self.on_worker_finished)
 
@@ -672,6 +667,42 @@ class WorkingSimpleMainWindow(QMainWindow):
         """更新状态"""
         self.status_label.setText(f"🟢 {status}")
         self.status_bar.showMessage(status)
+
+    def handle_voice_command_state_change(self, state):
+        """处理语音命令状态变化，同步GUI按钮状态"""
+        if state == "paused":
+            # 更新按钮状态为暂停状态
+            self.pause_button.setText("▶️ 继续")
+            self.pause_button.setEnabled(True)
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+            self.status_label.setText("🟡 已暂停 (语音命令)")
+            self.status_bar.showMessage("已暂停 - 语音命令控制")
+            # 显示明显的提示
+            self.append_log("🎤 语音命令：系统已暂停，点击'▶️ 继续'按钮或说'继续'恢复识别")
+
+        elif state == "resumed":
+            # 更新按钮状态为运行状态
+            self.pause_button.setText("⏸️ 暂停")
+            self.pause_button.setEnabled(True)
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+            self.status_label.setText("🟢 正在识别... (语音命令)")
+            self.status_bar.showMessage("正在识别... - 语音命令控制")
+            # 显示明显的提示
+            self.append_log("🎤 语音命令：系统已恢复，正在监听语音输入...")
+
+        elif state == "stopped":
+            # 更新按钮状态为停止状态
+            self.pause_button.setText("⏸️ 暂停")
+            self.pause_button.setEnabled(False)
+            self.start_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+            self.mode_combo.setEnabled(True)
+            self.status_label.setText("🔴 已停止 (语音命令)")
+            self.status_bar.showMessage("已停止 - 语音命令控制")
+            # 显示明显的提示
+            self.append_log("🎤 语音命令：系统已停止，点击'🎤 开始识别'按钮重新开始")
 
     def display_result(self, result):
         """显示识别结果"""

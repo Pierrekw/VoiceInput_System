@@ -44,7 +44,7 @@ class PerformanceMonitor:
 
     def __init__(self):
         self._records: List[PerformanceRecord] = []
-        self._current_operations: Dict[str, float] = {}
+        self._current_operations: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._session_start_time = time.time()
         self._enabled = True
@@ -175,14 +175,14 @@ class PerformanceMonitor:
             # 按时间排序
             records.sort(key=lambda x: x.start_time)
 
-            session_analysis = {
+            session_analysis: Dict[str, Any] = {
                 'thread_id': thread_id,
                 'step_count': len(records),
                 'total_duration': records[-1].end_time - records[0].start_time if records else 0,
                 'steps': {}
             }
 
-            step_times = {}
+            step_times: Dict[str, List[float]] = {}
             for record in records:
                 if record.step_name not in step_times:
                     step_times[record.step_name] = []

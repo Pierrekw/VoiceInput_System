@@ -57,11 +57,11 @@ try:
     )
 except ImportError:
     # 如果导入失败，提供空函数
-    def start_latency_session() -> None: pass
-    def end_latency_session() -> None: pass
-    def log_voice_input_end(audio_duration: float) -> None: pass
-    def log_asr_complete(text: str, asr_latency: float) -> None: pass
-    def log_terminal_display(text: str, display_latency: float = 0.0) -> None: pass
+    def start_latency_session(): pass
+    def end_latency_session(): pass
+    def log_voice_input_end(audio_duration: float): pass
+    def log_asr_complete(text: str, asr_latency: float): pass
+    def log_terminal_display(text: str, display_latency: float = 0.0): pass
 
 # 导入Excel导出模块
 try:
@@ -69,7 +69,7 @@ try:
     EXCEL_AVAILABLE = True
 except ImportError:
     EXCEL_AVAILABLE = False
-    ExcelExporter: ExcelExporterType = None
+    ExcelExporter = None
 
 # 配置日志
 logging.basicConfig(
@@ -131,6 +131,9 @@ class FunASRVoiceSystem:
         self.recognition_duration = recognition_duration
         self.continuous_mode = continuous_mode
         self.debug_mode = debug_mode
+
+        # 状态变化回调函数（用于GUI同步）
+        self.state_change_callback = None
 
         # 启用性能监控
         performance_monitor.enable()
@@ -249,6 +252,15 @@ class FunASRVoiceSystem:
             logger.info(f"识别日志已设置: {log_filepath}")
         except Exception as e:
             logger.error(f"设置识别日志失败: {e}")
+
+    def set_state_change_callback(self, callback):
+        """设置状态变化回调函数（用于GUI同步）"""
+        self.state_change_callback = callback
+
+    def _notify_state_change(self, state: str, message: str = ""):
+        """通知状态变化"""
+        if self.state_change_callback:
+            self.state_change_callback(state, message)
 
     def initialize(self) -> bool:
         """初始化系统"""
@@ -433,13 +445,13 @@ class FunASRVoiceSystem:
         # 记录生产环境终端显示
         log_terminal_display(processed_text, float(terminal_time))
 
-        # 记录调试日志（包含时间信息）
+        # 记录详细日志（包含原始音频输入、处理后的文本和数字）
         if hasattr(self, 'recognition_logger'):
-            # 改为debug级别并添加时间信息
-            debug_message = f"识别文本: '{processed_text}' | 终端显示: {terminal_time*1000:.2f}ms"
+            # 改为info级别以便用户查看，包含完整的处理流程信息
+            log_message = f"原始输入: '{original_text}' -> 处理后: '{processed_text}' | 终端显示: {terminal_time*1000:.2f}ms"
             if numbers and len(numbers) > 0:
-                debug_message += f" -> 提取数字: {numbers[0]}"
-            self.recognition_logger.debug(debug_message)
+                log_message += f" -> 提取数字: {numbers[0]}"
+            self.recognition_logger.info(log_message)
 
         # 检查是否为特定文本
         special_text_match = self._check_special_text(processed_text)
@@ -555,12 +567,15 @@ class FunASRVoiceSystem:
         if command_type == VoiceCommandType.PAUSE:
             self.pause()
             print(f"\n🎤 语音命令：暂停")
+            self._notify_state_change("paused", "语音命令：暂停")
         elif command_type == VoiceCommandType.RESUME:
             self.resume()
             print(f"\n🎤 语音命令：恢复")
+            self._notify_state_change("resumed", "语音命令：恢复")
         elif command_type == VoiceCommandType.STOP:
             self.system_stop()
             print(f"\n🎤 语音命令：停止")
+            self._notify_state_change("stopped", "语音命令：停止")
 
     def start_keyboard_listener(self):
         """启动键盘监听线程"""

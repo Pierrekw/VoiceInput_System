@@ -1,5 +1,6 @@
 audio:
-  chunk_size: 400
+  # 针对torch 2.3.1+cpu版本优化的音频配置
+  chunk_size: 200  # 减小chunk_size以降低CPU处理负担
   sample_rate: 16000
 error_correction:
   dictionary_path: voice_correction_dict.txt
@@ -16,13 +17,15 @@ model:
   default_path: ./model/cn
   device: cpu
   funasr:
+    # 针对torch 2.3.1+cpu版本进一步优化的FunASR配置
+    # 使用更激进的chunk_size以提高识别响应速度
     chunk_size:
     - 0
-    - 10
-    - 5
+    - 6   # 进一步降低chunk_size以提高响应速度
+    - 3   # 相应调整stride以保持连续性
     decoder_chunk_look_back: 1
     disable_update: true
-    encoder_chunk_look_back: 4
+    encoder_chunk_look_back: 1  # 进一步减少内存使用
     path: ./model/fun
     trust_remote_code: false
 recognition:
@@ -65,32 +68,28 @@ vad:
   # balanced: 平衡模式 - 默认设置
   # accuracy: 高准确性模式 - 增加稳定性但延迟较高
   # customized: 自定义模式 - 使用下面的具体参数设置
-  mode: "fast"
+  # 针对torch 2.3.1+cpu版本优化，使用自定义平衡配置
+  mode: "customized"
 
   # ===== 自定义VAD参数 (仅在mode="customized"时生效) =====
+  # 针对torch 2.3.1+cpu版本优化的VAD参数
+  # 在accuracy和balanced之间找到最佳平衡点
+
   # 能量阈值 - 检测语音的最小能量
-  # 较小值: 更敏感，可能检测到更多噪音
-  # 较大值: 更严格，可能漏掉轻声说话
-  # 推荐范围: 0.008 - 0.025
-  energy_threshold: 0.015
+  # torch 2.3.1+cpu优化：稍低的阈值以提高敏感度
+  energy_threshold: 0.012
 
   # 最小语音持续时间 - 检测到语音后至少持续多久才认为是有效语音
-  # 较小值: 响应更快，但可能误检测
-  # 较大值: 更稳定，但需要说更长时间
-  # 推荐范围: 0.05 - 0.8 (秒)
-  min_speech_duration: 0.3
+  # torch 2.3.1+cpu优化：平衡响应速度和稳定性
+  min_speech_duration: 0.2
 
   # 最小静音持续时间 - 语音结束后需要静音多久才认为说话结束
-  # 🔥 这是影响延迟的关键参数！
-  # 较小值: 响应更快，但可能在说话中途就结束
-  # 较大值: 更准确，但需要等更长时间
-  # 推荐范围: 0.1 - 1.5 (秒)
-  min_silence_duration: 0.6
+  # torch 2.3.1+cpu优化：增加静音检测时间以避免重复识别
+  min_silence_duration: 0.8
 
   # 语音填充 - 在语音前后添加额外的音频时间
-  # 确保不会因为短时间的静音而切断语音
-  # 推荐范围: 0.1 - 0.5 (秒)
-  speech_padding: 0.3
+  # torch 2.3.1+cpu优化：增加填充以补偿识别延迟
+  speech_padding: 0.4
 
   # ===== VAD预设配置定义 (系统内部使用，请勿修改) =====
   presets:

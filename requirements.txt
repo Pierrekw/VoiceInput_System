@@ -6,12 +6,17 @@ onnxruntime==1.15.1
 numpy==1.26.4
 cn2an==0.5.23
 
+# PyTorch CPU版本
+torch==2.3.1+cpu
+torchaudio==2.3.1+cpu
+torchvision==0.18.1+cpu
+
 # 音频处理
 pyaudio==0.2.14
 soundfile==0.13.1
 librosa==0.11.0
 
-# Excel导出
+# Excel输出
 openpyxl==3.1.5
 pandas==2.3.2
 
@@ -40,6 +45,3 @@ omegaconf==2.3.0
 # 日志和调试
 colorama==0.4.6
 coloredlogs==15.0.1
-
-# 可选：VOSK（向后兼容）
-vosk==0.3.45

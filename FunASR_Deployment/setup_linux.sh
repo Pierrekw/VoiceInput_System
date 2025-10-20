@@ -47,7 +47,7 @@ echo ""
 echo "📦 安装Python依赖包..."
 
 echo "   - 安装PyTorch (CPU版本)..."
-python3 -m pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cpu
+python3 -m pip install torch==2.3.1+cpu torchvision==0.18.1+cpu torchaudio==2.3.1+cpu --index-url https://download.pytorch.org/whl/cpu
 
 echo "   - 安装FunASR..."
 python3 -m pip install funasr

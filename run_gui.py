@@ -45,6 +45,17 @@ def start_full_gui():
         print(f"❌ 完整版GUI启动失败: {e}")
         return False
 
+def start_working_gui():
+    """启动工作版GUI"""
+    try:
+        from working_simple_gui import main as working_main
+        print("🚀 启动工作版GUI...")
+        working_main()
+        return True
+    except Exception as e:
+        print(f"❌ 工作版GUI启动失败: {e}")
+        return False
+
 def main():
     """主函数"""
     print("🎤 FunASR语音识别系统 GUI启动器")
@@ -63,23 +74,30 @@ def main():
     print("\n选择GUI版本:")
     print("1. 简化版GUI (👍 推荐，稳定可靠)")
     print("2. 完整版GUI (⚠️ 高级版本，可能在调试中)")
-    print("3. 自动选择最佳版本 (默认)")
+    print("3. 工作版GUI (🔧 新增，直接集成)")
+    print("4. 自动选择最佳版本 (默认)")
 
-    choice = input("\n请输入选择 (1-3，默认为3): ").strip()
+    choice = input("\n请输入选择 (1-4，默认为4): ").strip()
 
     if choice == "1":
         success = start_simple_gui()
     elif choice == "2":
         print("\n⚠️ 完整版GUI正在开发中，可能存在一些问题")
         success = start_full_gui()
-    elif choice == "3" or choice == "":
-        # 优先尝试简化版
-        print("\n🔍 优先启动简化版GUI...")
-        if start_simple_gui():
+    elif choice == "3":
+        success = start_working_gui()
+    elif choice == "4" or choice == "":
+        # 优先尝试工作版，然后简化版
+        print("\n🔍 优先启动工作版GUI...")
+        if start_working_gui():
             success = True
         else:
-            print("⚠️ 简化版GUI失败，尝试完整版GUI...")
-            success = start_full_gui()
+            print("⚠️ 工作版GUI失败，尝试简化版GUI...")
+            if start_simple_gui():
+                success = True
+            else:
+                print("⚠️ 简化版GUI失败，尝试完整版GUI...")
+                success = start_full_gui()
     else:
         print("❌ 无效选择")
         success = False

@@ -94,15 +94,21 @@ class VoiceRecognitionThread(QThread):
                 # 重写回调方法来发送信号
                 def safe_recognition_callback(result):
                     try:
+                        self.log_message.emit(f"📥 收到识别回调: {type(result)} - {result}")
                         self._on_recognition_result(result)
                         if original_callback:
                             original_callback(result)
                     except Exception as e:
                         logger.error(f"识别回调错误: {e}")
+                        self.log_message.emit(f"❌ 识别回调错误: {e}")
 
+                # 设置回调
                 self.voice_system.recognizer.set_callbacks(
                     on_final_result=safe_recognition_callback
                 )
+                self.log_message.emit("✅ 识别回调设置完成")
+            else:
+                self.log_message.emit("⚠️ 无法设置回调：recognizer不可用")
 
             # 开始识别
             self.voice_system.start_recognition()
@@ -140,15 +146,36 @@ class VoiceRecognitionThread(QThread):
 
     def _on_recognition_result(self, result):
         """识别结果回调"""
-        if hasattr(result, 'text'):
-            text = result.text
-            # 判断是否包含数字
-            if any(char.isdigit() for char in text):
-                result_type = "数字"
+        try:
+            # 处理不同类型的结果
+            if isinstance(result, str):
+                text = result
+                confidence = 0.0
+            elif hasattr(result, 'text'):
+                text = result.text
+                confidence = getattr(result, 'confidence', 0.0)
             else:
-                result_type = "文本"
-            confidence = getattr(result, 'confidence', 0.0)
-            self.recognition_result.emit(text, result_type, confidence)
+                # 尝试转换为字符串
+                text = str(result)
+                confidence = 0.0
+
+            if text and text.strip():
+                # 判断是否包含数字
+                if any(char.isdigit() for char in text):
+                    result_type = "数字"
+                else:
+                    result_type = "文本"
+
+                self.log_message.emit(f"🗣️ 识别结果: {text}")
+                self.recognition_result.emit(text, result_type, confidence)
+            else:
+                self.log_message.emit("⚠️ 识别结果为空")
+
+        except Exception as e:
+            self.log_message.emit(f"❌ 处理识别结果错误: {e}")
+            logger.error(f"处理识别结果错误: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     def _on_voice_command(self, command_type):
         """语音命令回调"""
@@ -176,7 +203,13 @@ class LogStreamHandler(StringIO):
 
     def write(self, text):
         if text.strip():  # 只处理非空文本
-            self.log_callback.emit(text.strip())
+            # 检查回调是否为信号对象或普通函数
+            if hasattr(self.log_callback, 'emit'):
+                # 是PyQt信号，使用emit方法
+                self.log_callback.emit(text.strip())
+            else:
+                # 是普通函数，直接调用
+                self.log_callback(text.strip())
         return len(text)
 
     def flush(self):

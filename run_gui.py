@@ -61,19 +61,20 @@ def main():
     os.environ['FUNASR_LOG_LEVEL'] = 'ERROR'
 
     print("\n选择GUI版本:")
-    print("1. 简化版GUI (推荐，更稳定)")
-    print("2. 完整版GUI (功能更全面)")
-    print("3. 自动选择最佳版本")
+    print("1. 简化版GUI (👍 推荐，稳定可靠)")
+    print("2. 完整版GUI (⚠️ 高级版本，可能在调试中)")
+    print("3. 自动选择最佳版本 (默认)")
 
     choice = input("\n请输入选择 (1-3，默认为3): ").strip()
 
     if choice == "1":
         success = start_simple_gui()
     elif choice == "2":
+        print("\n⚠️ 完整版GUI正在开发中，可能存在一些问题")
         success = start_full_gui()
     elif choice == "3" or choice == "":
         # 优先尝试简化版
-        print("\n🔍 尝试启动简化版GUI...")
+        print("\n🔍 优先启动简化版GUI...")
         if start_simple_gui():
             success = True
         else:

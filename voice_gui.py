@@ -88,13 +88,26 @@ class VoiceRecognitionThread(QThread):
 
             # 设置回调（通过recognizer）
             if hasattr(self.voice_system, 'recognizer'):
+                # 直接设置回调函数，避免信号连接问题
+                original_callback = getattr(self.voice_system, 'on_recognition_result', None)
+
+                # 重写回调方法来发送信号
+                def safe_recognition_callback(result):
+                    try:
+                        self._on_recognition_result(result)
+                        if original_callback:
+                            original_callback(result)
+                    except Exception as e:
+                        logger.error(f"识别回调错误: {e}")
+
                 self.voice_system.recognizer.set_callbacks(
-                    on_final_result=self._on_recognition_result
+                    on_final_result=safe_recognition_callback
                 )
 
             # 开始识别
             self.voice_system.start_recognition()
             self.status_changed.emit("正在识别...")
+            self.log_message.emit("🎙️ 开始语音识别...")
 
             # 运行识别循环
             self.voice_system.run_recognition_cycle()
@@ -102,6 +115,8 @@ class VoiceRecognitionThread(QThread):
         except Exception as e:
             self.error_occurred.emit(f"语音识别异常: {str(e)}")
             logger.error(f"语音识别异常: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         finally:
             self.recognition_stopped.emit()
 

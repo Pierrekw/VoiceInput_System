@@ -40,44 +40,67 @@ class WorkingVoiceWorker(QThread):
     recognition_result = Signal(str)
     status_changed = Signal(str)
     finished = Signal()
+    system_initialized = Signal()
 
     def __init__(self):
         super().__init__()
         self._should_stop = False
         self._is_paused = False
-        self.recognizer = None
+        self.voice_system = None
 
     def run(self):
         """运行语音识别"""
         try:
-            self.log_message.emit("🚀 正在初始化语音识别器...")
+            self.log_message.emit("🚀 正在初始化语音系统...")
 
-            # 直接导入和初始化识别器
-            from funasr_voice_module import FunASRVoiceRecognizer
-            self.recognizer = FunASRVoiceRecognizer()
+            # 导入完整的语音系统
+            from main_f import FunASRVoiceSystem
+            self.voice_system = FunASRVoiceSystem(
+                recognition_duration=60,  # 每次识别60秒
+                continuous_mode=True,      # 连续识别模式
+                debug_mode=False           # 生产模式
+            )
 
-            if not self.recognizer.initialize():
-                self.log_message.emit("❌ 语音识别器初始化失败")
+            if not self.voice_system.initialize():
+                self.log_message.emit("❌ 语音系统初始化失败")
                 return
 
-            self.log_message.emit("✅ 语音识别器初始化成功")
+            self.log_message.emit("✅ 语音系统初始化成功")
             self.status_changed.emit("系统就绪")
+            self.system_initialized.emit()
 
-            # 设置识别时长
-            recognition_duration = 60  # 60秒
+            # 设置回调函数来捕获识别结果
+            original_callback = getattr(self.voice_system, 'on_recognition_result', None)
 
-            # 开始识别
-            self.log_message.emit(f"🎙️ 开始{recognition_duration}秒语音识别...")
+            def gui_recognition_callback(result):
+                try:
+                    # 处理识别结果
+                    if hasattr(result, 'text'):
+                        text = result.text
+                        if text and text.strip():
+                            self.recognition_result.emit(text)
+                            self.log_message.emit(f"🎤 识别结果: {text}")
+
+                    # 调用原始回调
+                    if original_callback:
+                        original_callback(result)
+                except Exception as e:
+                    self.log_message.emit(f"❌ 处理识别结果错误: {e}")
+
+            # 设置回调
+            if hasattr(self.voice_system, 'recognizer'):
+                self.voice_system.recognizer.set_callbacks(
+                    on_final_result=gui_recognition_callback
+                )
+
+            self.log_message.emit("🎙️ 开始连续语音识别...")
             self.status_changed.emit("正在识别...")
 
-            # 执行识别
-            result = self.recognizer.recognize_speech(duration=recognition_duration)
+            # 启动键盘监听
+            self.voice_system.start_keyboard_listener()
 
-            if result and hasattr(result, 'text') and result.text.strip():
-                self.recognition_result.emit(result.text)
-                self.log_message.emit(f"✅ 识别成功: {result.text}")
-            else:
-                self.log_message.emit("⚠️ 未识别到有效语音内容")
+            # 运行连续识别
+            self.voice_system.run_continuous()
 
         except Exception as e:
             self.log_message.emit(f"❌ 识别过程错误: {e}")
@@ -91,20 +114,30 @@ class WorkingVoiceWorker(QThread):
     def stop(self):
         """停止识别"""
         self._should_stop = True
-        if self.recognizer:
+        if self.voice_system:
             try:
-                self.recognizer.stop_recognition()
+                self.voice_system.system_stop()
             except:
                 pass
 
     def pause(self):
         """暂停"""
         self._is_paused = True
+        if self.voice_system:
+            try:
+                self.voice_system.pause()
+            except:
+                pass
         self.status_changed.emit("已暂停")
 
     def resume(self):
         """恢复"""
         self._is_paused = False
+        if self.voice_system:
+            try:
+                self.voice_system.resume()
+            except:
+                pass
         self.status_changed.emit("正在识别...")
 
 
@@ -174,7 +207,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         control_group = QGroupBox("控制")
         control_layout = QVBoxLayout(control_group)
 
-        self.start_button = QPushButton("🎙️ 开始识别(60秒)")
+        self.start_button = QPushButton("🎙️ 开始连续识别")
         self.start_button.setMinimumHeight(45)
         self.start_button.clicked.connect(self.start_recognition)
         control_layout.addWidget(self.start_button)
@@ -200,15 +233,20 @@ class WorkingSimpleMainWindow(QMainWindow):
 
         info_text = QLabel(
             "📖 使用说明:\n\n"
-            "1. 点击'开始识别'启动60秒识别\n"
+            "1. 点击'开始连续识别'启动系统\n"
             "2. 对着麦克风清晰说话\n"
-            "3. 系统会自动识别语音内容\n"
+            "3. 系统会连续识别语音内容\n"
             "4. 识别结果显示在右侧\n\n"
             "💡 提示:\n"
             "• 确保麦克风工作正常\n"
             "• 说话时保持清晰音量\n"
             "• 安静环境有助于识别准确度\n\n"
+            "🎯 语音命令:\n"
+            "• '暂停' - 暂停识别\n"
+            "• '继续' - 恢复识别\n"
+            "• '停止' - 停止系统\n\n"
             "⌨️ 快捷键:\n"
+            "• 空格键 - 暂停/继续\n"
             "• ESC键 - 停止识别"
         )
         info_text.setWordWrap(True)
@@ -394,12 +432,14 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.worker.log_message.connect(self.append_log)
         self.worker.recognition_result.connect(self.display_result)
         self.worker.status_changed.connect(self.update_status)
+        self.worker.system_initialized.connect(self.on_system_initialized)
         self.worker.finished.connect(self.on_worker_finished)
 
         self.worker.start()
         self.timer.start(1000)  # 每秒更新
 
         self.append_log("🚀 启动语音识别系统...")
+        self.update_status("正在初始化系统...")
 
     def toggle_pause(self):
         """切换暂停状态"""
@@ -420,6 +460,11 @@ class WorkingSimpleMainWindow(QMainWindow):
         if self.worker:
             self.worker.stop()
             self.timer.stop()
+
+    def on_system_initialized(self):
+        """系统初始化完成"""
+        self.append_log("✅ 系统初始化完成，准备开始识别...")
+        self.current_text_label.setText("系统就绪，可以开始说话了...")
 
     def on_worker_finished(self):
         """工作线程完成"""
@@ -488,6 +533,12 @@ class WorkingSimpleMainWindow(QMainWindow):
         """处理按键事件"""
         if event.key() == Qt.Key_Escape:
             self.stop_recognition()
+        elif event.key() == Qt.Key_Space:
+            if self.worker and self.worker.isRunning():
+                self.toggle_pause()
+            else:
+                self.start_recognition()
+        event.accept()
 
     def closeEvent(self, event):
         """关闭事件"""

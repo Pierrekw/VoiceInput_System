@@ -8,9 +8,10 @@ python start_voice_gui.py
 
 ## 📁 文件结构
 
-- `voice_gui.py` - 主GUI界面文件
+- `voice_gui.py` - 主GUI界面文件（支持多模式识别）
 - `start_voice_gui.py` - 简单启动脚本
 - `funasr_voice_module.py` - 语音识别核心模块
+- `debug_gui_issues.py` - GUI问题调试工具
 
 ## 📋 使用说明
 
@@ -40,6 +41,14 @@ python start_voice_gui.py
    - 识别是连续的，随时说话随时识别
    - 支持语音命令控制
    - 自动Excel导出和日志记录
+
+## 🎯 识别模式选择
+
+- **Fast模式** - 低延迟，识别速度快，适合实时交互
+- **Balanced模式** - 平衡模式，识别准确度和速度的良好平衡（默认推荐）
+- **Accuracy模式** - 精确模式，高准确度，更注重识别质量
+
+运行时可在GUI界面左上角选择模式。
 
 ## 💡 使用提示
 

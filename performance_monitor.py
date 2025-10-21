@@ -165,7 +165,7 @@ class PerformanceMonitor:
                 if record.step_name in pipeline_steps:
                     thread_records[record.thread_id].append(record)
 
-        analysis = {
+        analysis: Dict[str, Any] = {
             'total_sessions': len(thread_records),
             'pipeline_steps': pipeline_steps,
             'sessions': []

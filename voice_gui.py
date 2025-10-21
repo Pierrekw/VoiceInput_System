@@ -44,7 +44,7 @@ class WorkingVoiceWorker(QThread):
     finished = Signal()
     system_initialized = Signal()
 
-    def __init__(self, mode='balanced'):
+    def __init__(self, mode='customized'):
         super().__init__()
         self._should_stop = False
         self._is_paused = False
@@ -225,43 +225,77 @@ class WorkingVoiceWorker(QThread):
         
     def _get_mode_config(self, mode: str) -> Dict[str, Any]:
         """根据模式获取配置参数
-        
+
         Args:
-            mode: 识别模式 ('fast', 'balanced', 'accuracy')
-            
+            mode: 识别模式 ('fast', 'balanced', 'accuracy', 'customized')
+
         Returns:
             配置参数字典
         """
-        # 定义三种模式的配置参数
+        # 导入配置加载器
+        from config_loader import config
+
+        # 定义四种模式的配置参数（包含模型相关参数）
         configs = {
             'fast': {
                 'chunk_size': [0, 8, 4],
                 'encoder_chunk_look_back': 2,
                 'decoder_chunk_look_back': 0,
-                'vad_energy_threshold': 0.02,
-                'vad_min_speech_duration': 0.2,
                 'description': '快速模式 - 低延迟，识别速度快'
             },
             'balanced': {
                 'chunk_size': [0, 10, 5],
                 'encoder_chunk_look_back': 4,
                 'decoder_chunk_look_back': 1,
-                'vad_energy_threshold': 0.015,
-                'vad_min_speech_duration': 0.3,
                 'description': '平衡模式 - 识别准确度和速度的良好平衡'
             },
             'accuracy': {
                 'chunk_size': [0, 16, 8],
                 'encoder_chunk_look_back': 8,
                 'decoder_chunk_look_back': 2,
-                'vad_energy_threshold': 0.01,
-                'vad_min_speech_duration': 0.4,
                 'description': '精确模式 - 高准确度，更注重识别质量'
+            },
+            'customized': {
+                'chunk_size': [0, 10, 5],
+                'encoder_chunk_look_back': 4,
+                'decoder_chunk_look_back': 1,
+                'description': '自定义模式 - 使用config.yaml中的VAD设置，支持小数识别优化'
             }
         }
         
         # 返回指定模式的配置，如果不存在则返回平衡模式
-        return configs.get(mode, configs['balanced'])
+        mode_config = configs.get(mode, configs['balanced'])
+        
+        # 从config_loader获取VAD配置
+        try:
+            if mode == 'customized':
+                # 自定义模式：直接使用config.yaml中的customized VAD设置
+                vad_config = config.get_vad_config()
+                if vad_config:
+                    mode_config['vad_energy_threshold'] = vad_config.get('energy_threshold', 0.012)
+                    mode_config['vad_min_speech_duration'] = vad_config.get('min_speech_duration', 0.2)
+                    mode_config['vad_min_silence_duration'] = vad_config.get('min_silence_duration', 0.6)
+                    mode_config['vad_speech_padding'] = vad_config.get('speech_padding', 0.4)
+                    logger.info(f"✅ 加载自定义VAD配置: {vad_config}")
+                else:
+                    logger.warning("⚠️ 未找到customized VAD配置，使用默认值")
+            else:
+                # 预设模式：使用预设VAD参数
+                vad_preset = config.get_vad_preset(mode)
+                if vad_preset:
+                    mode_config['vad_energy_threshold'] = vad_preset.get('energy_threshold', config.get_vad_energy_threshold())
+                    mode_config['vad_min_speech_duration'] = vad_preset.get('min_speech_duration', config.get_vad_min_speech_duration())
+                    mode_config['vad_min_silence_duration'] = vad_preset.get('min_silence_duration', config.get_vad_min_silence_duration())
+                    mode_config['vad_speech_padding'] = vad_preset.get('speech_padding', config.get_vad_speech_padding())
+        except Exception as e:
+            # 如果加载失败，使用默认值
+            logger.warning(f"⚠️ 从config.yaml加载VAD配置失败: {e}")
+            mode_config['vad_energy_threshold'] = 0.015
+            mode_config['vad_min_speech_duration'] = 0.3
+            mode_config['vad_min_silence_duration'] = 0.6
+            mode_config['vad_speech_padding'] = 0.3
+            
+        return mode_config
     
     def _configure_recognizer(self, config: Dict[str, Any]):
         """配置识别器参数
@@ -275,15 +309,32 @@ class WorkingVoiceWorker(QThread):
                 recognizer = self.voice_system.recognizer
 
                 # 安全地应用优化配置
-                if hasattr(recognizer, 'chunk_size'):
-                    try:
-                        # 使用config.yaml中的优化配置，而不是GUI中的配置
-                        # chunk_size = [0, 6, 3] 来自config.yaml
-                        self.log_message.emit(f"✅ 使用config.yaml中的优化配置")
-                        self.log_message.emit(f"📋 VAD模式: customized (torch 2.3.1+cpu优化)")
-                        self.log_message.emit(f"📋 自定义VAD参数已应用")
-                    except Exception as e:
-                        self.log_message.emit(f"⚠️ 设置参数失败: {e}")
+                try:
+                    # 应用模型相关配置
+                    if 'chunk_size' in config and hasattr(recognizer, 'configure_funasr'):
+                        recognizer.configure_funasr(chunk_size=config['chunk_size'])
+                        
+                    # 应用VAD配置
+                    if hasattr(recognizer, 'configure_vad'):
+                        vad_params = {}
+                        if 'vad_energy_threshold' in config:
+                            vad_params['energy_threshold'] = config['vad_energy_threshold']
+                        if 'vad_min_speech_duration' in config:
+                            vad_params['min_speech_duration'] = config['vad_min_speech_duration']
+                        if 'vad_min_silence_duration' in config:
+                            vad_params['min_silence_duration'] = config['vad_min_silence_duration']
+                        if 'vad_speech_padding' in config:
+                            vad_params['speech_padding'] = config['vad_speech_padding']
+                            
+                        # 如果有VAD参数需要配置，则应用
+                        if vad_params:
+                            recognizer.configure_vad(**vad_params)
+                            
+                    self.log_message.emit(f"✅ 使用config.yaml中的优化配置")
+                    self.log_message.emit(f"📋 VAD模式: {config.get('description', 'customized')}")
+                    self.log_message.emit(f"📋 自定义VAD参数已应用")
+                except Exception as e:
+                    self.log_message.emit(f"⚠️ 设置参数失败: {e}")
 
                 self.log_message.emit(f"✅ 系统配置完成: torch 2.3.1+cpu优化版本")
 
@@ -362,12 +413,12 @@ class WorkingSimpleMainWindow(QMainWindow):
         mode_layout = QFormLayout(mode_group)
         
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["fast", "balanced", "accuracy"])
-        self.mode_combo.setCurrentText("balanced")
+        self.mode_combo.addItems(["fast", "balanced", "accuracy", "customized"])
+        self.mode_combo.setCurrentText("customized")  # 默认使用自定义模式以支持小数识别优化
         self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         
         # 模式描述
-        self.mode_description = QLabel("平衡模式 - 识别准确度和速度的良好平衡")
+        self.mode_description = QLabel("自定义模式 - 使用config.yaml中的VAD设置，支持小数识别优化（推荐）")
         self.mode_description.setWordWrap(True)
         self.mode_description.setStyleSheet("color: #555; font-size: 12px;")
         
@@ -438,7 +489,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.recognition_count_label = QLabel("识别次数: 0")
         system_layout.addWidget(self.recognition_count_label)
         
-        self.mode_display_label = QLabel(f"当前模式: balanced")
+        self.mode_display_label = QLabel(f"当前模式: {self.current_mode}")
         system_layout.addWidget(self.mode_display_label)
 
         layout.addWidget(system_group)
@@ -769,10 +820,12 @@ class WorkingSimpleMainWindow(QMainWindow):
         mode_descriptions = {
             'fast': '快速模式 - 低延迟，识别速度快，适合实时交互',
             'balanced': '平衡模式 - 识别准确度和速度的良好平衡，默认推荐',
-            'accuracy': '精确模式 - 高准确度，更注重识别质量，但延迟较高'
+            'accuracy': '精确模式 - 高准确度，更注重识别质量，但延迟较高',
+            'customized': '自定义模式 - 使用config.yaml中的VAD设置，支持小数识别优化（推荐）'
         }
         
         self.mode_description.setText(mode_descriptions.get(mode, '平衡模式'))
+        self.mode_display_label.setText(f"当前模式: {mode}")
         self.append_log(f"模式已更改为: {mode}")
 
     def append_log(self, message):

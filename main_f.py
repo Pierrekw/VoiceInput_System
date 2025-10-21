@@ -69,7 +69,7 @@ try:
     EXCEL_AVAILABLE = True
 except ImportError:
     EXCEL_AVAILABLE = False
-    ExcelExporter = None
+    ExcelExporter = None  # type: ignore
 
 # 配置日志
 logging.basicConfig(
@@ -98,7 +98,8 @@ except ImportError:
         def get_exportable_texts(self):
             return []
     
-    config_loader: Union[ConfigPlaceholder, Any] = ConfigPlaceholder()
+    # config_loader 模块的占位符，实际运行时动态加载
+config_loader = None  # type: ignore
 
 class SystemState(Enum):
     """系统状态枚举"""
@@ -467,7 +468,7 @@ class FunASRVoiceSystem:
                     # 数字结果
                     excel_data.append((numbers[0], original_text, processed_text))
                     result_type = "数字"
-                    result_value = numbers[0]
+                    result_value: Union[float, str] = numbers[0]
                 else:
                     # 特定文本结果
                     # 将特定文本作为数值的替代写入Excel
@@ -475,7 +476,7 @@ class FunASRVoiceSystem:
                     text_value = 1.0 if special_text_match == "OK" else 0.0
                     excel_data.append((text_value, original_text, special_text_match))
                     result_type = "特定文本"
-                    result_value = special_text_match
+                    result_value = special_text_match  # type: ignore
                 
                 # Excel写入开始
                 excel_start = time.time()

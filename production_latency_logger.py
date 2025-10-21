@@ -8,15 +8,15 @@
 import time
 import logging
 import threading
-from typing import Dict, List, Optional
 from collections import deque
+from typing import Deque, Dict, Any, List, Optional
 
 class ProductionLatencyLogger:
     """生产环境延迟记录器"""
 
     def __init__(self, max_records: int = 100):
         self.max_records = max_records
-        self.records = deque(maxlen=max_records)
+        self.records: Deque[Dict[str, Any]] = deque(maxlen=max_records)
         self.current_session_start = None
         self.lock = threading.Lock()
         self.logger = logging.getLogger("LATENCY")
@@ -101,7 +101,7 @@ class ProductionLatencyLogger:
         asr_records = [r for r in recent_records if r['type'] == 'asr_complete']
         terminal_records = [r for r in recent_records if r['type'] == 'terminal_display']
 
-        summary = {
+        summary: Dict[str, Any] = {
             'total_records': len(recent_records),
             'asr_count': len(asr_records),
             'terminal_count': len(terminal_records),

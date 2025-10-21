@@ -130,7 +130,7 @@ class DebugPerformanceTracker:
         current_time = time.time()
 
         # 计算端到端延迟
-        end_to_end_latency = 0
+        end_to_end_latency: float = 0.0
         if hasattr(self, '_last_voice_input_time') and self._last_voice_input_time:
             end_to_end_latency = current_time - self._last_voice_input_time
 

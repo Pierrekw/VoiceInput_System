@@ -32,6 +32,14 @@ recognition:
   buffer_size: 10000
   pause_timeout_multiplier: 3
   timeout_seconds: -1
+  # 🔧 数字识别优化配置
+  # 增加缓冲区大小以支持更长的数字序列识别
+  decimal_optimization:
+    enabled: true
+    # 延长音频采集时间，确保完整的小数被识别
+    extended_capture_time: 2.0
+    # 提高数字识别的置信度阈值
+    confidence_threshold: 0.7
 special_texts:
   enabled: true
   exportable_texts:
@@ -76,20 +84,21 @@ vad:
   # 在accuracy和balanced之间找到最佳平衡点
 
   # 能量阈值 - 检测语音的最小能量
-  # torch 2.3.1+cpu优化：稍低的阈值以提高敏感度
-  energy_threshold: 0.012
+  # 优化：降低阈值以更好地检测轻声数字
+  energy_threshold: 0.010
 
   # 最小语音持续时间 - 检测到语音后至少持续多久才认为是有效语音
-  # torch 2.3.1+cpu优化：平衡响应速度和稳定性
-  min_speech_duration: 0.2
+  # 优化：稍微增加以避免过早检测结束
+  min_speech_duration: 0.3
 
   # 最小静音持续时间 - 语音结束后需要静音多久才认为说话结束
-  # torch 2.3.1+cpu优化：增加静音检测时间以避免重复识别
-  min_silence_duration: 0.8
+  # 🔧 优化修复：适度增加静音容忍时间，平衡小数识别和响应速度
+  # 原因：说小数时数字间的短暂停顿被误认为语音结束
+  min_silence_duration: 0.9
 
   # 语音填充 - 在语音前后添加额外的音频时间
-  # torch 2.3.1+cpu优化：增加填充以补偿识别延迟
-  speech_padding: 0.4
+  # 优化：增加填充以确保完整数字被采集
+  speech_padding: 0.5
 
   # ===== VAD预设配置定义 (系统内部使用，请勿修改) =====
   presets:

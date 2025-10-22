@@ -6,7 +6,7 @@
 """
 
 import re
-from typing import Optional
+from typing import Optional, Dict, Any, List, Tuple
 
 # 尝试导入cn2an库
 CN2AN_AVAILABLE = False
@@ -19,7 +19,7 @@ except ImportError:
 class TextProcessor:
     """优化的文本处理器类"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # 简化的数字正则表达式
         self.num_pattern = re.compile(r"[零一二三四五六七八九十百千万点两]")
         # 完整数字模式（用于提取）
@@ -59,7 +59,7 @@ class TextProcessor:
         ]
 
         # 检查数字是否在序号上下文中
-        def is_sequence_context(match, full_text):
+        def is_sequence_context(match: str, full_text: str) -> bool:
             # 检查数字前后是否有序号关键词
             match_start = full_text.find(match)
             if match_start == -1:
@@ -137,7 +137,7 @@ class TextProcessor:
             # 通用模式：处理"[X]百十三"的情况
             import re
             pattern = r'([一二三四五六七八九十])百十三'
-            def replace_hundred_thirteen(match):
+            def replace_hundred_thirteen(match: re.Match[str]) -> str:
                 first_digit = match.group(1)
                 return f'{first_digit}百一十三'
             result_text = re.sub(pattern, replace_hundred_thirteen, result_text)
@@ -196,14 +196,14 @@ class TextProcessor:
     def is_pure_number_or_with_unit(self, text: str) -> bool:
         """
         简化的检查：是否为纯数字或数字+单位
-        删除70%规则，简化判断逻辑
+        提高阈值到90%，避免误判含非数字字符的文本
         """
         if not text or not CN2AN_AVAILABLE:
             return False
 
         clean_text = self.remove_spaces(text)
 
-        # 检查是否主要是数字（至少70%的字符是数字字符）
+        # 检查是否主要是数字（至少90%的字符是数字字符）
         digit_chars = "零一二三四五六七八九十百千万点负两幺"
         digit_count = sum(1 for char in clean_text if char in digit_chars)
 
@@ -212,10 +212,10 @@ class TextProcessor:
 
         digit_ratio = digit_count / len(clean_text)
 
-        # 如果主要是数字（>70%）或者是很短的纯数字，返回True
-        return digit_ratio > 0.7 or (len(clean_text) <= 3 and digit_count == len(clean_text))
+        # 如果主要是数字（>90%）或者是很短的纯数字，返回True
+        return digit_ratio > 0.9 or (len(clean_text) <= 3 and digit_count == len(clean_text))
 
-    def extract_numbers(self, original_text: str, processed_text: Optional[str] = None) -> list:
+    def extract_numbers(self, original_text: str, processed_text: Optional[str] = None) -> List[float]:
         """
         简化的数字提取逻辑
         """
@@ -254,7 +254,7 @@ class TextProcessor:
 
                 # 通用模式：处理"[X]百十三"的情况
                 pattern = r'([一二三四五六七八九十])百十三'
-                def replace_hundred_thirteen(match):
+                def replace_hundred_thirteen(match: re.Match[str]) -> str:
                     first_digit = match.group(1)
                     return f'{first_digit}百一十三'
                 import re
@@ -312,7 +312,7 @@ class TextProcessor:
         # 通用模式：处理"[X]百十三"的情况
         import re
         pattern = r'([一二三四五六七八九十])百十三'
-        def replace_hundred_thirteen(match):
+        def replace_hundred_thirteen(match: re.Match[str]) -> str:
             first_digit = match.group(1)
             return f'{first_digit}百一十三'
         result = re.sub(pattern, replace_hundred_thirteen, result)
@@ -321,6 +321,170 @@ class TextProcessor:
         result = self.convert_chinese_numbers_in_text(result)
 
         return result
+
+    def calculate_similarity(self, text1: str, text2: str) -> float:
+        """
+        计算两个文本之间的相似度
+        使用编辑距离算法
+
+        Args:
+            text1: 文本1
+            text2: 文本2
+
+        Returns:
+            相似度 (0-1之间的浮点数)
+        """
+        if not text1 or not text2:
+            return 0.0
+
+        # 如果完全相等，返回1.0
+        if text1 == text2:
+            return 1.0
+
+        # 计算编辑距离
+        len1, len2 = len(text1), len(text2)
+        if len1 == 0:
+            return 0.0
+        if len2 == 0:
+            return 0.0
+
+        # 创建动态规划表
+        dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
+
+        # 初始化边界条件
+        for i in range(len1 + 1):
+            dp[i][0] = i
+        for j in range(len2 + 1):
+            dp[0][j] = j
+
+        # 填充动态规划表
+        for i in range(1, len1 + 1):
+            for j in range(1, len2 + 1):
+                if text1[i-1] == text2[j-1]:
+                    dp[i][j] = dp[i-1][j-1]
+                else:
+                    dp[i][j] = min(
+                        dp[i-1][j] + 1,      # 删除
+                        dp[i][j-1] + 1,      # 插入
+                        dp[i-1][j-1] + 1     # 替换
+                    )
+
+        # 计算相似度
+        max_len = max(len1, len2)
+        edit_distance = dp[len1][len2]
+        similarity = 1.0 - (edit_distance / max_len)
+
+        return max(0.0, similarity)
+
+    def check_special_text(self, text: str, exportable_texts: List[Dict[str, Any]], export_enabled: bool = True) -> Optional[str]:
+        """
+        检查文本是否匹配特定文本配置
+
+        Args:
+            text: 要检查的文本
+            exportable_texts: 可导出文本配置列表
+            export_enabled: 是否启用特殊文本导出
+
+        Returns:
+            如果匹配，返回对应的基础文本；否则返回None
+        """
+        if not export_enabled or not exportable_texts:
+            return None
+
+        text_lower = text.lower().strip()
+
+        for text_config in exportable_texts:
+            base_text = text_config.get('base_text')
+            if base_text is None:
+                continue
+            variants = text_config.get('variants', [])
+
+            # 检查文本是否匹配任何变体
+            for variant in variants:
+                if variant.lower() == text_lower or text_lower in variant.lower():
+                    return str(base_text)
+
+        return None
+
+    def clean_text_for_command_matching(self, text: str) -> str:
+        """
+        清理文本用于命令匹配
+
+        Args:
+            text: 原始文本
+
+        Returns:
+            清理后的文本
+        """
+        if not text:
+            return ""
+
+        text_clean = text.lower().strip()
+
+        # 移除常见的标点符号
+        text_clean = re.sub(r'[。！？\.,!?\s]', '', text_clean)
+
+        return text_clean
+
+# 新增语音命令处理器类
+class VoiceCommandProcessor:
+    """语音命令专用文本处理器"""
+
+    def __init__(self) -> None:
+        self.text_processor = TextProcessor()
+        self.match_mode = "fuzzy"
+        self.min_match_length = 2
+        self.confidence_threshold = 0.8
+
+    def configure(self, match_mode: str = "fuzzy", min_match_length: int = 2, confidence_threshold: float = 0.8) -> None:
+        """配置匹配参数"""
+        self.match_mode = match_mode
+        self.min_match_length = min_match_length
+        self.confidence_threshold = confidence_threshold
+
+    def process_command_text(self, text: str) -> str:
+        """处理命令文本"""
+        return self.text_processor.clean_text_for_command_matching(text)
+
+    def match_command(self, text: str, commands: Dict[str, List[str]]) -> Optional[str]:
+        """
+        匹配语音命令
+
+        Args:
+            text: 识别的文本
+            commands: 命令字典 {command_type: [keywords]}
+
+        Returns:
+            匹配的命令类型，如果没有匹配返回None
+        """
+        if not text or len(text.strip()) < self.min_match_length:
+            return None
+
+        text_clean = self.process_command_text(text)
+
+        for command_type, keywords in commands.items():
+            for keyword in keywords:
+                keyword_clean = self.text_processor.clean_text_for_command_matching(keyword)
+
+                if self.match_mode == "exact":
+                    # 精确匹配模式
+                    if text_clean == keyword_clean:
+                        return command_type
+
+                elif self.match_mode == "fuzzy":
+                    # 模糊匹配模式
+                    similarity = self.text_processor.calculate_similarity(text_clean, keyword_clean)
+
+                    # 对于停止命令，要求更高的匹配度
+                    if command_type == "stop":
+                        if similarity >= 0.7 or keyword_clean in text_clean:
+                            return command_type
+                    else:
+                        # 其他命令使用标准的相似度阈值
+                        if similarity >= self.confidence_threshold:
+                            return command_type
+
+        return None
 
 # 便捷函数
 def process_text(text: str) -> str:

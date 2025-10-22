@@ -55,7 +55,7 @@ def setup_ffmpeg_environment():
         # 方法2：配置固定路径（推荐用于快速启动）
         # 这里设置一个固定的FFmpeg路径，避免多次检查
         # 用户可以根据实际情况修改这个路径
-        FIXED_FFMPEG_PATH = "F:/onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin"
+        FIXED_FFMPEG_PATH = "./onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin"
         
         if FIXED_FFMPEG_PATH and os.path.exists(FIXED_FFMPEG_PATH):
             current_path = os.environ.get('PATH', '')

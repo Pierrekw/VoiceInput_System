@@ -157,15 +157,41 @@ Voice_Input/
 ├── main_f.py                # 核心系统类
 ├── funasr_voice_module.py   # FunASR识别模块
 ├── config_loader.py         # 配置加载器
-├── text_processor_clean.py  # 文本处理模块
+├── text_processor_clean.py  # 文本处理模块（重构优化）
 ├── excel_exporter.py        # Excel导出模块
+├── voice_gui.py             # GUI图形界面
+├── stable_gui.py            # 稳定版GUI
+├── performance_monitor.py   # 性能监控模块
 ├── config.yaml             # 配置文件
 ├── model/                   # 模型文件目录
 ├── reports/                 # Excel输出目录
-└── logs/                    # 日志文件目录
+├── logs/                    # 日志文件目录
+└── tests/                   # 测试文件目录
+    ├── test_text_processor_refactor.py  # 文本处理器重构测试
+    ├── test_funasr.py                # 核心功能测试
+    ├── test_improvements.py          # 功能改进测试
+    └── ...
 ```
 
 ## 🛠️ 开发调试
+
+### 运行测试
+
+项目包含完整的测试套件，位于 `tests/` 目录：
+
+```bash
+# 运行文本处理器重构测试（验证核心功能）
+python tests/test_text_processor_refactor.py
+
+# 运行核心功能测试
+python tests/test_funasr.py
+
+# 运行功能改进测试
+python tests/test_improvements.py
+
+# 运行性能测试
+python tests/test_production_latency.py
+```
 
 ### 查看日志
 
@@ -188,6 +214,19 @@ python start_funasr.py -d 10 --debug
 ```bash
 # 验证配置文件是否正确加载
 python -c "from config_loader import config; print(config.get_timeout_seconds())"
+```
+
+### 类型检查
+
+项目通过了 MyPy 静态类型检查：
+
+```bash
+# 严格模式检查核心文本处理模块
+mypy text_processor_clean.py --ignore-missing-imports --strict
+
+# 标准模式检查其他模块
+mypy main_f.py --ignore-missing-imports
+mypy funasr_voice_module.py --ignore-missing-imports
 ```
 
 ## 🔍 常见问题
@@ -217,6 +256,23 @@ A: 设置 `global_unload: true` 在识别完成后自动卸载模型。
 3. **准确性优化**: 适当增加 `encoder_chunk_look_back` 值
 4. **实时性优化**: 调整 `chunk_size` 参数
 
+## 🔧 代码质量
+
+### 类型安全
+- ✅ 通过 MyPy 严格模式类型检查
+- ✅ 完整的类型注解覆盖
+- ✅ 零类型错误
+
+### 测试覆盖
+- ✅ 单元测试覆盖核心功能
+- ✅ 集成测试验证系统整合
+- ✅ 回归测试确保向后兼容
+
+### 代码规范
+- ✅ 模块化设计，职责清晰
+- ✅ 完整的错误处理机制
+- ✅ 详细的文档和注释
+
 ## 🤝 贡献指南
 
 欢迎提交Issue和Pull Request来改进项目：
@@ -225,6 +281,12 @@ A: 设置 `global_unload: true` 在识别完成后自动卸载模型。
 2. 代码优化和性能改进
 3. 文档完善和使用案例
 4. 新功能开发和测试
+
+**开发流程**：
+1. Fork 项目并创建功能分支
+2. 编写代码并添加相应测试
+3. 运行 MyPy 类型检查和测试套件
+4. 提交 Pull Request
 
 ## 📄 许可证
 

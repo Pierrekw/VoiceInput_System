@@ -41,7 +41,7 @@ warnings.filterwarnings('ignore')
 
 # 导入FunASR相关模块
 from funasr_voice_module import FunASRVoiceRecognizer
-from text_processor_clean import TextProcessor
+from text_processor_clean import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
 from performance_monitor import performance_monitor, PerformanceStep
@@ -82,24 +82,53 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 导入配置加载模块
+config_loader: Any = None
+CONFIG_AVAILABLE = False
+
 try:
-    from config_loader import config as config_loader
+    from config_loader import config
+    config_loader = config
+    CONFIG_AVAILABLE = True
 except ImportError:
     logger.error("配置加载模块不可用，使用默认配置")
-    
+    CONFIG_AVAILABLE = False
+
     # 创建简单的配置替代
     class ConfigPlaceholder:
+        def get_voice_commands_config(self):
+            return {
+                'pause': ['暂停', '停一下', '等一下'],
+                'resume': ['继续', '开始', '接着来'],
+                'stop': ['停止', '结束', '退出']
+            }
+
+        def get_pause_commands(self):
+            return ['暂停', '停一下', '等一下']
+
+        def get_resume_commands(self):
+            return ['继续', '开始', '接着来']
+
+        def get_stop_commands(self):
+            return ['停止', '结束', '退出']
+
+        def get_voice_command_config(self):
+            return {
+                'match_mode': 'fuzzy',
+                'min_match_length': 2,
+                'confidence_threshold': 0.8
+            }
+
         def get_special_texts_config(self):
             return {"enabled": True, "exportable_texts": []}
-        
+
         def is_special_text_export_enabled(self):
             return True
-            
+
         def get_exportable_texts(self):
             return []
-    
-    # config_loader 模块的占位符，实际运行时动态加载
-config_loader = None  # type: ignore
+
+    # 使用替代配置
+    config_loader = ConfigPlaceholder()
 
 class SystemState(Enum):
     """系统状态枚举"""
@@ -148,6 +177,7 @@ class FunASRVoiceSystem:
         # 创建核心组件
         self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
         self.processor = TextProcessor()
+        self.command_processor = VoiceCommandProcessor()
 
         # Excel导出器
         self.excel_exporter: Optional[ExcelExporter] = None
@@ -166,9 +196,16 @@ class FunASRVoiceSystem:
 
         # 加载语音命令识别配置
         self.voice_command_config = config_loader.get_voice_command_config()
-        self.match_mode = self.voice_command_config.get('match_mode', 'fuzzy')
-        self.min_match_length = self.voice_command_config.get('min_match_length', 2)
-        self.confidence_threshold = self.voice_command_config.get('confidence_threshold', 0.8)
+        match_mode = self.voice_command_config.get('match_mode', 'fuzzy')
+        min_match_length = self.voice_command_config.get('min_match_length', 2)
+        confidence_threshold = self.voice_command_config.get('confidence_threshold', 0.8)
+
+        # 配置语音命令处理器
+        self.command_processor.configure(
+            match_mode=match_mode,
+            min_match_length=min_match_length,
+            confidence_threshold=confidence_threshold
+        )
         
         # 加载特定文本配置
         self.special_text_config = config_loader.get_special_texts_config()
@@ -210,10 +247,11 @@ class FunASRVoiceSystem:
 
     def _log_voice_commands_config(self):
         """记录语音命令配置信息"""
+        # 从新的命令处理器获取配置
         logger.info("🎯 语音命令配置:")
-        logger.info(f"  模式: {self.match_mode}")
-        logger.info(f"  最小匹配长度: {self.min_match_length}")
-        logger.info(f"  置信度阈值: {self.confidence_threshold}")
+        logger.info(f"  模式: {self.command_processor.match_mode}")
+        logger.info(f"  最小匹配长度: {self.command_processor.min_match_length}")
+        logger.info(f"  置信度阈值: {self.command_processor.confidence_threshold}")
 
         for command_type, keywords in self.voice_commands.items():
             if command_type == VoiceCommandType.PAUSE:
@@ -291,49 +329,27 @@ class FunASRVoiceSystem:
         Returns:
             语音命令类型
         """
-        if not text or len(text.strip()) < self.min_match_length:
-            return VoiceCommandType.UNKNOWN
+        # 转换命令字典格式以适配新的处理器
+        command_dict = {
+            command_type.value: keywords
+            for command_type, keywords in self.voice_commands.items()
+        }
 
-        text_clean = text.lower().strip()
+        # 使用新的语音命令处理器
+        result = self.command_processor.match_command(text, command_dict)
 
-        # 移除常见的标点符号
-        import re
-        text_clean = re.sub(r'[。！？\.,!?\s]', '', text_clean)
-
-        for command_type, keywords in self.voice_commands.items():
-            for keyword in keywords:
-                keyword_clean = keyword.lower().strip()
-                keyword_clean = re.sub(r'[。！？\.,!?\s]', '', keyword_clean)
-
-                if self.match_mode == "exact":
-                    # 精确匹配模式
-                    if text_clean == keyword_clean:
-                        logger.debug(f"精确匹配命令: '{text}' -> '{keyword}' ({command_type.value})")
-                        return command_type
-
-                elif self.match_mode == "fuzzy":
-                    # 模糊匹配模式 - 支持包含匹配和相似度匹配
-                    if keyword_clean in text_clean or text_clean in keyword_clean:
-                        # 对于停止命令，要求更高的匹配度
-                        if command_type == VoiceCommandType.STOP:
-                            # 停止命令需要至少70%的相似度或者是完全包含
-                            similarity = self._calculate_similarity(text_clean, keyword_clean)
-                            if similarity >= 0.7 or keyword_clean in text_clean:
-                                logger.debug(f"模糊匹配停止命令: '{text}' -> '{keyword}' (相似度: {similarity:.2f})")
-                                return command_type
-                        else:
-                            # 其他命令使用标准的相似度阈值
-                            similarity = self._calculate_similarity(text_clean, keyword_clean)
-                            if similarity >= self.confidence_threshold:
-                                logger.debug(f"模糊匹配命令: '{text}' -> '{keyword}' (相似度: {similarity:.2f})")
-                                return command_type
+        if result:
+            # 将字符串结果转换回枚举类型
+            for command_type in VoiceCommandType:
+                if command_type.value == result:
+                    return command_type
 
         return VoiceCommandType.UNKNOWN
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
-        计算两个文本之间的相似度
-        使用简单的编辑距离算法
+        计算两个文本之间的相似度 (已弃用，使用TextProcessor.calculate_similarity)
+        为了向后兼容保留此方法
 
         Args:
             text1: 文本1
@@ -342,73 +358,26 @@ class FunASRVoiceSystem:
         Returns:
             相似度 (0-1之间的浮点数)
         """
-        if not text1 or not text2:
-            return 0.0
-
-        # 如果完全相等，返回1.0
-        if text1 == text2:
-            return 1.0
-
-        # 计算编辑距离
-        len1, len2 = len(text1), len(text2)
-        if len1 == 0:
-            return 0.0
-        if len2 == 0:
-            return 0.0
-
-        # 创建动态规划表
-        dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
-
-        # 初始化边界条件
-        for i in range(len1 + 1):
-            dp[i][0] = i
-        for j in range(len2 + 1):
-            dp[0][j] = j
-
-        # 填充动态规划表
-        for i in range(1, len1 + 1):
-            for j in range(1, len2 + 1):
-                if text1[i-1] == text2[j-1]:
-                    dp[i][j] = dp[i-1][j-1]
-                else:
-                    dp[i][j] = min(
-                        dp[i-1][j] + 1,      # 删除
-                        dp[i][j-1] + 1,      # 插入
-                        dp[i-1][j-1] + 1     # 替换
-                    )
-
-        # 计算相似度
-        max_len = max(len1, len2)
-        edit_distance = dp[len1][len2]
-        similarity = 1.0 - (edit_distance / max_len)
-
-        return max(0.0, similarity)
+        # 使用新的文本处理器，保持向后兼容
+        return self.processor.calculate_similarity(text1, text2)
 
     def _check_special_text(self, text: str) -> Optional[str]:
         """
-        检查文本是否匹配特定文本配置
-        
+        检查文本是否匹配特定文本配置 (已弃用，使用TextProcessor.check_special_text)
+        为了向后兼容保留此方法
+
         Args:
             text: 要检查的文本
-            
+
         Returns:
             如果匹配，返回对应的基础文本；否则返回None
         """
-        if not self.export_special_texts or not self.exportable_texts:
-            return None
-        
-        text_lower = text.lower().strip()
-        
-        for text_config in self.exportable_texts:
-            base_text = text_config.get('base_text')
-            variants = text_config.get('variants', [])
-            
-            # 检查文本是否匹配任何变体
-            for variant in variants:
-                if variant.lower() == text_lower or text_lower in variant.lower():
-                    return base_text
-        
-        return None
+        # 使用新的文本处理器，保持向后兼容
+        return self.processor.check_special_text(
+            text,
+            self.exportable_texts,
+            self.export_special_texts
+        )
         
     def process_recognition_result(self, original_text: str, processed_text: str, numbers: List[float]):
         """
@@ -638,7 +607,7 @@ class FunASRVoiceSystem:
         print(f"\n🎯 开始语音识别")
         print("请说话...")
         print("控制：空格键-暂停/恢复 | ESC键-停止 | 语音命令-暂停/继续/停止")
-        print(f"语音命令 (模式: {self.match_mode}):")
+        print(f"语音命令 (模式: {self.command_processor.match_mode}):")
         print(f"  暂停: {', '.join(self.voice_commands[VoiceCommandType.PAUSE][:3])}{'...' if len(self.voice_commands[VoiceCommandType.PAUSE]) > 3 else ''}")
         print(f"  继续: {', '.join(self.voice_commands[VoiceCommandType.RESUME][:3])}{'...' if len(self.voice_commands[VoiceCommandType.RESUME]) > 3 else ''}")
         print(f"  停止: {', '.join(self.voice_commands[VoiceCommandType.STOP][:3])}{'...' if len(self.voice_commands[VoiceCommandType.STOP]) > 3 else ''}")
@@ -732,7 +701,7 @@ class FunASRVoiceSystem:
         print(f"模式：单次识别")
         print(f"识别时长：{self.recognition_duration}秒")
         print("控制：空格键暂停/恢复 | ESC键停止 | 语音命令控制")
-        print(f"语音命令配置 (模式: {self.match_mode}):")
+        print(f"语音命令配置 (模式: {self.command_processor.match_mode}):")
         print(f"  暂停: {', '.join(self.voice_commands[VoiceCommandType.PAUSE][:3])}{'...' if len(self.voice_commands[VoiceCommandType.PAUSE]) > 3 else ''}")
         print(f"  继续: {', '.join(self.voice_commands[VoiceCommandType.RESUME][:3])}{'...' if len(self.voice_commands[VoiceCommandType.RESUME]) > 3 else ''}")
         print(f"  停止: {', '.join(self.voice_commands[VoiceCommandType.STOP][:3])}{'...' if len(self.voice_commands[VoiceCommandType.STOP]) > 3 else ''}")

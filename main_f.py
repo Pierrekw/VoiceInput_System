@@ -440,9 +440,8 @@ class FunASRVoiceSystem:
                     result_value: Union[float, str] = numbers[0]
                 else:
                     # 特定文本结果
-                    # 将特定文本作为数值的替代写入Excel
-                    # 使用1代表OK，0代表Not OK或其他特殊文本
-                    text_value = 1.0 if special_text_match == "OK" else 0.0
+                    # 将特定文本直接写入Excel，而不是数值
+                    text_value = special_text_match  # 直接使用OK/Not OK文本
                     excel_data.append((text_value, original_text, special_text_match))
                     result_type = "特定文本"
                     result_value = special_text_match  # type: ignore
@@ -464,8 +463,15 @@ class FunASRVoiceSystem:
 
                 if excel_result:
                     record_id, record_number, record_text = excel_result[0]
-                    # 确保record_number是数值类型
-                    number_value = float(record_number) if isinstance(record_number, (int, float)) else 0.0
+
+                    # 根据结果类型处理record_number
+                    if result_type == "特定文本":
+                        # 特定文本结果：直接存储特殊文本，便于GUI区分
+                        number_value = record_number  # 存储OK/Not OK文本
+                    else:
+                        # 数字结果：record_number是数值
+                        number_value = float(record_number) if isinstance(record_number, (int, float)) else 0.0
+
                     self.number_results.append((record_id, number_value, record_text))
 
                     # 统一使用logger.info记录识别结果

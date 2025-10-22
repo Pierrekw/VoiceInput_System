@@ -106,9 +106,9 @@ class ExcelExporter:
 
     def append_with_text(
             self,
-            data: List[Tuple[float, str, str]],  # (数值, 原始语音文本, 处理文本)
+            data: List[Tuple[Union[float, str], str, str]],  # (数值或文本, 原始语音文本, 处理文本)
             auto_generate_ids: bool = True
-        ) -> List[Tuple[int, float, str]]:  # 返回 [(ID, 数值, 原始文本)]
+        ) -> List[Tuple[int, Union[float, str], str]]:  # 返回 [(ID, 数值或文本, 原始文本)]
             """
             新增方法：写入带原始语音文本的数据
             返回本次写入的所有记录（包含生成的ID）
@@ -139,8 +139,11 @@ class ExcelExporter:
                             new_id = self.get_next_id()
                             new_record["编号"] = new_id
                             
-                        # 添加测量值
-                        new_record["测量值"] = self._float_cell(val)
+                        # 添加测量值（支持文本和数值）
+                        if isinstance(val, str):
+                            new_record["测量值"] = val  # 文本值直接写入
+                        else:
+                            new_record["测量值"] = self._float_cell(val)  # 数值值转换
                         
                         # 根据配置决定是否添加时间戳
                         if include_timestamp:
@@ -157,10 +160,13 @@ class ExcelExporter:
                         
                         # 如果启用了自动编号，记录到会话数据
                         if auto_numbering:
-                            self._session_data.append((new_id, self._float_cell(val), original_text))
+                            # 记录原始值而不是转换后的值
+                            record_val = val if isinstance(val, str) else self._float_cell(val)
+                            self._session_data.append((new_id, record_val, original_text))
                         else:
                             # 对于没有ID的情况，使用-1作为占位符
-                            self._session_data.append((-1, self._float_cell(val), original_text))
+                            record_val = val if isinstance(val, str) else self._float_cell(val)
+                            self._session_data.append((-1, record_val, original_text))
     
                     # 合并数据
                     if existing_data.empty:

@@ -93,19 +93,26 @@ class WorkingVoiceWorker(QThread):
                     if original_process_result:
                         original_process_result(original_text, processed_text, numbers)
 
-                    # 只有当本次识别结果包含数字时，才显示数字格式
-                    if numbers and len(numbers) > 0 and hasattr(self.voice_system, 'number_results') and self.voice_system.number_results:
+                    # 检查是否有记录结果（数字或特殊文本）
+                    if hasattr(self.voice_system, 'number_results') and self.voice_system.number_results:
                         # 获取最新的记录（应该是刚刚添加的本次记录）
                         latest_record = self.voice_system.number_results[-1]
                         if len(latest_record) >= 3:
                             record_id, record_number, record_text = latest_record
-                            # 按照ID+数值格式显示
-                            display_text = f"[{record_id}] {record_number}"
+
+                            # 判断是否为特殊文本（通过检查record_number是否为字符串）
+                            if isinstance(record_number, str) and record_text and record_text.strip():
+                                # 特殊文本：直接显示record_number（OK/Not OK）
+                                display_text = f"[{record_id}] {record_number}"
+                            else:
+                                # 普通数字显示数值
+                                display_text = f"[{record_id}] {record_number}"
+
                             self.recognition_result.emit(display_text)
-                            self.log_message.emit(f"🎤 数字识别结果: {display_text}")
-                    # 确保所有文本结果都显示，包括纯文本和文本+数字组合
+                            self.log_message.emit(f"🎤 识别结果: {display_text}")
+                    # 确保所有文本结果都显示，包括纯文本
                     elif processed_text and processed_text.strip():
-                        # 对于普通文本，直接显示
+                        # 对于没有记录的普通文本，直接显示
                         self.recognition_result.emit(processed_text)
                         self.log_message.emit(f"🎤 文本识别结果: {processed_text}")
                     # 处理原始文本情况
@@ -351,9 +358,9 @@ class WorkingSimpleMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.worker = None
+        self.current_mode = 'customized'  # 设置默认模式，必须在init_ui之前
         self.init_ui()
         self.setup_timer()
-        self.current_mode = 'balanced'
 
     def init_ui(self):
         """初始化界面"""

@@ -333,6 +333,10 @@ class ConfigLoader:
         """获取VAD能量阈值"""
         return self.get("vad.energy_threshold", 0.015)
 
+    def get_gui_display_threshold(self) -> float:
+        """获取GUI能量显示阈值（独立于VAD检测）"""
+        return self.get("vad.gui_display_threshold", 0.00001)
+
     def get_vad_min_speech_duration(self) -> float:
         """获取VAD最小语音持续时间"""
         return self.get("vad.min_speech_duration", 0.3)

@@ -32,7 +32,14 @@
       "mcp__zai-mcp-server__analyze_image",
       "WebFetch(domain:github.com)",
       "mcp__web-search-prime__webSearchPrime",
-      "Bash(mypy:*)"
+      "Bash(mypy:*)",
+      "mcp__zai-mcp-server__analyze_video",
+      "Read(//c/Users/Administrator/**)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(.venv/Scripts/pip.exe list:*)",
+      "Bash(cat:*)",
+      "Bash(.venv/Scripts/funasr-export.exe:*)",
+      "Bash(.venv/Scripts/pip.exe install:*)"
     ],
     "deny": []
   }

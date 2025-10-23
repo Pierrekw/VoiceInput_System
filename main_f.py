@@ -165,6 +165,9 @@ class FunASRVoiceSystem:
         # 状态变化回调函数（用于GUI同步）
         self.state_change_callback = None
 
+        # VAD事件回调函数（用于语音能量显示）
+        self.vad_callback = None
+
         # 启用性能监控
         performance_monitor.enable()
         logger.info("🔍 性能监控已启用")
@@ -296,10 +299,31 @@ class FunASRVoiceSystem:
         """设置状态变化回调函数（用于GUI同步）"""
         self.state_change_callback = callback
 
+    def set_vad_callback(self, callback):
+        """设置VAD事件回调函数（用于语音能量显示）"""
+        self.vad_callback = callback
+
     def _notify_state_change(self, state: str, message: str = ""):
         """通知状态变化"""
         if self.state_change_callback:
             self.state_change_callback(state, message)
+
+    def _handle_vad_event(self, event_type: str, event_data: dict):
+        """处理VAD事件并转发给回调函数"""
+        # 🔍 调试输出 - 在main_f.py中接收VAD事件
+        energy = event_data.get('energy', 0)
+        logger.info(f"[🔗 MAIN接收] ← 收到VAD事件: {event_type} | 能量: {energy:.8f} | 数据: {event_data}")
+        logger.info(f"[🔗 MAIN检查] VAD回调已设置: {self.vad_callback is not None}")
+
+        if self.vad_callback:
+            logger.info(f"[🔗 MAIN转发] → 转发VAD事件给GUI | 事件: {event_type} | 能量: {energy:.8f}")
+            try:
+                self.vad_callback(event_type, event_data)
+                logger.info(f"[🔗 MAIN成功] ✅ VAD事件转发成功")
+            except Exception as e:
+                logger.error(f"[🔗 MAIN错误] ❌ VAD事件转发失败: {e}")
+        else:
+            logger.error(f"[🔗 MAIN错误] ❌ VAD回调未设置，无法转发事件给GUI")
 
     def initialize(self) -> bool:
         """初始化系统"""
@@ -311,6 +335,12 @@ class FunASRVoiceSystem:
             success = self.recognizer.initialize()
             if success:
                 logger.info("✅ FunASR识别器初始化成功")
+
+                # 设置VAD事件回调
+                if hasattr(self.recognizer, 'set_callbacks'):
+                    self.recognizer.set_callbacks(on_vad_event=self._handle_vad_event)
+                    logger.info("✅ VAD事件回调已设置")
+
                 return True
             else:
                 logger.error("❌ FunASR识别器初始化失败")
@@ -670,8 +700,11 @@ class FunASRVoiceSystem:
 
     def run_recognition_cycle(self):
         """运行识别循环"""
-        # 设置回调
-        self.recognizer.set_callbacks(on_final_result=self.on_recognition_result)
+        # 设置回调（保留VAD回调）
+        self.recognizer.set_callbacks(
+            on_final_result=self.on_recognition_result,
+            on_vad_event=self._handle_vad_event  # 🔧 修复：保留VAD回调
+        )
 
         # 开始识别
         self.start_recognition()

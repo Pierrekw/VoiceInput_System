@@ -113,7 +113,7 @@ from collections import deque
 
 # 配置日志
 logging.basicConfig(
-    level=logging.DEBUG,  # 改为DEBUG级别以便查看能量跟踪信息
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
@@ -139,12 +139,12 @@ except ImportError:
     logger.error("❌ pyaudio 不可用，请安装: pip install pyaudio")
 
 try:
-    from funasr import AutoModel
+    from funasr_onnx.paraformer_online_bin import Paraformer
     FUNASR_AVAILABLE = True
-    logger.info("✅ FunASR 模块可用")
+    logger.info("✅ FunASR ONNX 在线模块可用")
 except ImportError as e:
-    logger.error(f"❌ FunASR 不可用: {e}")
-    AutoModel = None
+    logger.error(f"❌ FunASR ONNX 在线模块不可用: {e}")
+    Paraformer = None
 
 @dataclass
 class RecognitionResult:
@@ -166,18 +166,16 @@ class VADConfig:
 
 @dataclass
 class FunASRConfig:
-    """FunASR配置"""
-    model_path: str = "f:/04_AI/01_Workplace/Voice_Input/model/fun"
-    device: str = "cpu"
-    chunk_size: Optional[List[int]] = None
-    encoder_chunk_look_back: int = 4
-    decoder_chunk_look_back: int = 1
-    disable_update: bool = True
-    trust_remote_code: bool = False
+    """FunASR ONNX在线配置"""
+    model_path: str = "./model/fun_zh16k_onnx"
+    batch_size: int = 1
+    quantize: bool = True  # 使用量化ONNX模型
+    chunk_size: List[int] = None
+    intra_op_num_threads: int = 4
 
     def __post_init__(self):
         if self.chunk_size is None:
-            self.chunk_size = [0, 10, 5]  # 默认流式参数
+            self.chunk_size = [8, 16, 8]  # 默认流式参数，与demo一致
 
 class FunASRVoiceRecognizer:
     """
@@ -204,13 +202,12 @@ class FunASRVoiceRecognizer:
         # 基础配置
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
-        self.model_path = model_path or "./model/fun"
+        self.model_path = model_path or "./model/fun_zh16k_onnx"
         self.silent_mode = silent_mode
 
-        # FunASR配置
+        # FunASR ONNX配置
         self.funasr_config = FunASRConfig(
-            model_path=self.model_path,
-            device=device
+            model_path=self.model_path
         )
 
         # VAD配置 - 支持从配置文件加载
@@ -266,15 +263,6 @@ class FunASRVoiceRecognizer:
         except Exception as e:
             logger.warning(f"加载VAD配置失败: {e}，使用默认配置")
             return VADConfig()
-
-    def _get_gui_display_threshold(self) -> float:
-        """获取GUI能量显示阈值（独立于VAD检测）"""
-        try:
-            from config_loader import config
-            return config.get_gui_display_threshold()
-        except Exception as e:
-            logger.warning(f"加载GUI显示阈值失败: {e}，使用默认值0.00001")
-            return 0.00001
 
     def set_callbacks(self,
                      on_partial_result: Optional[Callable[[str], None]] = None,
@@ -354,15 +342,15 @@ class FunASRVoiceRecognizer:
         return True
 
     def _load_model(self) -> bool:
-        """加载FunASR模型"""
+        """加载FunASR ONNX模型"""
         if self._model_loaded:
             return True
 
         if not FUNASR_AVAILABLE:
-            logger.error("❌ FunASR不可用")
+            logger.error("❌ FunASR ONNX不可用")
             return False
 
-        logger.info(f"📦 加载FunASR模型: {self.model_path}")
+        logger.info(f"📦 加载FunASR ONNX模型: {self.model_path}")
         start_time = time.time()
 
         try:
@@ -371,22 +359,23 @@ class FunASRVoiceRecognizer:
                 logger.error(f"❌ 模型路径不存在: {self.model_path}")
                 return False
 
-            # 加载模型
-            self._model = AutoModel(
-                model=self.funasr_config.model_path,
-                device=self.funasr_config.device,
-                trust_remote_code=self.funasr_config.trust_remote_code,
-                disable_update=self.funasr_config.disable_update
+            # 加载ONNX模型
+            self._model = Paraformer(
+                model_dir=self.funasr_config.model_path,
+                batch_size=self.funasr_config.batch_size,
+                quantize=self.funasr_config.quantize,
+                chunk_size=self.funasr_config.chunk_size,
+                intra_op_num_threads=self.funasr_config.intra_op_num_threads
             )
 
             self._model_loaded = True
             self._model_load_time = time.time() - start_time
 
-            logger.info(f"✅ 模型加载成功 (耗时: {self._model_load_time:.2f}秒)")
+            logger.info(f"✅ ONNX模型加载成功 (耗时: {self._model_load_time:.2f}秒)")
             return True
 
         except Exception as e:
-            logger.error(f"❌ 模型加载失败: {e}")
+            logger.error(f"❌ ONNX模型加载失败: {e}")
             import traceback
             logger.error(f"详细错误: {traceback.format_exc()}")
             return False
@@ -522,28 +511,7 @@ class FunASRVoiceRecognizer:
         # 计算音频能量
         audio_energy = np.sqrt(np.mean(audio_data ** 2))
 
-        # 🔍 调试输出 - 在funasr_voice_module中计算音频能量
-        logger.info(f"[🎤 FUNASR能量] 能量值: {audio_energy:.8f} | VAD检测: is_speech={is_speech}, vad_event={vad_event} | VAD阈值: {self.vad_config.energy_threshold}")
-
-        # 检查是否应该发送GUI能量更新
-        gui_threshold = self._get_gui_display_threshold()
-        should_send_gui_update = not vad_event and audio_energy > gui_threshold
-
-        logger.info(f"[🎤 FUNASR能量检查] GUI显示阈值: {gui_threshold:.8f} | 应该发送GUI更新: {should_send_gui_update} | VAD回调已设置: {self._on_vad_event is not None}")
-
-        # 如果没有VAD事件但能量超过显示阈值，也发送能量更新用于显示
-        if should_send_gui_update:  # 使用配置的GUI显示阈值
-            if self._on_vad_event:
-                logger.info(f"[🎤 FUNASR发送] → 发送energy_update事件 | 能量: {audio_energy:.8f}")
-                self._on_vad_event("energy_update", {
-                    'time': current_time,
-                    'energy': audio_energy
-                })
-            else:
-                logger.error(f"[🎤 FUNASR错误] ❌ 能量超过阈值({audio_energy:.8f})但VAD回调未设置！")
-
         if vad_event and self._on_vad_event:
-            logger.info(f"触发VAD事件: {vad_event}, 能量: {audio_energy:.6f}")
             self._on_vad_event(vad_event, {
                 'time': current_time,
                 'energy': audio_energy
@@ -583,27 +551,34 @@ class FunASRVoiceRecognizer:
             # 取最近的音频数据进行识别
             audio_array = np.array(list(self._speech_buffer))
 
-            result = self._model.generate(
-                input=audio_array,
-                cache=self._funasr_cache,
-                is_final=False,
-                chunk_size=self.funasr_config.chunk_size,
-                encoder_chunk_look_back=self.funasr_config.encoder_chunk_look_back,
-                decoder_chunk_look_back=self.funasr_config.decoder_chunk_look_back
-            )
+            # 使用ONNX模型的在线识别方式
+            param_dict = {"cache": self._funasr_cache, "is_final": False}
+            result = self._model(audio_in=audio_array, param_dict=param_dict)
 
+            # 改进结果解析
             if result and isinstance(result, list) and len(result) > 0:
-                text = result[0].get("text", "").strip()
-                if text and text != self._current_text:
-                    self._current_text = text
-                    self._partial_results.append(text)
+                try:
+                    # 检查结果结构
+                    if isinstance(result[0], dict) and "preds" in result[0]:
+                        text = result[0]["preds"][0].strip() if result[0]["preds"] else ""
+                    else:
+                        # 尝试直接获取文本
+                        text = str(result[0]).strip()
 
-                    # 触发部分结果回调
-                    if self._on_partial_result:
-                        self._on_partial_result(text)
+                    if text and text != "" and text != self._current_text:
+                        self._current_text = text
+                        self._partial_results.append(text)
 
-                    if not self.silent_mode:
-                        logger.info(f"🗣️ 流式识别: '{text}'")
+                        # 触发部分结果回调
+                        if self._on_partial_result:
+                            self._on_partial_result(text)
+
+                        if not self.silent_mode:
+                            logger.info(f"🗣️ 流式识别: '{text}'")
+                except (IndexError, KeyError, TypeError) as parse_error:
+                    logger.debug(f"流式识别结果解析错误: {parse_error}")
+            else:
+                logger.debug(f"流式识别返回空结果")
 
         except Exception as e:
             logger.debug(f"流式识别异常: {e}")
@@ -618,44 +593,55 @@ class FunASRVoiceRecognizer:
 
             audio_array = np.array(list(self._speech_buffer))
 
-            result = self._model.generate(
-                input=audio_array,
-                cache=self._funasr_cache,
-                is_final=True,
-                chunk_size=self.funasr_config.chunk_size,
-                encoder_chunk_look_back=self.funasr_config.encoder_chunk_look_back,
-                decoder_chunk_look_back=self.funasr_config.decoder_chunk_look_back
-            )
+            # 使用ONNX模型的在线识别方式（最终识别）
+            param_dict = {"cache": self._funasr_cache, "is_final": True}
+            result = self._model(audio_in=audio_array, param_dict=param_dict)
 
             processing_time = time.time() - start_time
 
+            # 改进结果解析，增加错误处理
             if result and isinstance(result, list) and len(result) > 0:
-                text = result[0].get("text", "").strip()
-                if text:
-                    # 创建识别结果
-                    recognition_result = RecognitionResult(
-                        text=text,
-                        partial_results=self._partial_results.copy(),
-                        confidence=0.9,  # FunASR暂不提供置信度，使用默认值
-                        duration=len(self._speech_buffer) / self.sample_rate,
-                        timestamp=time.time(),
-                        audio_buffer=self._speech_buffer.copy()
-                    )
+                try:
+                    # 检查结果结构
+                    if isinstance(result[0], dict) and "preds" in result[0]:
+                        text = result[0]["preds"][0].strip() if result[0]["preds"] else ""
+                    else:
+                        # 尝试直接获取文本
+                        text = str(result[0]).strip()
 
-                    self._final_results.append(recognition_result)
-                    self.stats['total_recognitions'] += 1
-                    self.stats['successful_recognitions'] += 1
-                    self.stats['total_processing_time'] += processing_time
+                    if text and text != "":
+                        # 创建识别结果
+                        recognition_result = RecognitionResult(
+                            text=text,
+                            partial_results=self._partial_results.copy(),
+                            confidence=0.9,  # FunASR暂不提供置信度，使用默认值
+                            duration=len(self._speech_buffer) / self.sample_rate,
+                            timestamp=time.time(),
+                            audio_buffer=self._speech_buffer.copy()
+                        )
 
-                    # 触发最终结果回调
-                    if self._on_final_result:
-                        self._on_final_result(recognition_result)
+                        self._final_results.append(recognition_result)
+                        self.stats['total_recognitions'] += 1
+                        self.stats['successful_recognitions'] += 1
+                        self.stats['total_processing_time'] += processing_time
 
-                    if not self.silent_mode:
-                        logger.info(f"✅ 最终识别: '{text}' (耗时: {processing_time:.3f}s)")
+                        # 触发最终结果回调
+                        if self._on_final_result:
+                            self._on_final_result(recognition_result)
+
+                        if not self.silent_mode:
+                            logger.info(f"✅ 最终识别: '{text}' (耗时: {processing_time:.3f}s)")
+                    else:
+                        logger.debug("识别结果为空")
+                except (IndexError, KeyError, TypeError) as parse_error:
+                    logger.error(f"识别结果解析错误: {parse_error}, 原始结果: {result}")
+            else:
+                logger.debug(f"识别返回空结果: {result}")
 
         except Exception as e:
             logger.error(f"最终识别异常: {e}")
+            import traceback
+            logger.debug(f"详细错误: {traceback.format_exc()}")
         finally:
             # 清空语音缓冲区
             self._speech_buffer = []
@@ -876,12 +862,11 @@ class FunASRVoiceRecognizer:
             'initialized': self._is_initialized,
             'model_loaded': self._model_loaded,
             'model_path': self.model_path,
-            'device': self.funasr_config.device,
             'running': self._is_running,
             'stats': self.stats.copy(),
             'model_load_time': self._model_load_time,
             'dependencies': {
-                'funasr': FUNASR_AVAILABLE,
+                'funasr_onnx': FUNASR_AVAILABLE,
                 'pyaudio': PYAUDIO_AVAILABLE,
                 'numpy': NUMPY_AVAILABLE
             }
@@ -974,7 +959,7 @@ if __name__ == "__main__":
 
         # 进行识别测试
         try:
-            result = recognizer.recognize_speech(duration=15)
+            result = recognizer.recognize_speech(duration=30)
             print(f"\n🎯 最终识别结果: '{result.text}'")
             print(f"📊 识别时长: {result.duration:.2f}秒")
             print(f"📊 部分结果数: {len(result.partial_results)}")

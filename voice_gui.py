@@ -10,20 +10,24 @@ import os
 import time
 import threading
 import logging
+import math
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+
+# 配置logger
+logger = logging.getLogger(__name__)
 
 # PySide6导入
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QLabel, QPushButton, QGroupBox, QStatusBar,
-    QMessageBox, QSplitter, QTabWidget, QComboBox, QFormLayout
+    QMessageBox, QSplitter, QTabWidget, QComboBox, QFormLayout, QProgressBar
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QFont, QTextCursor, QPalette, QColor
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)  # 降低日志级别，减少输出量
 logger = logging.getLogger(__name__)
 
 # 抑制输出
@@ -41,6 +45,7 @@ class WorkingVoiceWorker(QThread):
     partial_result = Signal(str)
     status_changed = Signal(str)
     voice_command_state_changed = Signal(str)  # 语音命令状态变化信号
+    voice_activity = Signal(int)  # 语音活动级别信号 (0-100)
     finished = Signal()
     system_initialized = Signal()
 
@@ -54,6 +59,12 @@ class WorkingVoiceWorker(QThread):
     def run(self):
         """运行语音识别"""
         try:
+            # 🔍 调试 - Worker线程开始运行
+            logger.info(f"[🧵 WORKER启动] 🚀 Worker线程开始运行")
+            print(f"[🧵 WORKER启动] 🚀 Worker线程开始运行")
+            self.log_message.emit(f"🧵 Worker线程启动，模式: {self.mode}")
+
+            print(f"[CRITICAL] 开始初始化语音识别系统")
             self.log_message.emit(f"🚀 正在初始化语音系统... (模式: {self.mode})")
 
             # 根据模式获取配置参数
@@ -61,13 +72,22 @@ class WorkingVoiceWorker(QThread):
             self.log_message.emit(f"🔧 使用配置: {mode_config}")
 
             # 导入完整的语音系统
+            logger.info(f"[🧵 WORKER导入] 📦 开始导入FunASRVoiceSystem")
+            print(f"[🧵 WORKER导入] 📦 开始导入FunASRVoiceSystem")
+
             from main_f import FunASRVoiceSystem
+
+            logger.info(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")
+            print(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")
 
             self.voice_system = FunASRVoiceSystem(
                 recognition_duration=-1,  # 不限时识别
                 continuous_mode=True,      # 连续识别模式
                 debug_mode=False           # 生产模式
             )
+
+            logger.info(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")
+            print(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")
 
             # 注入模式配置到识别器
             self._configure_recognizer(mode_config)
@@ -77,7 +97,47 @@ class WorkingVoiceWorker(QThread):
                 return
 
             # 设置状态变化回调（用于语音命令同步）
+            logger.info(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
+            print(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
             self.voice_system.set_state_change_callback(self._handle_voice_command_state_change)
+            logger.info(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
+            print(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
+
+            # 设置VAD事件回调（用于语音能量显示）
+            logger.info(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")
+            print(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")
+
+            # 检查voice_system对象
+            logger.info(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
+            logger.info(f"[🔗 WORKER检查] voice_system方法: {[method for method in dir(self.voice_system) if 'vad' in method.lower() or 'callback' in method.lower()]}")
+            print(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
+
+            if hasattr(self.voice_system, 'set_vad_callback'):
+                logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
+                print(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
+
+                try:
+                    self.voice_system.set_vad_callback(self._handle_vad_event)
+                    logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
+                    print(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
+                    self.log_message.emit("✅ 已设置VAD能量监听")
+
+                    # 发送测试VAD事件来验证连接（已注释，避免启动时显示）
+                    # logger.info(f"[🔗 WORKER测试] 🧪 发送测试VAD事件验证连接")
+                    # print(f"[🔗 WORKER测试] 🧪 发送测试VAD事件验证连接")
+                    # test_event_data = {'energy': 0.005}
+                    # self._handle_vad_event('energy_update', test_event_data)
+                    # logger.info(f"[🔗 WORKER测试] ✅ 测试VAD事件发送完成")
+                    # print(f"[🔗 WORKER测试] ✅ 测试VAD事件发送完成")
+
+                except Exception as e:
+                    logger.error(f"[🔗 WORKER错误] ❌ VAD回调设置失败: {e}")
+                    print(f"[🔗 WORKER错误] ❌ VAD回调设置失败: {e}")
+                    import traceback
+                    logger.error(f"[🔗 WORKER详细] {traceback.format_exc()}")
+            else:
+                logger.error(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")
+                print(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")
 
             self.log_message.emit("✅ 语音系统初始化成功")
             self.status_changed.emit("系统就绪")
@@ -93,33 +153,59 @@ class WorkingVoiceWorker(QThread):
                     if original_process_result:
                         original_process_result(original_text, processed_text, numbers)
 
-                    # 检查是否有记录结果（数字或特殊文本）
+                    # 优先检查是否产生了新的记录结果（数字或特殊文本）
+                    has_new_record = False
                     if hasattr(self.voice_system, 'number_results') and self.voice_system.number_results:
-                        # 获取最新的记录（应该是刚刚添加的本次记录）
+                        # 检查是否有新记录（通过比较记录数量）
+                        # 注意：这里假设调用original_process_result后会立即产生新记录
                         latest_record = self.voice_system.number_results[-1]
                         if len(latest_record) >= 3:
                             record_id, record_number, record_text = latest_record
 
-                            # 判断是否为特殊文本（通过检查record_number是否为字符串）
-                            if isinstance(record_number, str) and record_text and record_text.strip():
-                                # 特殊文本：直接显示record_number（OK/Not OK）
-                                display_text = f"[{record_id}] {record_number}"
-                            else:
-                                # 普通数字显示数值
-                                display_text = f"[{record_id}] {record_number}"
+                            # 验证这个记录是否对应当前的识别结果
+                            is_matching_record = False
+                            if record_text:
+                                if record_text == processed_text or record_text == original_text:
+                                    is_matching_record = True
+                                elif numbers and len(numbers) > 0:
+                                    if isinstance(record_number, (int, float)):
+                                        # 数值记录：比较数值
+                                        try:
+                                            if float(record_number) == numbers[0]:
+                                                is_matching_record = True
+                                        except:
+                                            pass
+                                    elif str(numbers[0]) in str(record_number):
+                                        # 字符串记录包含数字
+                                        is_matching_record = True
 
-                            self.recognition_result.emit(display_text)
-                            self.log_message.emit(f"🎤 识别结果: {display_text}")
-                    # 确保所有文本结果都显示，包括纯文本
-                    elif processed_text and processed_text.strip():
-                        # 对于没有记录的普通文本，直接显示
-                        self.recognition_result.emit(processed_text)
-                        self.log_message.emit(f"🎤 文本识别结果: {processed_text}")
-                    # 处理原始文本情况
-                    elif original_text and original_text.strip() and not processed_text:
-                        # 如果processed_text为空但original_text有内容，也显示original_text
-                        self.recognition_result.emit(original_text)
-                        self.log_message.emit(f"🎤 原始识别结果: {original_text}")
+                            if is_matching_record:
+                                has_new_record = True
+
+                                # 判断是否为特殊文本（通过检查record_number是否为字符串）
+                                if isinstance(record_number, str) and record_text and record_text.strip():
+                                    # 特殊文本：直接显示record_number（OK/Not OK）
+                                    display_text = f"[{record_id}] {record_number}"
+                                else:
+                                    # 普通数字显示数值
+                                    display_text = f"[{record_id}] {record_number}"
+
+                                self.recognition_result.emit(display_text)
+                                self.log_message.emit(f"🎤 识别结果: {display_text}")
+
+                    # 如果没有新记录，显示文本结果
+                    if not has_new_record:
+                        # 确保所有文本结果都显示，包括纯文本
+                        if processed_text and processed_text.strip():
+                            # 对于没有记录的普通文本，直接显示
+                            self.recognition_result.emit(processed_text)
+                            self.log_message.emit(f"🎤 文本识别结果: {processed_text}")
+                        # 处理原始文本情况
+                        elif original_text and original_text.strip() and not processed_text:
+                            # 如果processed_text为空但original_text有内容，也显示original_text
+                            self.recognition_result.emit(original_text)
+                            self.log_message.emit(f"🎤 原始识别结果: {original_text}")
+
                 except Exception as e:
                     self.log_message.emit(f"❌ 处理识别结果时出错: {e}")
 
@@ -229,7 +315,113 @@ class WorkingVoiceWorker(QThread):
             self.log_message.emit(f"🎤 {message}")
             # 发送信号更新GUI按钮状态
             self.voice_command_state_changed.emit("stopped")
-        
+
+    def _handle_vad_event(self, event_type: str, event_data: Dict):
+        """处理VAD事件，更新语音能量显示"""
+        # 🔍 调试输出 - 在voice_gui.py中接收VAD事件
+        energy = event_data.get('energy', 0)
+        logger.info(f"[🖥️ GUI接收] ← 收到VAD事件: {event_type} | 原始能量值: {energy:.8f}")
+        print(f"[🖥️ GUI接收] ← 收到VAD事件: {event_type} | 原始能量值: {energy:.8f}")
+
+        try:
+            # 🔧 修复：只有检测到真正语音（is_speech=True）才更新能量条
+            is_speech = False
+            energy_level = 0
+
+            # 检查是否为语音相关事件
+            if event_type in ["speech_start", "speech_end", "energy_update"]:
+                # 🔧 与VAD语音检测阈值统一，使用相同的阈值
+                # 从config.yaml获取VAD能量阈值，保持一致性
+                try:
+                    from config_loader import config
+                    vad_threshold = config.get_vad_energy_threshold()
+                except:
+                    vad_threshold = 0.010  # 默认阈值，与config.yaml一致
+
+                is_speech = energy > vad_threshold  # 使用与VAD相同的阈值
+
+                logger.info(f"[🖥️ GUI判断] 能量: {energy:.8f} vs VAD阈值: {vad_threshold:.8f} = {is_speech}")
+                print(f"[🖥️ GUI判断] 能量: {energy:.8f} vs VAD阈值: {vad_threshold:.8f} = {is_speech}")
+
+                if is_speech:
+                    # 🔧 优化能量转换逻辑 - 更保守的映射，避免容易满值
+                    # 基于VAD阈值0.010进行合理映射
+                    if energy < vad_threshold * 0.5:  # 小于VAD阈值一半，显示为低值
+                        energy_level = int((energy / vad_threshold) * 30)  # 0-30%
+                    elif energy < vad_threshold * 0.8:  # VAD阈值的50%-80%
+                        energy_level = int(30 + (energy - vad_threshold * 0.5) * 100)  # 30-60%
+                    elif energy < vad_threshold:  # VAD阈值的80%-100%
+                        energy_level = int(60 + (energy - vad_threshold * 0.8) * 100)  # 60-100%
+                    else:  # 超过VAD阈值，显示为中高值
+                        # 使用平方根映射，让大声音的变化更平缓
+                        excess = energy - vad_threshold
+                        if excess < vad_threshold * 2:  # 1-2倍阈值
+                            energy_level = int(75 + excess * 10)  # 75-95%
+                        elif excess < vad_threshold * 5:  # 2-5倍阈值
+                            energy_level = int(85 + excess * 2)  # 85-95%
+                        else:  # 超过5倍阈值
+                            energy_level = min(98, int(90 + (excess - vad_threshold * 5) * 2))  # 90-98%
+
+                    # 确保在有效范围内
+                    energy_level = max(0, min(100, energy_level))
+                else:
+                    # 没有检测到语音，不更新能量条（保持当前状态或渐降为0）
+                    energy_level = 0
+
+            logger.info(f"[🖥️ GUI处理] 🔄 能量转换: {energy:.8f} → {energy_level}% | 语音检测: {is_speech}")
+            print(f"[🖥️ GUI处理] 🔄 能量转换: {energy:.8f} → {energy_level}% | 语音检测: {is_speech}")
+
+            # 只在检测到语音时才发送能量更新信号
+            if is_speech and hasattr(self, 'voice_activity'):
+                logger.info(f"[🖥️ GUI发送] → 发送voice_activity信号: {energy_level}% (语音)")
+                print(f"[🖥️ GUI发送] → 发送voice_activity信号: {energy_level}% (语音)")
+                self.voice_activity.emit(energy_level)
+                logger.info(f"[🖥️ GUI成功] ✅ voice_activity信号发送成功")
+            elif not is_speech and hasattr(self, 'voice_activity'):
+                # 🔧 优化：只在之前有显示值时才发送0信号降为0
+                # 这样避免静音时频繁的0%更新，减少不必要的界面刷新
+                try:
+                    current_value = self.voice_energy_bar.value() if hasattr(self, 'voice_energy_bar') else 0
+                    if current_value > 0:
+                        logger.info(f"[🖥️ GUI发送] → 发送voice_activity信号: 0% (静音，从{current_value}%降为0)")
+                        print(f"[🖥️ GUI发送] → 发送voice_activity信号: 0% (静音，从{current_value}%降为0)")
+                        self.voice_activity.emit(0)
+                        logger.info(f"[🖥️ GUI成功] ✅ voice_activity信号发送成功")
+                    else:
+                        # 当前已经是0，不发送重复的0信号
+                        logger.info(f"[🖥️ GUI跳过] 当前已是0%，跳过发送静音信号")
+                        print(f"[🖥️ GUI跳过] 当前已是0%，跳过发送静音信号")
+                except Exception as e:
+                    logger.error(f"[🖥️ GUI错误] 获取当前能量值失败: {e}")
+                    # 发生错误时，仍然发送0信号
+                    self.voice_activity.emit(0)
+            else:
+                logger.error(f"[🖥️ GUI错误] ❌ voice_activity信号未定义！")
+                print(f"[🖥️ GUI错误] ❌ voice_activity信号未定义！")
+
+            # 记录关键事件到GUI日志
+            if hasattr(self, 'log_message'):
+                self.log_message.emit(f"🔊 GUI处理: {event_type}, 能量: {energy:.6f} → {energy_level}% (语音:{is_speech})")
+
+            # 特别关注语音开始/结束事件
+            if event_type == "speech_start":
+                logger.info(f"[🖥️ GUI语音] 🎤 检测到语音开始")
+                if hasattr(self, 'log_message'):
+                    self.log_message.emit(f"🎤 GUI检测到语音开始")
+            elif event_type == "speech_end":
+                logger.info(f"[🖥️ GUI语音] 🎤 检测到语音结束")
+                if hasattr(self, 'log_message'):
+                    self.log_message.emit("🎤 GUI检测到语音结束")
+            elif event_type == "energy_update" and is_speech:
+                logger.info(f"[🖥️ GUI能量] ⚡ 语音能量更新: {energy:.8f} → {energy_level}%")
+                print(f"[🖥️ GUI能量] ⚡ 语音能量更新: {energy:.8f} → {energy_level}%")
+
+        except Exception as e:
+            logger.error(f"[🖥️ GUI错误] ❌ 处理VAD事件异常: {e}")
+            print(f"[🖥️ GUI错误] ❌ 处理VAD事件异常: {e}")
+            import traceback
+            logger.error(f"[🖥️ GUI详细] {traceback.format_exc()}")
+
     def _get_mode_config(self, mode: str) -> Dict[str, Any]:
         """根据模式获取配置参数
 
@@ -352,6 +544,99 @@ class WorkingVoiceWorker(QThread):
             logger.error(f"配置识别器时出错: {e}")
 
 
+class VoiceEnergyBar(QProgressBar):
+    """语音能量显示条"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimum(0)
+        self.setMaximum(100)
+        self.setValue(0)
+        self.setFixedHeight(20)  # 增加高度使其更可见
+        self.setTextVisible(False)  # 不显示百分比文本
+
+        # 设置样式 - 纯蓝色渐变，更美观
+        self.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #2196F3;
+                border-radius: 8px;
+                background-color: #f0f0f0;
+                font-weight: bold;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                border-radius: 6px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1E88E5, stop:0.5 #2196F3, stop:1 #42A5F5);
+                width: 8px;
+                margin: 2px;
+            }
+        """)
+
+        # 动画效果
+        self.animation = QPropertyAnimation(self, b"value")
+        self.animation.setDuration(100)  # 100ms动画
+        self.animation.setEasingCurve(QEasingCurve.OutQuad)
+
+        # 定时器用于自动衰减
+        self.decay_timer = QTimer()
+        self.decay_timer.timeout.connect(self.decay_energy)
+        self.last_activity_time = 0
+
+    def update_energy(self, level):
+        """更新能量级别 (0-100)"""
+        # 打印调试日志
+        print(f"[DEBUG] VoiceEnergyBar更新能量: {level}")
+        
+        # 确保值在有效范围内
+        if level < 0:
+            level = 0
+        elif level > 100:
+            level = 100
+
+        # 强制更新值
+        self.setValue(int(level))
+        # 立即刷新显示
+        self.update()
+        
+        # 更新时间戳
+        self.last_activity_time = time.time()
+        
+        # 启动定时器用于衰减
+        if not self.decay_timer.isActive():
+            self.decay_timer.start(50)
+
+    def decay_energy(self):
+        """自动衰减能量级别"""
+        current_value = self.value()
+
+        # 简化衰减逻辑，根据时间间隔决定衰减速度
+        time_diff = time.time() - self.last_activity_time
+        if time_diff > 0.5:  # 降低阈值，更快地响应无活动状态
+            # 指数衰减，更快地降为0
+            if time_diff > 1.0:
+                new_value = 0
+            else:
+                new_value = max(0, int(current_value * (1 - time_diff * 0.5)))
+        else:
+            # 缓慢衰减
+            new_value = max(0, current_value - 1)
+
+        self.setValue(new_value)
+
+        # 如果能量降到0，停止定时器
+        if new_value == 0:
+            self.decay_timer.stop()
+
+    def indicate_speech_activity(self):
+        """指示语音活动（快速闪烁）"""
+        self.update_energy(80)
+
+    def indicate_listening(self):
+        """指示监听状态（低能量显示）"""
+        self.update_energy(15)
+
+
 class WorkingSimpleMainWindow(QMainWindow):
     """工作简化版主窗口"""
 
@@ -359,6 +644,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         super().__init__()
         self.worker = None
         self.current_mode = 'customized'  # 设置默认模式，必须在init_ui之前
+        self.voice_energy_bar = None  # 语音能量条
         self.init_ui()
         self.setup_timer()
 
@@ -397,6 +683,21 @@ class WorkingSimpleMainWindow(QMainWindow):
 
         # 应用样式
         self.apply_styles()
+        
+        # 添加手动测试按钮
+        self.add_test_controls()
+        
+        # 注释掉随机能量条测试定时器，改用真实VAD能量数据
+        # self.random_test_timer = QTimer()
+        # self.random_test_timer.timeout.connect(self.update_energy_bar_randomly)
+        # self.random_test_timer.start(500)  # 每500毫秒更新一次
+        # self.append_log("🎯 启动能量条随机测试模式")
+
+        # 启用真实VAD能量显示模式
+        self.append_log("🎯 启用真实VAD能量显示模式")
+
+        # 注释掉直接测试，等待真实VAD事件
+        # self.direct_energy_test()
 
     def create_control_panel(self):
         """创建控制面板"""
@@ -412,6 +713,14 @@ class WorkingSimpleMainWindow(QMainWindow):
             "font-size: 16px; font-weight: bold; color: #d32f2f; padding: 10px;"
         )
         status_layout.addWidget(self.status_label)
+
+        # 语音能量显示
+        energy_label = QLabel("🎤 语音能量检测:")
+        energy_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #333; margin-top: 5px;")
+        status_layout.addWidget(energy_label)
+
+        self.voice_energy_bar = VoiceEnergyBar()
+        status_layout.addWidget(self.voice_energy_bar)
 
         layout.addWidget(status_group)
         
@@ -644,6 +953,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
     def start_recognition(self):
         """开始识别"""
+        print(f"[CRITICAL] start_recognition被调用")
         if self.worker and self.worker.isRunning():
             return
 
@@ -663,8 +973,13 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.start_time = time.time()
 
         # 创建并启动工作线程，传入选择的模式
+        print(f"[CRITICAL] 创建WorkingVoiceWorker实例")
         self.worker = WorkingVoiceWorker(mode=self.current_mode)
         # 确保信号连接正确
+        print(f"[CRITICAL] 连接voice_activity信号到update_voice_energy")
+        self.worker.voice_activity.connect(self.update_voice_energy)
+        print(f"[CRITICAL] 信号连接完成")
+        
         self.worker.log_message.connect(self.append_log)
         self.worker.recognition_result.connect(self.display_result)
         self.worker.partial_result.connect(self.update_partial_result)
@@ -672,6 +987,10 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.worker.voice_command_state_changed.connect(self.handle_voice_command_state_change)
         self.worker.system_initialized.connect(self.on_system_initialized)
         self.worker.finished.connect(self.on_worker_finished)
+        
+        # 添加一个直接测试 - 绕过VAD系统，直接调用update_voice_energy
+        print(f"[CRITICAL] 直接测试update_voice_energy")
+        self.update_voice_energy(50)  # 直接设置50%的能量值
 
         # 确保UI元素已正确初始化
         self.append_log("🚀 启动语音识别系统... (当前模式: " + str(self.current_mode) + ")")
@@ -714,6 +1033,10 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.status_label.setText("🔴 已停止")
         self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #d32f2f; padding: 10px;")
         self.current_text_label.setText("等待识别...")
+
+        # 重置能量条
+        if self.voice_energy_bar:
+            self.voice_energy_bar.setValue(0)
 
         if self.worker:
             self.worker.wait(1000)
@@ -763,33 +1086,32 @@ class WorkingSimpleMainWindow(QMainWindow):
             self.append_log("🎤 语音命令：系统已停止，点击'🎤 开始识别'按钮重新开始")
 
     def display_result(self, result):
-        """显示识别结果"""
+        """显示识别结果 - 只显示record类型的信息"""
         # 确保结果不为空
         if not result or not result.strip():
             return
 
         result = result.strip()
 
+        # 检查是否为record类型（格式：[ID] 数值 或 [ID] OK/NOT OK等）
+        is_record = result.startswith('[') and ']' in result and ('] ' in result or ']' in result and len(result) > 3)
+
+        # 如果不是record类型，直接返回（不显示在识别历史中）
+        if not is_record:
+            # 只在日志中记录，不在历史中显示
+            if hasattr(self, 'append_log'):
+                self.append_log(f"过滤非record信息: {result}")
+                # 移除模拟能量数据，避免干扰实际能量条显示
+            return
+
         # 确保在主线程中更新UI
         def update_ui():
             # 更新当前识别文本
-            if result.startswith('[') and ']' in result:
-                # 数字结果格式: [ID] 数值
-                self.current_text_label.setText(f"识别结果: {result}")
-            else:
-                # 文本结果格式
-                self.current_text_label.setText(f"识别结果: {result}")
+            self.current_text_label.setText(f"识别结果: {result}")
 
-            # 添加到历史记录
+            # 添加到历史记录（只显示record类型）
             timestamp = datetime.now().strftime("%H:%M:%S")
-
-            # 根据结果类型设置不同的前缀和格式
-            if result.startswith('[') and ']' in result:
-                # 数字结果 - 按照ID+数值格式
-                history_entry = f"[{timestamp}] 🔢 {result}"
-            else:
-                # 文本结果 - 包括普通文本和文本+数字组合
-                history_entry = f"[{timestamp}] 📝 {result}"
+            history_entry = f"[{timestamp}] 🔢 {result}"
 
             # 确保UI元素存在
             if hasattr(self, 'history_text') and self.history_text:
@@ -803,14 +1125,16 @@ class WorkingSimpleMainWindow(QMainWindow):
 
             # 记录到日志
             if hasattr(self, 'append_log'):
-                self.append_log(f"语音识别: {result}")
+                self.append_log(f"语音识别(record): {result}")
 
         # 使用Qt的线程安全方式更新UI
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, update_ui)
 
+        # 移除模拟能量数据，避免干扰实际能量条显示
+
         # 同时在控制台打印，保持与PowerShell相同的输出格式
-        print(f"🎤 识别: {result}")
+        print(f"🎤 识别(record): {result}")
         
     def update_partial_result(self, text):
         """更新部分识别结果"""
@@ -818,7 +1142,163 @@ class WorkingSimpleMainWindow(QMainWindow):
         current_status = self.status_label.text()
         if "就绪" in current_status or "识别" in current_status:
             self.current_text_label.setText(f"识别中: {text}")
+
+    def update_voice_energy(self, energy_level):
+        """更新语音能量显示"""
+        # 🔍 调试输出 - 在GUI主线程中接收能量更新信号
+        logger.info(f"[🖥️ GUI主线程] ← 收到voice_activity信号: {energy_level}%")
+        print(f"[🖥️ GUI主线程] ← 收到voice_activity信号: {energy_level}%")
+
+        # 添加日志到GUI界面
+        self.append_log(f"📊 GUI能量条更新: {energy_level}%")
+
+        # 检查能量条对象
+        if hasattr(self, 'voice_energy_bar') and self.voice_energy_bar:
+            logger.info(f"[🖥️ GUI能量条] ✅ 能量条对象存在，开始更新")
+            print(f"[🖥️ GUI能量条] ✅ 能量条对象存在，开始更新")
+
+            try:
+                # 直接在当前线程中更新（PySide6的QProgressBar是线程安全的）
+                logger.info(f"[🖥️ GUI更新] 🔄 设置能量条值: {energy_level}%")
+                self.voice_energy_bar.setValue(energy_level)
+                # 也调用update_energy方法以保持一致性
+                self.voice_energy_bar.update_energy(energy_level)
+                logger.info(f"[🖥️ GUI成功] ✅ 能量条更新完成: {energy_level}%")
+                print(f"[🖥️ GUI成功] ✅ 能量条更新完成: {energy_level}%")
+            except Exception as e:
+                logger.error(f"[🖥️ GUI错误] ❌ 能量条更新失败: {e}")
+                print(f"[🖥️ GUI错误] ❌ 能量条更新失败: {e}")
+        else:
+            logger.error(f"[🖥️ GUI错误] ❌ 能量条未初始化或不存在！")
+            print(f"[🖥️ GUI错误] ❌ 能量条未初始化或不存在！")
+            self.append_log("❌ GUI错误: 能量条未初始化")
+
+            # 调试：检查所有可能的能量条属性
+            energy_attrs = [attr for attr in dir(self) if 'energy' in attr.lower()]
+            logger.info(f"[🖥️ GUI调试] 🔍 找到energy相关属性: {energy_attrs}")
+            print(f"[🖥️ GUI调试] 🔍 找到energy相关属性: {energy_attrs}")
             
+    def add_test_controls(self):
+        """添加测试控制按钮到状态栏"""
+        # 对于QMainWindow，正确的方式是使用状态栏或central widget
+        self.append_log("[CRITICAL] 添加测试控制按钮")
+        
+        # 创建测试按钮并添加到状态栏
+        test_button = QPushButton("测试能量条")
+        test_button.clicked.connect(self.test_energy_bar)
+        
+        # 添加到状态栏
+        status_bar = self.statusBar()
+        if status_bar:
+            status_bar.addWidget(test_button)
+            self.append_log("[DEBUG] 测试按钮已添加到状态栏")
+        else:
+            # 如果没有状态栏，尝试添加到central widget
+            central = self.centralWidget()
+            if central and hasattr(central, 'layout') and central.layout():
+                central.layout().addWidget(test_button)
+                self.append_log("[DEBUG] 测试按钮已添加到central widget")
+            else:
+                self.append_log("[ERROR] 无法添加测试按钮")
+    
+    def direct_energy_test(self):
+        """直接测试能量条更新机制"""
+        self.append_log("[CRITICAL] 执行直接能量条测试")
+        
+        # 检查所有可能的能量条对象名称
+        energy_bar_names = ['voice_energy_bar', 'energy_bar', 'voice_energy']
+        found = False
+        
+        for name in energy_bar_names:
+            if hasattr(self, name):
+                found = True
+                bar = getattr(self, name)
+                self.append_log(f"[CRITICAL] 找到能量条对象 '{name}': {bar}")
+                self.append_log(f"[CRITICAL] {name} 类型: {type(bar).__name__}")
+                
+                # 检查能量条的方法
+                methods = [method for method in dir(bar) if callable(getattr(bar, method)) and not method.startswith('_')]
+                self.append_log(f"[CRITICAL] {name} 可用方法: {methods}")
+                
+                # 尝试直接设置值
+                try:
+                    if hasattr(bar, 'setValue'):
+                        bar.setValue(60)
+                        self.append_log(f"[CRITICAL] 成功设置{name}值为60")
+                    elif hasattr(bar, 'update_energy'):
+                        bar.update_energy(60)
+                        self.append_log(f"[CRITICAL] 成功调用{name}.update_energy(60)")
+                    else:
+                        self.append_log(f"[ERROR] {name}没有setValue或update_energy方法")
+                except Exception as e:
+                    self.append_log(f"[ERROR] 设置{name}值失败: {e}")
+                
+                # 强制刷新
+                if hasattr(bar, 'update'):
+                    bar.update()
+                if hasattr(bar, 'repaint'):
+                    bar.repaint()
+        
+        if not found:
+            self.append_log("[ERROR] 未找到任何能量条对象")
+            # 打印所有属性，寻找可能的能量条对象
+            all_attrs = [attr for attr in dir(self) if not attr.startswith('__')]
+            self.append_log(f"[CRITICAL] 所有属性: {all_attrs[:20]}...")  # 只显示前20个避免日志过长
+
+    def test_energy_bar(self):
+        """手动测试能量条功能"""
+        self.append_log("[CRITICAL] 手动测试能量条按钮被点击")
+        
+        # 测试1: 直接设置能量条值
+        energy_bar_names = ['voice_energy_bar', 'energy_bar', 'voice_energy']
+        for name in energy_bar_names:
+            if hasattr(self, name):
+                bar = getattr(self, name)
+                self.append_log(f"[CRITICAL] 测试1: 直接设置{name}值为75")
+                
+                try:
+                    if hasattr(bar, 'setValue'):
+                        bar.setValue(75)
+                    elif hasattr(bar, 'update_energy'):
+                        bar.update_energy(75)
+                    
+                    # 强制刷新
+                    if hasattr(bar, 'update'):
+                        bar.update()
+                    if hasattr(bar, 'repaint'):
+                        bar.repaint()
+                    
+                    self.append_log(f"[CRITICAL] 成功更新{name}")
+                except Exception as e:
+                    self.append_log(f"[ERROR] 更新{name}失败: {e}")
+        
+        # 测试2: 模拟VAD事件处理链
+        self.append_log("[CRITICAL] 测试2: 模拟完整VAD事件处理链")
+        test_event_data = {'energy': 0.006}  # 一个较高的能量值
+        
+        # 如果是MainWindow类，尝试找到worker并调用其方法
+        if hasattr(self, 'worker') and self.worker:
+            self.append_log("[CRITICAL] 通过worker模拟VAD事件")
+            if hasattr(self.worker, '_handle_vad_event'):
+                self.worker._handle_vad_event('energy_update', test_event_data)
+        else:
+            self.append_log("[CRITICAL] 直接调用update_voice_energy")
+            self.update_voice_energy(70)
+    
+    def update_energy_bar_randomly(self):
+        """随机更新能量条，用于测试"""
+        import random
+        random_level = random.randint(0, 100)
+        
+        print(f"[DEBUG] 随机更新能量条: {random_level}")
+        
+        if hasattr(self, 'voice_energy_bar') and self.voice_energy_bar:
+            # 直接设置能量条值
+            self.voice_energy_bar.setValue(random_level)
+            # 强制刷新显示
+            self.voice_energy_bar.update()
+            self.voice_energy_bar.repaint()  # 额外的重绘尝试
+
     def on_mode_changed(self, mode):
         """处理模式变更"""
         self.current_mode = mode
@@ -853,9 +1333,10 @@ class WorkingSimpleMainWindow(QMainWindow):
         # 使用Qt的线程安全方式更新UI
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, update_log)
-
-        # 同时打印到控制台以便调试
-        print(f"[GUI LOG] {log_entry}")
+        
+        # 减少控制台输出，只输出重要信息
+        if any(keyword in message for keyword in ['错误', '警告', '系统初始化', '系统已', '识别结果']):
+            print(f"[GUI LOG] {log_entry}")
 
     def clear_log(self):
         """清空日志"""
@@ -913,6 +1394,10 @@ def main():
 
     window = WorkingSimpleMainWindow()
     window.show()
+    
+    # 强制刷新UI
+    window.update()
+    window.repaint()
 
     sys.exit(app.exec())
 

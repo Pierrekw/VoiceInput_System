@@ -91,6 +91,9 @@ class TextProcessor:
                 # 规则3：年份，总是转换
                 elif len(clean_match) >= 3 and any(keyword in result for keyword in ["年", "公元"]):
                     should_convert = True
+                # 规则4：小数（包含点），总是转换
+                elif '点' in clean_match:
+                    should_convert = True
 
                 if should_convert:
                     # 整数不显示小数点
@@ -218,13 +221,48 @@ class TextProcessor:
     def extract_numbers(self, original_text: str, processed_text: Optional[str] = None) -> List[float]:
         """
         简化的数字提取逻辑
+        重构后优先从processed_text中提取阿拉伯数字
         """
-        if not original_text or not CN2AN_AVAILABLE:
+        if not original_text:
             return []
 
         try:
+            # 优先从处理后的文本中提取数字（重构后的逻辑）
+            text_to_extract = processed_text if processed_text else original_text
+
+            # 如果处理后的文本包含阿拉伯数字，直接提取
+            import re
+            if CN2AN_AVAILABLE and processed_text:
+                # 提取阿拉伯数字（包括小数）
+                arabic_numbers = re.findall(r'\d+\.?\d*', text_to_extract)
+                if arabic_numbers:
+                    numbers = []
+                    for num_str in arabic_numbers:
+                        try:
+                            num = float(num_str)
+                            # 限制数字范围
+                            if -1000000 <= num <= 1000000000000:
+                                numbers.append(num)
+                        except ValueError:
+                            continue
+                    return numbers
+
+            # 如果没有阿拉伯数字，尝试转换中文数字
+            if not CN2AN_AVAILABLE:
+                return []
+
+            # 尝试用cn2an直接转换处理后的文本
+            try:
+                converted_num = cn2an.cn2an(text_to_extract, "smart")
+                converted_float = float(converted_num)
+                if -1000000 <= converted_float <= 1000000000000:
+                    return [converted_float]
+            except Exception:
+                pass
+
+            # 回退到原来的逻辑（从中文数字转换）
+
             # 检查是否为纯数字或数字+单位格式
-            if self.is_pure_number_or_with_unit(original_text):
                 # 应用与process_text相同的预处理逻辑（关键修复）
                 text_to_convert = self.remove_spaces(original_text)
 

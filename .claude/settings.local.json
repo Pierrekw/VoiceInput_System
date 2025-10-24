@@ -39,7 +39,8 @@
       "Bash(.venv/Scripts/pip.exe list:*)",
       "Bash(cat:*)",
       "Bash(.venv/Scripts/funasr-export.exe:*)",
-      "Bash(.venv/Scripts/pip.exe install:*)"
+      "Bash(.venv/Scripts/pip.exe install:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }

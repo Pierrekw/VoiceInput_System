@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List, Tuple
 # 尝试导入cn2an库
 CN2AN_AVAILABLE = False
 try:
-    import cn2an
+    import cn2an  # type: ignore
     CN2AN_AVAILABLE = True
 except ImportError:
     cn2an = None

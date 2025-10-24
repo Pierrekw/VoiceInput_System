@@ -12,7 +12,7 @@ import threading
 import time
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type
+from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type, Sequence
 
 # 类型别名
 ExcelExporterType = Union[Type['ExcelExporter'], None]
@@ -171,7 +171,7 @@ class FunASRVoiceSystem:
         # 系统状态
         self.state = SystemState.STOPPED
         self.results_buffer: List[Dict[str, Any]] = []
-        self.number_results: List[Tuple[int, Union[int, float], str]] = []  # (ID, number, original_text)
+        self.number_results: List[Tuple[int, Union[float, str], str]] = []  # (ID, number/str, original_text)
 
         # 创建核心组件
         self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
@@ -434,7 +434,7 @@ class FunASRVoiceSystem:
             # 添加到结果列表
             try:
                 # 准备要写入Excel的数据
-                excel_data = []
+                excel_data: List[Tuple[Union[float, str], str, str]] = []
                 
                 if numbers:
                     # 数字结果

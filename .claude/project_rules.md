@@ -24,10 +24,11 @@ Voice_Input/
 ├── voice_gui.py              # 主要GUI界面
 ├── start_funasr.py           # 主启动脚本
 ├── config_loader.py          # 配置加载器
-├── config.yaml              # 配置文件
+├── logging_utils.py          # 日志工具类  
+├── config.yaml               # 配置文件
 ├── performance_monitor.py    # 性能监控模块
 ├── reports/                  # Excel输出目录
-├── logs/                     # 日志文件目录
+├── Logs/                     # 日志文件目录
 ├── build_scripts/            # 构建脚本目录
 └── onnx_deps/                # ONNX依赖目录
 ```
@@ -36,11 +37,20 @@ Voice_Input/
 ```bash
 # 从项目根目录运行测试 (正确方式)
 python tests/test_text_processor_refactor.py
-python tests/test_funasr.py
+python tests/test_funasr_voice_module.py
 
 # 错误方式 - 不要在根目录创建测试文件
 # ❌ python test_something.py  (禁止)
 ```
+### 修改文件的标准方式
+```bash
+# 修改原文件 (正确方式)
+modify test_processor_refactor.py
+
+# 错误方式 - 新建新文件
+# ❌ create new test_processor_refactor_clean.py [example]  (禁止)
+```
+
 
 ## 🔧 核心模块说明
 
@@ -56,6 +66,8 @@ python tests/test_funasr.py
 - `config_loader.py` - 配置加载器，支持动态配置
 - `config.yaml` - 主配置文件，包含VAD、语音命令、性能参数
 - `smart_decimal_config.py` - 智能小数点配置
+- `logging_utils.py` - 日志工具类 (新增,用于统一日志记录)
+
 
 ### 性能监控系统
 - `performance_monitor.py` - 性能监控模块

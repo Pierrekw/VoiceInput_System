@@ -71,15 +71,11 @@ except ImportError:
     EXCEL_AVAILABLE = False
     ExcelExporter = None  # type: ignore
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('voice_input_funasr.log', encoding='utf-8')
-    ]
-)
-logger = logging.getLogger(__name__)
+# 使用统一的日志工具类
+from logging_utils import get_app_logger
+
+# 获取配置好的日志记录器
+logger = get_app_logger(__name__, debug=False)  # 根据命令行参数在main函数中动态调整
 
 # 导入配置加载模块
 config_loader: Any = None
@@ -266,34 +262,11 @@ class FunASRVoiceSystem:
 
     def _setup_logging(self):
         """设置日志记录"""
-        try:
-            # 创建logs目录
-            logs_dir = os.path.join(os.getcwd(), "logs")
-            os.makedirs(logs_dir, exist_ok=True)
-
-            # 生成日志文件名: voice_recognition_yyyymmdd_hhmmss.log
-            now = datetime.now()
-            log_filename = f"voice_recognition_{now.strftime('%Y%m%d_%H%M%S')}.log"
-            log_filepath = os.path.join(logs_dir, log_filename)
-
-            # 配置专门的识别日志记录器
-            self.recognition_logger = logging.getLogger("voice_recognition")
-            self.recognition_logger.setLevel(logging.INFO)
-
-            # 文件处理器
-            file_handler = logging.FileHandler(log_filepath, encoding='utf-8')
-            file_handler.setLevel(logging.INFO)
-
-            # 格式化器
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            file_handler.setFormatter(formatter)
-
-            # 添加处理器
-            self.recognition_logger.addHandler(file_handler)
-
-            logger.info(f"识别日志已设置: {log_filepath}")
-        except Exception as e:
-            logger.error(f"设置识别日志失败: {e}")
+        from logging_utils import get_logger
+        
+        # 使用统一的日志工具获取专门的识别日志记录器
+        self.recognition_logger = get_logger("voice_recognition", level=logging.INFO)
+        logger.info("识别日志已配置完成")
 
     def set_state_change_callback(self, callback):
         """设置状态变化回调函数（用于GUI同步）"""
@@ -832,10 +805,11 @@ class FunASRVoiceSystem:
 
 def main():
     """主函数"""
-    print("🎤 启动FunASR语音输入系统...")
-
     # 检查是否启用debug模式
     debug_mode = "--debug" in sys.argv or "-d" in sys.argv
+    
+    # 动态调整全局logger的日志级别
+    logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
     if debug_mode:
         print("🐛 Debug模式已启用")

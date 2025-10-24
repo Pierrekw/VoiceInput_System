@@ -10,10 +10,14 @@ import threading
 import logging
 from typing import Any, List, Tuple, Union, Optional, Dict
 
+# 使用统一的日志工具类
+from logging_utils import get_app_logger
+
+# 获取配置好的日志记录器
+logger = get_app_logger(__name__, debug=False)
+
 # 新增：导入配置系统
 from config_loader import config
-
-logger = logging.getLogger(__name__)
 
 class ExcelExporter:
     def __init__(self, filename: Optional[str] = None):

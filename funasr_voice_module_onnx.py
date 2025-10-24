@@ -111,13 +111,11 @@ from typing import List, Dict, Optional, Callable, Union, Tuple, Any
 from dataclasses import dataclass
 from collections import deque
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+# 使用统一的日志工具类
+from logging_utils import get_app_logger
+
+# 获取配置好的日志记录器
+logger = get_app_logger(__name__, debug=False)
 
 # 全局可用性检查
 FUNASR_AVAILABLE = False

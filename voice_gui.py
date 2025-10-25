@@ -1201,8 +1201,9 @@ class WorkingSimpleMainWindow(QMainWindow):
             self.start_button.setEnabled(True)
             self.stop_button.setEnabled(False)
             self.mode_combo.setEnabled(True)
-            self.status_label.setText("🔴 已停止 (语音命令)")
-            self.status_bar.showMessage("已停止 - 语音命令控制")
+            self.stop_recognition()
+            #self.status_label.setText("🔴 已停止 (语音命令)")
+            #self.status_bar.showMessage("已停止 - 语音命令控制")
             self.append_log("🎤 语音命令：系统已停止，点击'🎤 开始识别'按钮重新开始")
 
     def display_result(self, result):

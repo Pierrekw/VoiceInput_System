@@ -5,19 +5,12 @@ FunASR语音输入系统主程序
 集成语音识别、文本处理和循环控制功能
 """
 
-# 在导入任何其他模块之前，首先设置全局日志级别为INFO，确保所有DEBUG日志都被过滤
-import logging
-logging.basicConfig(
-    level=logging.INFO,  # 设置全局默认级别为INFO，完全禁止DEBUG日志显示
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
 import sys
 import os
 import io
 import threading
 import time
+import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type, Sequence
 
@@ -47,7 +40,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 导入FunASR相关模块
-from funasr_voice_TENVAD import FunASRVoiceRecognizer
+from funasr_voice_module import FunASRVoiceRecognizer
 from text_processor_clean import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
@@ -299,25 +292,18 @@ class FunASRVoiceSystem:
         """处理VAD事件并转发给回调函数"""
         # 🔍 调试输出 - 已注释，避免控制台输出过多
         energy = event_data.get('energy', 0)
-        logger.debug(f"[🔗 MAIN接收] ← 收到VAD事件: {event_type} | 能量: {energy:.8f} | 数据: {event_data}")
-        logger.debug(f"[🔗 MAIN检查] VAD回调已设置: {self.vad_callback is not None}")
+        #logger.debug(f"[🔗 MAIN接收] ← 收到VAD事件: {event_type} | 能量: {energy:.8f} | 数据: {event_data}")
+        #logger.debug(f"[🔗 MAIN检查] VAD回调已设置: {self.vad_callback is not None}")
 
-        # 🔥 关键修复：添加防护检查，防止语音命令处理期间的VAD回调错误
-        if self.vad_callback and event_type in ['speech_start', 'speech_end', 'energy_update']:
-            logger.debug(f"[🔗 MAIN转发] → 转发VAD事件给GUI | 事件: {event_type} | 能量: {energy:.8f}")
+        if self.vad_callback:
+            #logger.debug(f"[🔗 MAIN转发] → 转发VAD事件给GUI | 事件: {event_type} | 能量: {energy:.8f}")
             try:
                 self.vad_callback(event_type, event_data)
-                logger.debug(f"[🔗 MAIN成功] ✅ VAD事件转发成功")
+                #logger.debug(f"[🔗 MAIN成功] ✅ VAD事件转发成功")
             except Exception as e:
                 logger.error(f"[🔗 MAIN错误] ❌ VAD事件转发失败: {e}")
-        elif not self.vad_callback:
-            # 🔥 修复：控制台模式下VAD回调未设置是正常情况，改为DEBUG级别
-            if event_type in ['speech_start', 'speech_end']:
-                logger.info(f"🎤 {event_type.replace('_', ' ').title()} (能量: {energy:.3f})")
-            else:
-                logger.debug(f"[🔗 MAIN信息] ℹ️ 控制台模式：VAD回调未设置，跳过GUI事件转发")
-        # 🔥 防止其他VAD事件类型的错误日志干扰
-        # logger.debug(f"[🔗 MAIN跳过] VAD事件类型: {event_type} (已通过其他渠道处理)")
+        else:
+            logger.error(f"[🔗 MAIN错误] ❌ VAD回调未设置，无法转发事件给GUI")
 
     def initialize(self) -> bool:
         """初始化系统"""
@@ -829,8 +815,7 @@ def main():
     # 检查是否启用debug模式
     debug_mode = "--debug" in sys.argv or "-d" in sys.argv
     
-    # 动态调整日志级别 - 现在只需要设置logger本身的级别
-    # 控制台级别已经在logging_utils.py中统一设置为INFO
+    # 动态调整全局logger的日志级别
     logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
     if debug_mode:

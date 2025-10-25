@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FunASR + TEN VAD 语音识别模块
-基于FunASR ASR + TEN VAD的语音录入和识别功能，可作为模块导入使用
+FunASR + Silero VAD 语音识别模块
+基于FunASR ASR + Silero VAD的语音录入和识别功能，可作为模块导入使用
 结合神经网络VAD、流式识别和多种优化策略
 
-TEN VAD优势：
+Silero VAD优势：
 - 神经网络VAD，比传统能量阈值更准确
 - 抗噪音能力强，误检率低
 - 能够检测轻声语音
 - 无需手动调参，开箱即用
-- 流式支持，低延迟 (RTF约0.01-0.02)
-- 轻量级 (约508KB vs Silero VAD的2.16MB)
+- 流式支持，低延迟
+- Hugging Face维护，持续更新
 
 使用示例:
-    from funasr_voice_TENVAD import FunASRVoiceRecognizer
+    from funasr_voice_Silero import FunASRVoiceRecognizer
 
     recognizer = FunASRVoiceRecognizer()
     recognizer.initialize()
@@ -26,6 +26,8 @@ import os
 import sys
 import warnings
 import logging
+import torch
+import numpy as np
 
 # 导入性能监控
 from performance_monitor import performance_monitor, PerformanceStep
@@ -36,36 +38,44 @@ try:
 except ImportError:
     debug_tracker = None
 
-# TEN VAD相关
-TEN_VAD_AVAILABLE = False
-ten_vad_model = None
+# Silero VAD相关
+SILERO_VAD_AVAILABLE = False
+silero_vad_model = None
+silero_vad_utils = None
 
 try:
-    # 导入本地TEN VAD
-    ten_vad_path = "./onnx_deps/ten_vad"
-    if os.path.exists(ten_vad_path):
-        sys.path.insert(0, os.path.join(ten_vad_path, "include"))
+    # 加载本地Silero VAD
+    silero_vad_path = "F:/04_AI/01_Workplace/silero-vad"
+    if os.path.exists(silero_vad_path):
+        sys.path.insert(0, os.path.join(silero_vad_path, "src"))
 
-        # 导入TEN VAD (基于真实的API)
-        from ten_vad import TenVad
+        # 导入本地Silero VAD (基于真实API)
+        from silero_vad import silero_vad, utils_vad
 
-        # 创建TEN VAD实例
-        # hop_size=256 (16ms), threshold=0.5 (默认值)
-        ten_vad_model = TenVad(hop_size=256, threshold=0.5)
-        TEN_VAD_AVAILABLE = True
-        print("✅ TEN VAD 加载成功 (hop_size=256, threshold=0.5)")
+        # 创建Silero VAD实例
+        silero_vad_model, silero_vad_utils = silero_vad()
+        SILERO_VAD_AVAILABLE = True
+        print("✅ Silero VAD 加载成功 (使用本地模型)")
 
     else:
-        print(f"⚠️ TEN VAD路径不存在: {ten_vad_path}")
-        TEN_VAD_AVAILABLE = False
+        print(f"⚠️ Silero VAD路径不存在: {silero_vad_path}")
+        print("🔄 尝试从torch hub加载...")
+        # 备选：torch hub加载
+        silero_vad_model, silero_vad_utils = torch.hub.load(
+            repo_or_dir='snakers4/silero-vad',
+            model='silero_vad',
+            force_reload=False
+        )
+        SILERO_VAD_AVAILABLE = True
+        print("✅ Silero VAD 从torch hub加载成功")
 
 except Exception as e:
-    print(f"⚠️ TEN VAD初始化失败: {e}")
+    print(f"⚠️ Silero VAD加载失败: {e}")
     print("💡 建议检查:")
-    print("  1. ten-vad/lib/Windows/x64/ten_vad.dll 是否存在")
-    print("  2. numpy 是否已安装")
-    print("  3. Python环境是否兼容")
-    TEN_VAD_AVAILABLE = False
+    print("  1. torch 和 torchaudio 是否已安装")
+    print("  2. 网络连接是否正常")
+    print("  3. 将自动回退到能量阈值VAD")
+    SILERO_VAD_AVAILABLE = False
 
 # 彻底抑制FunASR的进度条和调试输出
 os.environ['TQDM_DISABLE'] = '1'
@@ -141,7 +151,6 @@ setup_ffmpeg_environment()
 # ============================================================================
 import io
 import time
-import numpy as np
 import pyaudio
 import threading
 from contextlib import contextmanager
@@ -154,7 +163,7 @@ from logging_utils import LoggingManager
 
 # 获取配置好的日志记录器（参考voice_gui.py的配置风格）
 logger = LoggingManager.get_logger(
-    name='funasr_voice_TENVAD',
+    name='funasr_voice_Silero',
     level=logging.DEBUG,  # 文件记录详细日志
     console_level=logging.INFO,  # 控制台显示INFO及以上信息
     log_to_console=True,
@@ -200,19 +209,25 @@ class RecognitionResult:
 
 @dataclass
 class VADConfig:
-    """TEN VAD配置"""
-    # TEN VAD主要参数
+    """Silero VAD配置"""
+    # Silero VAD主要参数
     vad_threshold: float = 0.5           # VAD检测阈值 (0-1)
-    min_speech_duration: float = 0.3     # 最小语音时长
-    min_silence_duration: float = 0.6    # 最小静音时长
-    speech_padding: float = 0.3          # 语音填充
+    min_speech_duration: float = 0.25    # 最小语音时长 (250ms)
+    min_silence_duration: float = 0.1    # 最小静音时长 (100ms)
+    speech_padding: float = 0.03          # 语音填充 (30ms)
 
-    # 回退配置：当TEN VAD不可用时使用
+    # 回退配置：当Silero VAD不可用时使用
     fallback_energy_threshold: float = 0.015  # 回退到能量阈值
 
-    # TEN VAD特定配置
-    use_ten_vad: bool = True            # 是否使用TEN VAD
+    # Silero VAD特定配置
+    use_silero_vad: bool = True        # 是否使用Silero VAD
     auto_fallback: bool = True          # 自动回退到能量阈值
+
+    # Silero VAD高级参数
+    window_size_samples: int = 512        # 窗口大小样本数
+    min_speech_duration_ms: int = 250   # 最小语音时长毫秒
+    min_silence_duration_ms: int = 100   # 最小静音时长毫秒
+    speech_pad_ms: int = 30            # 语音填充毫秒
 
 @dataclass
 class FunASRConfig:
@@ -231,7 +246,7 @@ class FunASRConfig:
 
 class FunASRVoiceRecognizer:
     """
-    FunASR + TEN VAD 语音识别器主类
+    FunASR + Silero VAD 语音识别器主类
     提供语音录入、识别和神经网络VAD功能
     """
 
@@ -282,9 +297,9 @@ class FunASRVoiceRecognizer:
         self._speech_buffer: List[np.ndarray] = []
         self._funasr_cache: Dict[str, Any] = {}
 
-        # TEN VAD音频缓冲 (用于处理256样本的hop size)
-        self._ten_vad_buffer: List[np.ndarray] = []
-        self._ten_vad_hop_size = 256  # TEN VAD要求的hop size
+        # Silero VAD音频缓冲 (用于处理512样本的窗口)
+        self._silero_vad_buffer: List[np.ndarray] = []
+        self._silero_window_size = 512  # Silero VAD要求的窗口大小
 
         # 识别结果
         self._current_text = ""
@@ -305,8 +320,8 @@ class FunASRVoiceRecognizer:
         self._on_final_result: Optional[Callable[[RecognitionResult], None]] = None
         self._on_vad_event: Optional[Callable[[str, Dict], None]] = None
 
-        # TEN VAD初始化状态
-        self._ten_vad_enabled = TEN_VAD_AVAILABLE and self.vad_config.use_ten_vad
+        # Silero VAD初始化状态
+        self._silero_vad_enabled = SILERO_VAD_AVAILABLE and self.vad_config.use_silero_vad
 
     def _load_vad_config(self):
         """从配置加载器加载VAD设置"""
@@ -314,12 +329,12 @@ class FunASRVoiceRecognizer:
             from config_loader import config
 
             return VADConfig(
-                vad_threshold=0.5,  # TEN VAD默认阈值
+                vad_threshold=0.5,  # Silero VAD默认阈值
                 min_speech_duration=config.get_vad_min_speech_duration(),
                 min_silence_duration=config.get_vad_min_silence_duration(),
                 speech_padding=config.get_vad_speech_padding(),
                 fallback_energy_threshold=config.get_vad_energy_threshold(),
-                use_ten_vad=True,  # 默认使用TEN VAD
+                use_silero_vad=True,  # 默认使用Silero VAD
                 auto_fallback=True
             )
 
@@ -396,7 +411,7 @@ class FunASRVoiceRecognizer:
             logger.info("✅ 识别器已初始化")
             return True
 
-        logger.info("🚀 初始化FunASR + TEN VAD语音识别器...")
+        logger.info("🚀 初始化FunASR + Silero VAD语音识别器...")
         init_start_time = time.time()
 
         # 检查依赖 - 前置检查，避免后续失败
@@ -412,13 +427,13 @@ class FunASRVoiceRecognizer:
 
         self._is_initialized = True
         total_init_time = time.time() - init_start_time
-        logger.info(f"✅ FunASR + TEN VAD语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
+        logger.info(f"✅ FunASR + Silero VAD语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
 
         # 显示VAD状态
-        if self._ten_vad_enabled:
-            logger.info("🎯 TEN VAD已启用 (hop_size=256, threshold=0.5)")
+        if self._silero_vad_enabled:
+            logger.info("🎯 Silero VAD已启用 (window_size=512, threshold=0.5)")
         else:
-            logger.info("⚠️ TEN VAD不可用，使用回退的能量阈值VAD")
+            logger.info("⚠️ Silero VAD不可用，使用回退的能量阈值VAD")
 
         return True
 
@@ -462,7 +477,7 @@ class FunASRVoiceRecognizer:
 
     def _detect_vad(self, audio_data: np.ndarray, current_time: float) -> Tuple[bool, Optional[str]]:
         """
-        VAD语音活动检测 - 使用TEN VAD
+        VAD语音活动检测 - 使用Silero VAD
 
         Args:
             audio_data: 音频数据
@@ -473,40 +488,58 @@ class FunASRVoiceRecognizer:
         """
         is_speech = False
         vad_confidence = 0.0
-        vad_flag = 0
 
-        # 优先使用TEN VAD
-        if self._ten_vad_enabled and ten_vad_model:
+        # 优先使用Silero VAD
+        if self._silero_vad_enabled and silero_vad_model and silero_vad_utils:
             try:
-                # TEN VAD要求音频数据必须是int16类型且长度为hop_size (256)
-                # 将float32音频转换回int16格式
-                if audio_data.dtype == np.float32:
-                    audio_int16 = (audio_data * 32767).astype(np.int16)
-                else:
-                    audio_int16 = audio_data.astype(np.int16)
+                # 将音频数据添加到Silero VAD缓冲区
+                self._silero_vad_buffer.extend(audio_data)
 
-                # 将音频数据添加到TEN VAD缓冲区
-                self._ten_vad_buffer.extend(audio_int16)
-
-                # 当缓冲区足够大时，处理TEN VAD
+                # 当缓冲区足够大时，处理Silero VAD
                 is_speech = False
-                while len(self._ten_vad_buffer) >= self._ten_vad_hop_size:
-                    # 取出256个样本进行处理
-                    hop_audio = np.array(self._ten_vad_buffer[:self._ten_vad_hop_size])
-                    self._ten_vad_buffer = self._ten_vad_buffer[self._ten_vad_hop_size:]
+                while len(self._silero_vad_buffer) >= self._silero_window_size:
+                    # 取出512个样本进行处理
+                    window_audio = np.array(self._silero_vad_buffer[:self._silero_window_size])
+                    self._silero_vad_buffer = self._silero_vad_buffer[self._silero_window_size:]
 
-                    # 使用TEN VAD的process方法 (基于真实API)
-                    vad_confidence, vad_flag = ten_vad_model.process(hop_audio)
+                    # 转换为torch tensor
+                    if isinstance(window_audio, np.ndarray):
+                        audio_tensor = torch.from_numpy(window_audio).float()
+                    else:
+                        audio_tensor = window_audio.float()
 
-                    # vad_flag: 0=非语音, 1=语音
-                    if vad_flag == 1:
-                        is_speech = True
-                        break  # 只要有一个hop检测到语音，就认为当前有语音
+                    # 使用Silero VAD的get_speech_timestamps方法 (基于真实API)
+                    try:
+                        # get_speech_timestamps需要完整的音频，这里使用简化的VAD检测
+                        # 实际上，我们需要的是实时的VAD判断
+                        if hasattr(silero_vad_model, '__call__'):
+                            # 直接调用模型进行VAD推理
+                            with torch.no_grad():
+                                vad_output = silero_vad_model(audio_tensor)
+                                # vad_output通常是语音概率
+                                if len(vad_output.shape) > 0:
+                                    vad_confidence = float(vad_output.mean())
+                                    is_speech = vad_confidence > self.vad_config.vad_threshold
+                        else:
+                            # 如果无法直接调用，回退到能量阈值
+                            energy = np.sqrt(np.mean(audio_data ** 2))
+                            vad_confidence = energy
+                            is_speech = energy > self.vad_config.fallback_energy_threshold
 
-                logger.debug(f"TEN VAD: 置信度={vad_confidence:.6f}, 标志={vad_flag}, 检测语音={is_speech}")
+                    except Exception as vad_error:
+                        logger.debug(f"Silero VAD推理失败: {vad_error}")
+                        # 回退到能量阈值
+                        energy = np.sqrt(np.mean(audio_data ** 2))
+                        vad_confidence = energy
+                        is_speech = energy > self.vad_config.fallback_energy_threshold
+
+                    if is_speech:
+                        break  # 只要有一个窗口检测到语音，就认为当前有语音
+
+                logger.debug(f"Silero VAD: 置信度={vad_confidence:.6f}, 检测语音={is_speech}")
 
             except Exception as e:
-                logger.error(f"❌ TEN VAD检测失败: {e}")
+                logger.error(f"❌ Silero VAD检测失败: {e}")
                 # 自动回退到能量阈值
                 if self.vad_config.auto_fallback:
                     energy = np.sqrt(np.mean(audio_data ** 2))
@@ -519,7 +552,6 @@ class FunASRVoiceRecognizer:
             energy = np.sqrt(np.mean(audio_data ** 2))
             is_speech = energy > self.vad_config.fallback_energy_threshold
             vad_confidence = energy if is_speech else 0.0
-            vad_flag = 1 if is_speech else 0
 
         # 计算音频能量（用于显示和调试）
         audio_energy = np.sqrt(np.mean(audio_data ** 2))
@@ -531,15 +563,15 @@ class FunASRVoiceRecognizer:
                 event_type = "speech_start"
                 self._speech_detected = True
                 self._speech_start_time = current_time
-                vad_method = "TEN VAD" if self._ten_vad_enabled else "Energy Threshold"
-                logger.info(f"🎤 语音开始 ({vad_method}: {vad_confidence:.3f}, 标志={vad_flag}, 能量: {audio_energy:.6f})")
+                vad_method = "Silero VAD" if self._silero_vad_enabled else "Energy Threshold"
+                logger.info(f"🎤 语音开始 ({vad_method}: {vad_confidence:.3f}, 能量: {audio_energy:.6f})")
         else:
             if hasattr(self, '_speech_detected') and self._speech_detected:
                 silence_duration = current_time - getattr(self, '_last_speech_time', current_time)
                 if silence_duration >= self.vad_config.min_silence_duration:
                     event_type = "speech_end"
                     self._speech_detected = False
-                    vad_method = "TEN VAD" if self._ten_vad_enabled else "Energy Threshold"
+                    vad_method = "Silero VAD" if self._silero_vad_enabled else "Energy Threshold"
                     logger.info(f"🔇 语音结束 (静音{silence_duration:.2f}s, {vad_method}: {vad_confidence:.3f})")
 
         if is_speech:
@@ -701,15 +733,15 @@ class FunASRVoiceRecognizer:
             'model_loaded': self._model_loaded,
             'model_path': self.model_path,
             'device': self.funasr_config.device,
-            'vad_method': 'TEN VAD' if self._ten_vad_enabled else 'Energy Threshold',
-            'ten_vad_available': TEN_VAD_AVAILABLE,
+            'vad_method': 'Silero VAD' if self._silero_vad_enabled else 'Energy Threshold',
+            'silero_vad_available': SILERO_VAD_AVAILABLE,
             'stats': self.stats.copy(),
             'model_load_time': self._model_load_time,
             'dependencies': {
                 'funasr': FUNASR_AVAILABLE,
                 'pyaudio': PYAUDIO_AVAILABLE,
                 'numpy': NUMPY_AVAILABLE,
-                'ten_vad': TEN_VAD_AVAILABLE
+                'silero_vad': SILERO_VAD_AVAILABLE
             }
         }
 
@@ -733,7 +765,7 @@ def create_recognizer(model_path: Optional[str] = None,
 
 if __name__ == "__main__":
     # 示例用法
-    print("🎯 FunASR + TEN VAD 语音识别模块测试")
+    print("🎯 FunASR + Silero VAD 语音识别模块测试")
     print("=" * 50)
 
     # 创建识别器
@@ -745,6 +777,6 @@ if __name__ == "__main__":
 
     if recognizer.initialize():
         print("✅ 识别器初始化成功")
-        print("🎤 TEN VAD集成完成，可以进行语音识别测试")
+        print("🎤 Silero VAD集成完成，可以进行语音识别测试")
     else:
         print("❌ 识别器初始化失败")

@@ -10,6 +10,39 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+# 创建一个过滤器，专门过滤DEBUG级别的日志
+class NoDebugFilter(logging.Filter):
+    def filter(self, record):
+        # 只允许INFO级别及以上的日志通过
+        return record.levelno >= logging.INFO
+
+# 全局初始化 - 在任何其他导入之前，先设置全局日志配置
+# 1. 首先设置基本配置
+logging.basicConfig(
+    level=logging.INFO,  # 设置全局默认级别为INFO
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# 2. 为根日志器的所有处理器添加过滤器，确保没有DEBUG日志显示
+root_logger = logging.getLogger()
+for handler in root_logger.handlers:
+    handler.addFilter(NoDebugFilter())
+
+# 3. 直接修改logging模块的基本配置，确保新创建的处理器也遵循相同规则
+# 保存原始的StreamHandler类
+original_stream_handler = logging.StreamHandler
+
+# 重写StreamHandler，自动添加过滤器
+class FilteredStreamHandler(original_stream_handler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setLevel(logging.INFO)  # 强制设置级别为INFO
+        self.addFilter(NoDebugFilter())  # 添加过滤器
+
+# 替换原始的StreamHandler
+logging.StreamHandler = FilteredStreamHandler
+
 
 class LoggingManager:
     """
@@ -60,15 +93,35 @@ class LoggingManager:
         # 获取或创建logger
         logger = logging.getLogger(name)
         logger.setLevel(level)
-        
+
         # 清除现有处理器，避免重复输出
         logger.handlers.clear()
+
+        # 禁用传播到根日志记录器，避免重复输出
+        logger.propagate = False
+        
+        # 为了安全起见，直接设置根日志器的级别为INFO
+        # 这将影响所有没有明确设置级别的logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
         
         # 创建格式化器
         formatter = logging.Formatter(
             fmt=cls.DEFAULT_FORMAT,
             datefmt=cls.DEFAULT_DATE_FORMAT
         )
+        
+        # 初始化log_file_path变量
+        log_file_path = None
+        
+        # 配置控制台日志 - 先配置控制台日志，确保所有日志都经过正确的级别过滤
+        if log_to_console:
+            console_handler = logging.StreamHandler()
+            # 强制将控制台日志级别设置为INFO，不管传入什么参数
+            # 这是为了确保控制台不会显示任何DEBUG日志
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
         
         # 配置文件日志
         if log_to_file:
@@ -91,19 +144,12 @@ class LoggingManager:
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
                 
-                # 使用低级别的日志记录，而不是print语句
+                # 所有处理器设置完成后，再记录日志
                 logger.debug(f"日志文件已创建: {log_file_path}")
             except Exception as e:
                 # 使用标准错误流输出错误信息
                 import sys
                 print(f"创建日志文件失败: {e}", file=sys.stderr)
-        
-        # 配置控制台日志
-        if log_to_console:
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(console_level or level)
-            console_handler.setFormatter(formatter)
-            logger.addHandler(console_handler)
         
         return logger
     

@@ -80,10 +80,7 @@ class WorkingVoiceWorker(QThread):
 
             logger.info(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")            
 
-            # 🔥 关键修复：传递mode参数到语音系统
-            mode_config_with_mode = mode_config.copy()
-            mode_config_with_mode['mode'] = self.mode
-            self._configure_recognizer(mode_config_with_mode)
+            self._configure_recognizer(mode_config)
 
             if not self.voice_system.initialize():
                 self.log_message.emit("❌ 语音系统初始化失败")
@@ -92,11 +89,16 @@ class WorkingVoiceWorker(QThread):
             #logger.debug(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
             
             self.voice_system.set_state_change_callback(self._handle_voice_command_state_change)
-            #logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
+            #logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")            
 
-            # 🔥 关键修复：设置VAD回调以解决GUI无响应问题
+            #logger.debug(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")            
+
+            #logger.info(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
+            #logger.debug(f"[🔗 WORKER检查] voice_system方法: {[method for method in dir(self.voice_system) if 'vad' in method.lower() or 'callback' in method.lower()]}")
+           
             if hasattr(self.voice_system, 'set_vad_callback'):
-                #logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
+                #logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")               
+
                 try:
                     self.voice_system.set_vad_callback(self._handle_vad_event)
                     #logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")

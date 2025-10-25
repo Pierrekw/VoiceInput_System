@@ -2,6 +2,29 @@ audio:
   # 针对torch 2.3.1+cpu版本优化的音频配置
   chunk_size: 200  # 减小chunk_size以降低CPU处理负担
   sample_rate: 16000
+
+  # FFmpeg音频预处理 (默认关闭)
+  # 启用后可显著提升语音质量，增强VAD和ASR识别准确性
+  ffmpeg_preprocessing:
+    enabled: true  # 测试阶段启用
+
+    # FFmpeg滤镜链参数 (可自定义)
+    # highpass=f=80: 移除低频噪音(如空调声、手柄噪音)
+    # afftdn=nf=-25: 基于FFT的降噪，减少稳定背景噪音
+    # loudnorm: 音量标准化，提升语音清晰度
+    # volume=2.0: 音量增强，提高信噪比
+    filter_chain: "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0"
+
+    # 预处理选项
+    options:
+      # 是否在语音开始时进行预处理
+      process_input: true
+
+      # 是否保存预处理后的音频文件(调试用)
+      save_processed: false
+
+      # 预处理后的临时文件名前缀
+      processed_prefix: "processed_"
 error_correction:
   dictionary_path: voice_correction_dict.txt
   enabled: true

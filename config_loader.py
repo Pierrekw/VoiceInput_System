@@ -57,7 +57,16 @@ class ConfigLoader:
             },
             "audio": {
                 "sample_rate": 16000,
-                "chunk_size": 8000
+                "chunk_size": 8000,
+                "ffmpeg_preprocessing": {
+                    "enabled": False,
+                    "filter_chain": "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0",
+                    "options": {
+                        "process_input": True,
+                        "save_processed": False,
+                        "processed_prefix": "processed_"
+                    }
+                }
             },
             "excel": {
                 "file_name": "report",
@@ -276,7 +285,23 @@ class ConfigLoader:
     def get_chunk_size(self) -> int:
         """获取音频块大小"""
         return self.get("audio.chunk_size", 8000)
-    
+
+    def is_ffmpeg_preprocessing_enabled(self) -> bool:
+        """获取FFmpeg音频预处理是否启用"""
+        return self.get("audio.ffmpeg_preprocessing.enabled", False)
+
+    def get_ffmpeg_filter_chain(self) -> str:
+        """获取FFmpeg滤镜链"""
+        return self.get("audio.ffmpeg_preprocessing.filter_chain", "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0")
+
+    def get_ffmpeg_options(self) -> dict:
+        """获取FFmpeg预处理选项"""
+        return self.get("audio.ffmpeg_preprocessing.options", {
+            "process_input": True,
+            "save_processed": False,
+            "processed_prefix": "processed_"
+        })
+
     def is_error_correction_enabled(self) -> bool:
         """获取错误修正功能是否启用"""
         return self.get("error_correction.enabled", True)

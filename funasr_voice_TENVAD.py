@@ -252,6 +252,11 @@ class FunASRVoiceRecognizer:
         self._stop_event = threading.Event()
         self._speech_detected = False
 
+        # FFmpeg预处理配置
+        self._ffmpeg_enabled = False
+        self._ffmpeg_filter_chain = ""
+        self._ffmpeg_options = {}
+
         # 音频处理
         self._audio_buffer: deque[np.ndarray] = deque(maxlen=sample_rate * 5)  # 5秒缓冲
         self._speech_buffer: List[np.ndarray] = []
@@ -291,6 +296,16 @@ class FunASRVoiceRecognizer:
         try:
             from config_loader import config
 
+            # 加载FFmpeg预处理配置
+            self._ffmpeg_enabled = config.is_ffmpeg_preprocessing_enabled()
+            self._ffmpeg_filter_chain = config.get_ffmpeg_filter_chain()
+            self._ffmpeg_options = config.get_ffmpeg_options()
+
+            logger.info(f"🔧 FFmpeg预处理: {'启用' if self._ffmpeg_enabled else '禁用'}")
+            if self._ffmpeg_enabled:
+                logger.info(f"   滤镜链: {self._ffmpeg_filter_chain}")
+                logger.info(f"   选项: {self._ffmpeg_options}")
+
             return VADConfig(
                 energy_threshold=config.get_vad_energy_threshold(),
                 min_speech_duration=config.get_vad_min_speech_duration(),
@@ -300,7 +315,120 @@ class FunASRVoiceRecognizer:
 
         except Exception as e:
             logger.warning(f"加载VAD配置失败: {e}，使用默认配置")
+            # FFmpeg配置失败时使用默认值
+            self._ffmpeg_enabled = False
+            self._ffmpeg_filter_chain = "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0"
+            self._ffmpeg_options = {
+                "process_input": True,
+                "save_processed": False,
+                "processed_prefix": "processed_"
+            }
             return VADConfig()
+
+    def _apply_ffmpeg_preprocessing(self, audio_data: np.ndarray, temp_file_prefix: str = "ffmpeg_temp_") -> np.ndarray:
+        """
+        应用FFmpeg预处理到音频数据
+
+        Args:
+            audio_data: 输入音频数据 (numpy数组)
+            temp_file_prefix: 临时文件前缀
+
+        Returns:
+            预处理后的音频数据
+        """
+        if not self._ffmpeg_enabled or not self._ffmpeg_options.get('process_input', True):
+            return audio_data  # 如果未启用或配置不处理输入，直接返回原数据
+
+        try:
+            import subprocess
+            import tempfile
+            import os
+
+            # 将音频数据保存为临时WAV文件
+            with tempfile.NamedTemporaryFile(suffix='.wav', prefix=temp_file_prefix, delete=False) as temp_input_file:
+                temp_input_path = temp_input_file.name
+
+                # 确保数据格式正确 (16位PCM)
+                audio_int16 = (audio_data * 32767).astype(np.int16)
+
+                # 写入WAV文件
+                import wave
+                with wave.open(temp_input_path, 'wb') as wav_file:
+                    wav_file.setnchannels(1)  # 单声道
+                    wav_file.setsampwidth(2)  # 16位
+                    wav_file.setframerate(self.sample_rate)
+                    wav_file.writeframes(audio_int16.tobytes())
+
+            # 生成输出文件路径
+            with tempfile.NamedTemporaryFile(suffix='.wav', prefix="processed_", delete=False) as temp_output_file:
+                temp_output_path = temp_output_file.name
+
+            # 构建FFmpeg命令
+            ffmpeg_cmd = [
+                self._ffmpeg_path,  # 从setup_environment设置
+                '-i', temp_input_path,
+                '-af', self._ffmpeg_filter_chain,
+                '-y',  # 覆盖输出文件
+                temp_output_path
+            ]
+
+            # 执行FFmpeg预处理
+            logger.debug(f"执行FFmpeg命令: {' '.join(ffmpeg_cmd)}")
+
+            try:
+                result = subprocess.run(
+                    ffmpeg_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30  # 30秒超时
+                )
+
+                if result.returncode != 0:
+                    logger.error(f"FFmpeg预处理失败: {result.stderr}")
+                    return audio_data  # 失败时返回原数据
+                else:
+                    logger.debug(f"FFmpeg预处理成功: {result.stdout}")
+
+            except subprocess.TimeoutExpired:
+                logger.error("FFmpeg预处理超时")
+                return audio_data
+            except Exception as e:
+                logger.error(f"FFmpeg预处理异常: {e}")
+                return audio_data
+
+            # 读取预处理后的音频数据
+            processed_data = None
+            try:
+                with wave.open(temp_output_path, 'rb') as wav_file:
+                    with wave.open(temp_output_path, 'rb') as wav_file:
+                        frames = wav_file.readframes(-1)
+                        sample_width = wav_file.getsampwidth()
+                        channels = wav_file.getnchannels()
+                        processed_data = np.frombuffer(frames, dtype=np.int16)
+
+                        # 确保是单声道
+                        if channels == 1 and sample_width == 2:
+                            processed_data = processed_data.astype(np.float32) / 32768.0
+                        else:
+                            logger.warning("FFmpeg输出格式异常，使用原始数据")
+                            processed_data = audio_data
+
+            except Exception as e:
+                logger.error(f"读取预处理后音频失败: {e}")
+                processed_data = audio_data
+
+            # 清理临时文件
+            try:
+                os.unlink(temp_input_path)
+                os.unlink(temp_output_path)
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {e}")
+
+            return processed_data if processed_data is not None else audio_data
+
+        except Exception as e:
+            logger.error(f"FFmpeg预处理模块异常: {e}")
+            return audio_data
 
     def _get_gui_display_threshold(self) -> float:
         """获取GUI能量显示阈值（独立于VAD检测）"""
@@ -612,6 +740,14 @@ class FunASRVoiceRecognizer:
             audio_data: 音频数据
             current_time: 当前时间
         """
+        # 应用FFmpeg预处理（如果启用）
+        if self._ffmpeg_enabled:
+            with PerformanceStep("FFmpeg预处理", {
+                'data_length': len(audio_data),
+                'current_time': current_time
+            }):
+                audio_data = self._apply_ffmpeg_preprocessing(audio_data, f"chunk_{current_time:.0f}")
+
         # 添加到音频缓冲区
         self._audio_buffer.extend(audio_data)
 
@@ -820,6 +956,14 @@ class FunASRVoiceRecognizer:
                             'current_time': current_time
                         }):
                             audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+
+                        # 应用FFmpeg预处理（如果启用）
+                        if self._ffmpeg_enabled:
+                            with PerformanceStep("FFmpeg预处理", {
+                                'data_length': len(audio_data),
+                                'current_time': current_time
+                            }):
+                                audio_data = self._apply_ffmpeg_preprocessing(audio_data, f"cont_chunk_{current_time:.0f}")
 
                         # 处理音频
                         self._process_audio_chunk(audio_data, current_time)

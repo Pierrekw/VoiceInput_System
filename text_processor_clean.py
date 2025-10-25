@@ -6,7 +6,18 @@
 """
 
 import re
+import logging
 from typing import Optional, Dict, Any, List, Tuple
+
+from logging_utils import LoggingManager
+
+logger = LoggingManager.get_logger(
+    name='text_processor_clean',
+    level=logging.DEBUG,
+    console_level=logging.INFO,
+    log_to_console=True,
+    log_to_file=True
+)
 
 # 尝试导入cn2an库
 CN2AN_AVAILABLE = False
@@ -20,6 +31,7 @@ class TextProcessor:
     """优化的文本处理器类"""
 
     def __init__(self) -> None:
+        logger.debug("初始化TextProcessor实例")
         # 简化的数字正则表达式
         self.num_pattern = re.compile(r"[零一二三四五六七八九十百千万点两]")
         # 完整数字模式（用于提取）
@@ -42,7 +54,9 @@ class TextProcessor:
         - 数字值大于9：转换为阿拉伯数字
         - 其他小数字：保留中文数字
         """
+        logger.debug(f"开始转换中文数字: {text[:50]}...")
         if not text or not CN2AN_AVAILABLE:
+            logger.debug("文本为空或cn2an不可用，跳过转换")
             return text
 
         result = text
@@ -77,8 +91,10 @@ class TextProcessor:
             try:
                 # 去除空格后转换
                 clean_match = re.sub(r'[\s　]', '', match)
+                logger.debug(f"转换中文数字: '{match}' -> '{clean_match}'")
                 converted = cn2an.cn2an(clean_match, "smart")
                 num_value = float(converted)
+                logger.debug(f"转换结果: {num_value}")
 
                 should_convert = False
 
@@ -101,15 +117,18 @@ class TextProcessor:
                         converted = str(int(num_value))
                     result = result.replace(match, converted)
 
-            except:
+            except Exception as e:
                 # 转换失败，保持原样
+                logger.debug(f"中文数字转换失败: '{match}'，错误: {str(e)}")
                 continue
 
         return result
 
     def chinese_to_arabic_number(self, text: str) -> str:
         """将中文数字转换为阿拉伯数字"""
+        logger.debug(f"开始中文转阿拉伯数字: {text}")
         if not text or not CN2AN_AVAILABLE:
+            logger.debug("文本为空或cn2an不可用，跳过转换")
             return text
 
         original_text = text
@@ -191,7 +210,8 @@ class TextProcessor:
                     except Exception:
                         continue
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"中文数字转换过程出错: {str(e)}")
             return original_text
 
         return result_text
@@ -223,7 +243,9 @@ class TextProcessor:
         简化的数字提取逻辑
         重构后优先从processed_text中提取阿拉伯数字
         """
+        logger.debug(f"开始提取数字: '{original_text[:50]}...'，处理后文本: {processed_text[:50]+'...' if processed_text is not None else None}")
         if not original_text:
+            logger.debug("原始文本为空，返回空列表")
             return []
 
         try:
@@ -309,7 +331,8 @@ class TextProcessor:
 
             return []
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"数字提取过程出错: {str(e)}")
             return []
 
     def process_text(self, text: str) -> str:
@@ -317,19 +340,24 @@ class TextProcessor:
         优化的文本处理流程
         新规则：数字>9转换为阿拉伯数字，否则保留中文
         """
+        logger.debug(f"开始处理文本: {text[:100]}...")
         if not text:
+            logger.debug("文本为空，直接返回")
             return text
 
         # 第一步：去除空格
         result = self.remove_spaces(text)
+        logger.debug(f"去除空格后: {result[:100]}...")
 
         # 第二步：特殊处理"幺"字符
         result = result.replace('幺', '一')
+        logger.debug(f"替换'幺'后: {result[:100]}...")
 
         # 第三步：修复中文数字语法错误（关键修复）
         # 处理"一百十三" -> "一百一十三"的情况
         if '一百十三' in result:
             result = result.replace('一百十三', '一百一十三')
+            logger.debug(f"修复数字语法后: {result[:100]}...")
         if '二百十三' in result:
             result = result.replace('二百十三', '二百一十三')
         if '三百十三' in result:
@@ -357,6 +385,7 @@ class TextProcessor:
 
         # 第四步：应用新规则转换数字
         result = self.convert_chinese_numbers_in_text(result)
+        logger.debug(f"文本处理完成，结果: {result[:100]}...")
 
         return result
 
@@ -469,6 +498,7 @@ class VoiceCommandProcessor:
     """语音命令专用文本处理器"""
 
     def __init__(self) -> None:
+        logger.debug("初始化VoiceCommandProcessor实例")
         self.text_processor = TextProcessor()
         self.match_mode = "fuzzy"
         self.min_match_length = 2
@@ -476,13 +506,16 @@ class VoiceCommandProcessor:
 
     def configure(self, match_mode: str = "fuzzy", min_match_length: int = 2, confidence_threshold: float = 0.8) -> None:
         """配置匹配参数"""
+        logger.debug(f"配置命令处理器: match_mode={match_mode}, min_match_length={min_match_length}, confidence_threshold={confidence_threshold}")
         self.match_mode = match_mode
         self.min_match_length = min_match_length
         self.confidence_threshold = confidence_threshold
 
     def process_command_text(self, text: str) -> str:
         """处理命令文本"""
-        return self.text_processor.clean_text_for_command_matching(text)
+        result = self.text_processor.clean_text_for_command_matching(text)
+        logger.debug(f"命令文本处理: '{text}' -> '{result}'")
+        return result
 
     def match_command(self, text: str, commands: Dict[str, List[str]]) -> Optional[str]:
         """
@@ -495,7 +528,9 @@ class VoiceCommandProcessor:
         Returns:
             匹配的命令类型，如果没有匹配返回None
         """
+        logger.debug(f"尝试匹配命令: '{text}'")
         if not text or len(text.strip()) < self.min_match_length:
+            logger.debug(f"文本长度小于最小匹配长度({self.min_match_length})，跳过匹配")
             return None
 
         text_clean = self.process_command_text(text)

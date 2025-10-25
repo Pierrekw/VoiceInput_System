@@ -51,7 +51,7 @@ special_texts:
     - okay 
     - 合格
     - 通过
-  - base_text: NOT OK
+  - base_text: NOK
     variants:
     - NotOK
     - notok
@@ -88,8 +88,8 @@ vad:
   energy_threshold: 0.010
 
   # GUI能量显示阈值 - 用于能量条显示的最小能量（独立于VAD检测）
-  # 较低的值使能量条更敏感，但不影响语音识别准确性
-  gui_display_threshold: 0.00001
+  # 较低的值使能量条更敏感，但不影响语音识别准确性， 比如0.00001
+  gui_display_threshold: 0.01
 
   # 最小语音持续时间 - 检测到语音后至少持续多久才认为是有效语音
   # 优化：降低以提高首次响应速度
@@ -98,7 +98,7 @@ vad:
   # 最小静音持续时间 - 语音结束后需要静音多久才认为说话结束
   # 🔧 优化：适度减少以提高首次响应速度，但保持对小数识别的支持
   # 平衡首次响应速度和识别准确性
-  min_silence_duration: 0.7
+  min_silence_duration: 0.6
 
   # 语音填充 - 在语音前后添加额外的音频时间
   # 优化：调整为更平衡的值，保持识别完整性同时提高响应速度

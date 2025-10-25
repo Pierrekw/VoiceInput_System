@@ -13,13 +13,12 @@ import math
 import subprocess
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-
 from logging_utils import LoggingManager
 
 logger = LoggingManager.get_logger(
-    name=__name__,
+    name='voice_gui',
     level=logging.DEBUG,  # 文件记录详细日志
-    console_level=logging.WARNING,  # 控制台只显示警告和错误
+    console_level=logging.INFO,  # 控制台只显示INFO及以上信息
     log_to_console=True,
     log_to_file=True
 )
@@ -59,8 +58,7 @@ class WorkingVoiceWorker(QThread):
     def run(self):
         """运行语音识别"""
         try:
-            logger.info(f"[🧵 WORKER启动] 🚀 Worker线程开始运行")
-            print(f"[🧵 WORKER启动] 🚀 Worker线程开始运行")
+            logger.info(f"[🧵 WORKER启动] 🚀 Worker线程开始运行")            
             self.log_message.emit(f"🧵 Worker线程启动，模式: {self.mode}")
 
             self.log_message.emit(f"🚀 正在初始化语音系统... (模式: {self.mode})")
@@ -68,13 +66,11 @@ class WorkingVoiceWorker(QThread):
             mode_config = self._get_mode_config(self.mode)
             self.log_message.emit(f"🔧 使用配置: {mode_config}")
 
-            logger.info(f"[🧵 WORKER导入] 📦 开始导入FunASRVoiceSystem")
-            print(f"[🧵 WORKER导入] 📦 开始导入FunASRVoiceSystem")
+            logger.info(f"[🧵 WORKER导入] 📦 开始导入FunASRVoiceSystem")            
 
             from main_f import FunASRVoiceSystem
 
-            logger.info(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")
-            print(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")
+            #logger.info(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")            
 
             self.voice_system = FunASRVoiceSystem(
                 recognition_duration=-1,  # 不限时识别
@@ -82,8 +78,7 @@ class WorkingVoiceWorker(QThread):
                 debug_mode=False           # 生产模式
             )
 
-            logger.info(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")
-            print(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")
+            logger.info(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")            
 
             self._configure_recognizer(mode_config)
 
@@ -91,38 +86,31 @@ class WorkingVoiceWorker(QThread):
                 self.log_message.emit("❌ 语音系统初始化失败")
                 return
 
-            logger.info(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
-            print(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
+            #logger.debug(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
+            
             self.voice_system.set_state_change_callback(self._handle_voice_command_state_change)
-            logger.info(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
-            print(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
+            #logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")            
 
-            logger.info(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")
-            print(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")
+            #logger.debug(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")            
 
-            logger.info(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
-            logger.info(f"[🔗 WORKER检查] voice_system方法: {[method for method in dir(self.voice_system) if 'vad' in method.lower() or 'callback' in method.lower()]}")
-            print(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
-
+            #logger.info(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
+            #logger.debug(f"[🔗 WORKER检查] voice_system方法: {[method for method in dir(self.voice_system) if 'vad' in method.lower() or 'callback' in method.lower()]}")
+           
             if hasattr(self.voice_system, 'set_vad_callback'):
-                logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
-                print(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
+                #logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")               
 
                 try:
                     self.voice_system.set_vad_callback(self._handle_vad_event)
-                    logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
-                    print(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
+                    #logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
                     self.log_message.emit("✅ 已设置VAD能量监听")
 
 
                 except Exception as e:
-                    logger.error(f"[🔗 WORKER错误] ❌ VAD回调设置失败: {e}")
-                    print(f"[🔗 WORKER错误] ❌ VAD回调设置失败: {e}")
+                    logger.error(f"[🔗 WORKER错误] ❌ VAD回调设置失败: {e}")                    
                     import traceback
                     logger.error(f"[🔗 WORKER详细] {traceback.format_exc()}")
             else:
-                logger.error(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")
-                print(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")
+                logger.error(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")                
 
             self.log_message.emit("✅ 语音系统初始化成功")
             self.status_changed.emit("系统就绪")
@@ -202,7 +190,7 @@ class WorkingVoiceWorker(QThread):
                     if text and text.strip():
                         self.partial_result.emit(text)
                 except Exception as e:
-                    logger.debug(f"处理部分结果错误: {e}")
+                    logger.error(f"处理部分结果错误: {e}")
 
             if hasattr(self.voice_system, 'recognizer'):
                 self.voice_system.recognizer.set_callbacks(
@@ -276,7 +264,7 @@ class WorkingVoiceWorker(QThread):
     def _handle_vad_event(self, event_type: str, event_data: Dict):
         """处理VAD事件，更新语音能量显示"""
         energy = event_data.get('energy', 0)
-        logger.debug(f"[🖥️ GUI接收] ← 收到VAD事件: {event_type} | 原始能量值: {energy:.8f}")
+        #logger.debug(f"[🖥️ GUI接收] ← 收到VAD事件: {event_type} | 原始能量值: {energy:.8f}")
 
         try:
             is_speech = False
@@ -291,7 +279,7 @@ class WorkingVoiceWorker(QThread):
 
                 is_speech = energy > vad_threshold  # 使用与VAD相同的阈值
 
-                logger.debug(f"[🖥️ GUI判断] 能量: {energy:.8f} vs VAD阈值: {vad_threshold:.8f} = {is_speech}")
+                #.debug(f"[🖥️ GUI判断] 能量: {energy:.8f} vs VAD阈值: {vad_threshold:.8f} = {is_speech}")
 
                 if is_speech:
                     if energy < vad_threshold * 0.5:  # 小于VAD阈值一半，显示为低值
@@ -321,26 +309,25 @@ class WorkingVoiceWorker(QThread):
                     energy_level = 0
 
             volume_level = self._get_volume_description(energy)
-            logger.debug(f"[🖥️ GUI处理] 🔄 能量转换: {energy:.8f} → {energy_level}% | 音量级别: {volume_level} | 语音检测: {is_speech}")
-            if energy_level > 0:  # 只在有能量变化时记录INFO级别日志
-                logger.info(f"[🖥️ 音量变化] 能量: {energy:.8f} → {energy_level}% ({volume_level})")
+            
+            #logger.debug(f"[🖥️ GUI处理] 🔄 能量转换: {energy:.8f} → {energy_level}% | 音量级别: {volume_level} | 语音检测: {is_speech}")
+            ## 注释掉调试日志，避免控制台输出过多
+            #if energy_level > vad_threshold:  # 只在能量超过VAD阈值时记录INFO级别日志
+            #   logger.debug(f"[🖥️ 音量变化] 能量: {energy:.8f} → {energy_level}% ({volume_level})")
 
             if is_speech and hasattr(self, 'voice_activity'):
-                logger.info(f"[🖥️ GUI发送] → 发送voice_activity信号: {energy_level}% (语音)")
-                print(f"[🖥️ GUI发送] → 发送voice_activity信号: {energy_level}% (语音)")
+                #logger.debug(f"[🖥️ GUI发送] → 发送voice_activity信号: {energy_level}% (语音)")                
                 self.voice_activity.emit(energy_level)
-                logger.info(f"[🖥️ GUI成功] ✅ voice_activity信号发送成功")
+                #logger.debug(f"[🖥️ GUI成功] ✅ voice_activity信号发送成功")
             elif not is_speech and hasattr(self, 'voice_activity'):
                 try:
                     current_value = self.voice_energy_bar.value() if hasattr(self, 'voice_energy_bar') else 0
                     if current_value > 0:
-                        logger.info(f"[🖥️ GUI发送] → 发送voice_activity信号: 0% (静音，从{current_value}%降为0)")
-                        print(f"[🖥️ GUI发送] → 发送voice_activity信号: 0% (静音，从{current_value}%降为0)")
+                        #logger.debug(f"[🖥️ GUI发送] → 发送voice_activity信号: 0% (静音，从{current_value}%降为0)")                        
                         self.voice_activity.emit(0)
-                        logger.info(f"[🖥️ GUI成功] ✅ voice_activity信号发送成功")
-                    else:
-                        logger.info(f"[🖥️ GUI跳过] 当前已是0%，跳过发送静音信号")
-                        print(f"[🖥️ GUI跳过] 当前已是0%，跳过发送静音信号")
+                        #logger.debug(f"[🖥️ GUI成功] ✅ voice_activity信号发送成功")
+                    #else:
+                        #logger.debug(f"[🖥️ GUI跳过] 当前已是0%，跳过发送静音信号")                        
                 except Exception as e:
                     logger.error(f"[🖥️ GUI错误] 获取当前能量值失败: {e}")
                     self.voice_activity.emit(0)
@@ -350,7 +337,9 @@ class WorkingVoiceWorker(QThread):
 
         except Exception as e:
             logger.error(f"[🖥️ GUI错误] ❌ 处理VAD事件异常: {e}")
-            print(f"[🖥️ GUI错误] ❌ 处理VAD事件异常: {e}")
+            # 使用sys.stderr输出错误信息
+            import sys
+            print(f"[🖥️ GUI错误] ❌ 处理VAD事件异常: {e}", file=sys.stderr)
 
     def _get_volume_description(self, energy):
         """根据能量值返回音量级别描述"""
@@ -490,22 +479,19 @@ class VoiceEnergyBar(QProgressBar):
         self.setMinimum(0)
         self.setMaximum(100)
         self.setValue(0)
-        self.setFixedHeight(20)  # 增加高度使其更可见
+        self.setFixedHeight(16)  # 增加高度使其更可见
         self.setTextVisible(False)  # 不显示百分比文本
 
         self.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #2196F3;
                 border-radius: 8px;
-                background-color: #f0f0f0;
-                font-weight: bold;
+                background: #f0f0f0;
                 text-align: center;
             }
             QProgressBar::chunk {
                 border-radius: 6px;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #1E88E5, stop:0.5 #2196F3, stop:1 #42A5F5);
-                width: 8px;
+                background: #2196F3;
                 margin: 2px;
             }
         """)
@@ -1240,7 +1226,8 @@ class WorkingSimpleMainWindow(QMainWindow):
         QTimer.singleShot(0, update_ui)
 
 
-        print(f"🎤 识别(record): {result}")
+        # 替换为logger.info，这样可以受日志级别控制
+        logger.info(f"🎤 识别(record): {result}")
         
     def update_partial_result(self, text):
         """更新部分识别结果"""
@@ -1250,27 +1237,36 @@ class WorkingSimpleMainWindow(QMainWindow):
 
     def update_voice_energy(self, energy_level):
         """更新语音能量显示"""
-        logger.debug(f"[🖥️ GUI主线程] ← 收到voice_activity信号: {energy_level}%")
-
-        self.append_log(f"📊 GUI能量条更新: {energy_level}%")
+        # 注释掉调试日志，减少控制台输出
+        #logger.debug(f"[🖥️ GUI主线程] ← 收到voice_activity信号: {energy_level}%")
+        
+        # 只在能量有显著变化或非零时记录日志，减少频率
+        #if energy_level > 10 or energy_level == 0 and hasattr(self, '_last_energy_level') and self._last_energy_level > 0:
+              # 注释掉能量条日志记录，避免系统日志过多
+              # self.append_log(f"📊 GUI能量条更新: {energy_level}%")
+        # 记录最后能量值用于比较（保持在if语句外，确保每次都更新）
+        self._last_energy_level = energy_level
 
         if hasattr(self, 'voice_energy_bar') and self.voice_energy_bar:
-            logger.debug(f"[🖥️ GUI能量条] ✅ 能量条对象存在，开始更新")
+            # 注释掉调试日志
+            #logger.debug(f"[🖥️ GUI能量条] ✅ 能量条对象存在，开始更新")
 
             try:
-                logger.debug(f"[🖥️ GUI更新] 🔄 设置能量条值: {energy_level}%")
+                # 注释掉调试日志
+                #logger.debug(f"[🖥️ GUI更新] 🔄 设置能量条值: {energy_level}%")
                 self.voice_energy_bar.setValue(energy_level)
                 self.voice_energy_bar.update_energy(energy_level)
-                logger.debug(f"[🖥️ GUI成功] ✅ 能量条更新完成: {energy_level}%")
+                # 注释掉调试日志
+                #logger.debug(f"[🖥️ GUI成功] ✅ 能量条更新完成: {energy_level}%")
             except Exception as e:
                 logger.error(f"[🖥️ GUI错误] ❌ 能量条更新失败: {e}")
         else:
             logger.error(f"[🖥️ GUI错误] ❌ 能量条未初始化或不存在！")
             self.append_log("❌ GUI错误: 能量条未初始化")
 
-            energy_attrs = [attr for attr in dir(self) if 'energy' in attr.lower()]
-            logger.info(f"[🖥️ GUI调试] 🔍 找到energy相关属性: {energy_attrs}")
-            print(f"[🖥️ GUI调试] 🔍 找到energy相关属性: {energy_attrs}")
+            # 注释掉调试日志
+            #energy_attrs = [attr for attr in dir(self) if 'energy' in attr.lower()]
+            #logger.debug(f"[🖥️ GUI调试] 🔍 找到energy相关属性: {energy_attrs}")
             
     def on_mode_changed(self, mode):
         """处理模式变更"""
@@ -1303,9 +1299,10 @@ class WorkingSimpleMainWindow(QMainWindow):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, update_log)
         
-        # 减少控制台输出，只输出重要信息
-        if any(keyword in message for keyword in ['错误', '警告', '系统初始化', '系统已', '识别结果']):
-            print(f"[GUI LOG] {log_entry}")
+        # 使用logger.info代替直接print，这样可以受日志级别控制
+        # 只记录重要信息，避免过多输出
+        if any(keyword in message for keyword in ['错误', '警告', '系统初始化', '系统已']):
+            logger.info(f"[GUI LOG] {log_entry}")
 
     def _history_mouse_press_event(self, event):
         """处理历史文本区域的鼠标点击事件"""
@@ -1336,10 +1333,9 @@ class WorkingSimpleMainWindow(QMainWindow):
                                 subprocess.run(['xdg-open', file_path], check=True)
 
                             logger.info(f"用户点击打开Excel文件: {file_path}")
-                            print(f"[EXCEL] 用户打开文件: {file_path}")
+                           
                         else:
-                            logger.warning(f"Excel文件不存在: {file_path}")
-                            print(f"[WARNING] 文件不存在: {file_path}")
+                            logger.warning(f"Excel文件不存在: {file_path}")                           
                             # 向用户显示更友好的消息
                             self.status_bar.showMessage("⚠️ Excel文件不存在或已被移动", 3000)
                     else:
@@ -1350,7 +1346,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 except Exception as e:
                     logger.error(f"打开Excel文件失败: {e}")
-                    print(f"[ERROR] 打开文件失败: {str(e)}")
+                    
 
                 # 不调用原始事件处理，避免任何UI变化
                 return
@@ -1432,7 +1428,6 @@ class WorkingSimpleMainWindow(QMainWindow):
         QTimer.singleShot(0, update_history)
 
         print(f"[HISTORY] [{timestamp}] 📊 Excel文件已生成: {file_name} ({record_count}条记录)")
-
     def _append_clickable_file_link(self, file_name, file_path):
         """添加可点击的文件链接"""
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -1509,6 +1504,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 def main():
     """主函数"""
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")    
     app.setApplicationName("FunASR语音识别系统 (多模式版)")
 
     window = WorkingSimpleMainWindow()

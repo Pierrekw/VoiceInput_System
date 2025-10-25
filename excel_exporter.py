@@ -11,10 +11,17 @@ import logging
 from typing import Any, List, Tuple, Union, Optional, Dict
 
 # 使用统一的日志工具类
-from logging_utils import get_app_logger
+import logging
+from logging_utils import LoggingManager
 
 # 获取配置好的日志记录器
-logger = get_app_logger(__name__, debug=False)
+logger = LoggingManager.get_logger(
+    name='excel_exporter',
+    level=logging.DEBUG,  # 文件记录DEBUG级别
+    console_level=logging.INFO,  # 控制台显示INFO级别
+    log_to_console=True,
+    log_to_file=True
+)
 
 # 新增：导入配置系统
 from config_loader import config

@@ -112,10 +112,16 @@ from dataclasses import dataclass
 from collections import deque
 
 # 使用统一的日志工具类
-from logging_utils import get_app_logger
+from logging_utils import LoggingManager
 
-# 获取配置好的日志记录器（使用DEBUG级别以便查看能量跟踪信息）
-logger = get_app_logger(__name__, debug=True)
+# 获取配置好的日志记录器（参考voice_gui.py的配置风格）
+logger = LoggingManager.get_logger(
+    name='funasr_voice_module',
+    level=logging.DEBUG,  # 文件记录详细日志
+    console_level=logging.INFO,  # 控制台显示INFO及以上信息
+    log_to_console=True,
+    log_to_file=True
+)
 
 # 全局可用性检查
 FUNASR_AVAILABLE = False
@@ -548,18 +554,18 @@ class FunASRVoiceRecognizer:
         audio_energy = np.sqrt(np.mean(audio_data ** 2))
 
         # 🔍 调试输出 - 在funasr_voice_module中计算音频能量
-        logger.info(f"[🎤 FUNASR能量] 能量值: {audio_energy:.8f} | VAD检测: is_speech={is_speech}, vad_event={vad_event} | VAD阈值: {self.vad_config.energy_threshold}")
+        #logger.info(f"[🎤 FUNASR能量] 能量值: {audio_energy:.8f} | VAD检测: is_speech={is_speech}, vad_event={vad_event} | VAD阈值: {self.vad_config.energy_threshold}")
 
         # 检查是否应该发送GUI能量更新
         gui_threshold = self._get_gui_display_threshold()
         should_send_gui_update = not vad_event and audio_energy > gui_threshold
 
-        logger.info(f"[🎤 FUNASR能量检查] GUI显示阈值: {gui_threshold:.8f} | 应该发送GUI更新: {should_send_gui_update} | VAD回调已设置: {self._on_vad_event is not None}")
+        #logger.info(f"[🎤 FUNASR能量检查] GUI显示阈值: {gui_threshold:.8f} | 应该发送GUI更新: {should_send_gui_update} | VAD回调已设置: {self._on_vad_event is not None}")
 
         # 如果没有VAD事件但能量超过显示阈值，也发送能量更新用于显示
         if should_send_gui_update:  # 使用配置的GUI显示阈值
             if self._on_vad_event:
-                logger.info(f"[🎤 FUNASR发送] → 发送energy_update事件 | 能量: {audio_energy:.8f}")
+                #logger.info(f"[🎤 FUNASR发送] → 发送energy_update事件 | 能量: {audio_energy:.8f}")
                 self._on_vad_event("energy_update", {
                     'time': current_time,
                     'energy': audio_energy
@@ -568,7 +574,7 @@ class FunASRVoiceRecognizer:
                 logger.error(f"[🎤 FUNASR错误] ❌ 能量超过阈值({audio_energy:.8f})但VAD回调未设置！")
 
         if vad_event and self._on_vad_event:
-            logger.info(f"触发VAD事件: {vad_event}, 能量: {audio_energy:.6f}")
+            #logger.info(f"触发VAD事件: {vad_event}, 能量: {audio_energy:.6f}")
             self._on_vad_event(vad_event, {
                 'time': current_time,
                 'energy': audio_energy

@@ -72,10 +72,17 @@ except ImportError:
     ExcelExporter = None  # type: ignore
 
 # 使用统一的日志工具类
-from logging_utils import get_app_logger
+import logging
+from logging_utils import LoggingManager
 
 # 获取配置好的日志记录器
-logger = get_app_logger(__name__, debug=False)  # 根据命令行参数在main函数中动态调整
+logger = LoggingManager.get_logger(
+    name='main_f',
+    level=logging.DEBUG,  # 文件记录详细日志
+    console_level=logging.INFO,  # 控制台只显示INFO及以上
+    log_to_console=True,
+    log_to_file=True
+)
 
 # 导入配置加载模块
 config_loader: Any = None
@@ -283,16 +290,16 @@ class FunASRVoiceSystem:
 
     def _handle_vad_event(self, event_type: str, event_data: dict):
         """处理VAD事件并转发给回调函数"""
-        # 🔍 调试输出 - 在main_f.py中接收VAD事件
+        # 🔍 调试输出 - 已注释，避免控制台输出过多
         energy = event_data.get('energy', 0)
-        logger.info(f"[🔗 MAIN接收] ← 收到VAD事件: {event_type} | 能量: {energy:.8f} | 数据: {event_data}")
-        logger.info(f"[🔗 MAIN检查] VAD回调已设置: {self.vad_callback is not None}")
+        #logger.debug(f"[🔗 MAIN接收] ← 收到VAD事件: {event_type} | 能量: {energy:.8f} | 数据: {event_data}")
+        #logger.debug(f"[🔗 MAIN检查] VAD回调已设置: {self.vad_callback is not None}")
 
         if self.vad_callback:
-            logger.info(f"[🔗 MAIN转发] → 转发VAD事件给GUI | 事件: {event_type} | 能量: {energy:.8f}")
+            #logger.debug(f"[🔗 MAIN转发] → 转发VAD事件给GUI | 事件: {event_type} | 能量: {energy:.8f}")
             try:
                 self.vad_callback(event_type, event_data)
-                logger.info(f"[🔗 MAIN成功] ✅ VAD事件转发成功")
+                #logger.debug(f"[🔗 MAIN成功] ✅ VAD事件转发成功")
             except Exception as e:
                 logger.error(f"[🔗 MAIN错误] ❌ VAD事件转发失败: {e}")
         else:
@@ -405,11 +412,11 @@ class FunASRVoiceSystem:
             'timestamp': time.time()
         })
 
-        # 终端显示（记录时间戳）
+        # 终端显示（记录时间戳）- 改为DEBUG级别，避免控制台输出过多
         terminal_start = time.time()
-        print(f"\n🎤 识别: {processed_text}")
+        logger.debug(f"\n🎤 识别: {processed_text}")
         if numbers and len(numbers) > 0:
-            print(f"🔢 数字: {numbers[0]}")
+            logger.debug(f"🔢 数字: {numbers[0]}")
         terminal_time = time.time() - terminal_start
 
         # 记录终端显示时间
@@ -545,15 +552,15 @@ class FunASRVoiceSystem:
 
         if command_type == VoiceCommandType.PAUSE:
             self.pause()
-            print(f"\n🎤 语音命令：暂停")
+            logger.debug(f"\n🎤 语音命令：暂停")
             self._notify_state_change("paused", "语音命令：暂停")
         elif command_type == VoiceCommandType.RESUME:
             self.resume()
-            print(f"\n🎤 语音命令：恢复")
+            logger.debug(f"\n🎤 语音命令：恢复")
             self._notify_state_change("resumed", "语音命令：恢复")
         elif command_type == VoiceCommandType.STOP:
             self.system_stop()
-            print(f"\n🎤 语音命令：停止")
+            logger.debug(f"\n🎤 语音命令：停止")
             self._notify_state_change("stopped", "语音命令：停止")
 
     def start_keyboard_listener(self):
@@ -573,18 +580,18 @@ class FunASRVoiceSystem:
                         if key == b' ':  # 空格键
                             if self.state == SystemState.RUNNING:
                                 self.pause()
-                                print(f"\n⌨️ 键盘命令：暂停")
+                                logger.debug(f"\n⌨️ 键盘命令：暂停")
                             elif self.state == SystemState.PAUSED:
                                 self.resume()
-                                print(f"\n⌨️ 键盘命令：恢复")
+                                logger.debug(f"\n⌨️ 键盘命令：恢复")
                             elif self.state == SystemState.STOPPED:
                                 # 在停止状态下，空格键开始新的识别
-                                print(f"\n⌨️ 键盘命令：开始识别")
+                                logger.debug(f"\n⌨️ 键盘命令：开始识别")
                                 self.run_recognition_cycle()
 
                         elif key == b'\x1b':  # ESC键
                             self.system_stop()
-                            print(f"\n⌨️ 键盘命令：停止")
+                            logger.debug(f"\n⌨️ 键盘命令：停止")
                             break
 
                 except KeyboardInterrupt:
@@ -598,14 +605,14 @@ class FunASRVoiceSystem:
 
         self.keyboard_thread = threading.Thread(target=keyboard_monitor, daemon=True)
         self.keyboard_thread.start()
-        logger.info("⌨️ 键盘监听器已启动")
+        logger.debug("⌨️ 键盘监听器已启动")
 
     def stop_keyboard_listener(self):
         """停止键盘监听"""
         self.keyboard_active = False
         if self.keyboard_thread and self.keyboard_thread.is_alive():
             self.keyboard_thread.join(timeout=1)
-        logger.info("⌨️ 键盘监听器已停止")
+        logger.debug("⌨️ 键盘监听器已停止")
 
     def start_recognition(self):
         """开始语音识别"""
@@ -613,38 +620,38 @@ class FunASRVoiceSystem:
             return
 
         self.state = SystemState.RUNNING
-        print(f"\n🎯 开始语音识别")
-        print("请说话...")
-        print("控制：空格键-暂停/恢复 | ESC键-停止 | 语音命令-暂停/继续/停止")
-        print(f"语音命令 (模式: {self.command_processor.match_mode}):")
-        print(f"  暂停: {', '.join(self.voice_commands[VoiceCommandType.PAUSE][:3])}{'...' if len(self.voice_commands[VoiceCommandType.PAUSE]) > 3 else ''}")
-        print(f"  继续: {', '.join(self.voice_commands[VoiceCommandType.RESUME][:3])}{'...' if len(self.voice_commands[VoiceCommandType.RESUME]) > 3 else ''}")
-        print(f"  停止: {', '.join(self.voice_commands[VoiceCommandType.STOP][:3])}{'...' if len(self.voice_commands[VoiceCommandType.STOP]) > 3 else ''}")
-        print("-" * 50)
+        logger.info(f"\n🎯 开始语音识别")
+        logger.debug("请说话...")
+        logger.debug("控制：空格键-暂停/恢复 | ESC键-停止 | 语音命令-暂停/继续/停止")
+        logger.debug(f"语音命令 (模式: {self.command_processor.match_mode}):")
+        logger.debug(f"  暂停: {', '.join(self.voice_commands[VoiceCommandType.PAUSE][:3])}{'...' if len(self.voice_commands[VoiceCommandType.PAUSE]) > 3 else ''}")
+        logger.debug(f"  继续: {', '.join(self.voice_commands[VoiceCommandType.RESUME][:3])}{'...' if len(self.voice_commands[VoiceCommandType.RESUME]) > 3 else ''}")
+        logger.debug(f"  停止: {', '.join(self.voice_commands[VoiceCommandType.STOP][:3])}{'...' if len(self.voice_commands[VoiceCommandType.STOP]) > 3 else ''}")
+        logger.debug("-" * 50)
 
     def pause(self):
         """暂停识别"""
         if self.state == SystemState.RUNNING:
             self.state = SystemState.PAUSED
-            print(f"\n⏸️ 已暂停")
+            logger.debug(f"\n⏸️ 已暂停")
 
     def resume(self):
         """恢复识别"""
         if self.state == SystemState.PAUSED:
             self.state = SystemState.RUNNING
-            print(f"\n▶️ 已恢复")
+            logger.debug(f"\n▶️ 已恢复")
 
     def stop(self):
         """停止当前识别（不停止系统）"""
         if self.state != SystemState.STOPPED:
             self.state = SystemState.STOPPED
-            print(f"\n🛑 识别已停止")
+            logger.debug(f"\n🛑 识别已停止")
 
     def system_stop(self):
         """完全停止系统"""
         self.state = SystemState.STOPPED
         self.system_should_stop = True
-        print(f"\n🛑 系统停止")
+        logger.info(f"\n🛑 系统停止")
 
         # 立即停止识别器
         try:
@@ -656,11 +663,11 @@ class FunASRVoiceSystem:
         try:
             performance_report = performance_monitor.export_performance_report()
             if performance_report:
-                print("\n" + "="*80)
-                print("📊 系统性能分析报告")
-                print("="*80)
-                print(performance_report)
-                print("="*80)
+                logger.debug("\n" + "="*80)
+                logger.debug("📊 系统性能分析报告")
+                logger.debug("="*80)
+                logger.debug(performance_report)
+                logger.debug("="*80)
 
                 # 将性能报告写入日志文件
                 performance_logger = logging.getLogger("performance")
@@ -690,34 +697,34 @@ class FunASRVoiceSystem:
             )
 
         except KeyboardInterrupt:
-            print(f"\n⚠️ 用户中断")
+            logger.info(f"\n⚠️ 用户中断")
             logger.info("🛑 用户手动中断识别流程")
         except Exception as e:
             logger.error(f"❌ 识别异常: {e}")
-            print(f"❌ 识别异常，请检查日志")
+            logger.debug(f"❌ 识别异常，请检查日志")
 
         # 识别结束，记录原因
         if self.system_should_stop:
             logger.info("🛑 系统接收到停止信号")
-            print("🛑 系统停止")
+            logger.debug("🛑 系统停止")
         else:
             logger.info("🛑 识别流程正常结束")
-            print("🛑 识别结束")
+            logger.debug("🛑 识别结束")
 
         self.stop()
 
     def run_continuous(self):
         """运行单次识别模式"""
-        print("🎤 FunASR语音输入系统")
-        print("=" * 50)
-        print(f"模式：单次识别")
-        print(f"识别时长：{self.recognition_duration}秒")
-        print("控制：空格键暂停/恢复 | ESC键停止 | 语音命令控制")
-        print(f"语音命令配置 (模式: {self.command_processor.match_mode}):")
-        print(f"  暂停: {', '.join(self.voice_commands[VoiceCommandType.PAUSE][:3])}{'...' if len(self.voice_commands[VoiceCommandType.PAUSE]) > 3 else ''}")
-        print(f"  继续: {', '.join(self.voice_commands[VoiceCommandType.RESUME][:3])}{'...' if len(self.voice_commands[VoiceCommandType.RESUME]) > 3 else ''}")
-        print(f"  停止: {', '.join(self.voice_commands[VoiceCommandType.STOP][:3])}{'...' if len(self.voice_commands[VoiceCommandType.STOP]) > 3 else ''}")
-        print("=" * 50)
+        logger.info("🎤 FunASR语音输入系统")
+        logger.debug("=" * 50)
+        logger.debug(f"模式：单次识别")
+        logger.debug(f"识别时长：{self.recognition_duration}秒")
+        logger.debug("控制：空格键暂停/恢复 | ESC键停止 | 语音命令控制")
+        logger.debug(f"语音命令配置 (模式: {self.command_processor.match_mode}):")
+        logger.debug(f"  暂停: {', '.join(self.voice_commands[VoiceCommandType.PAUSE][:3])}{'...' if len(self.voice_commands[VoiceCommandType.PAUSE]) > 3 else ''}")
+        logger.debug(f"  继续: {', '.join(self.voice_commands[VoiceCommandType.RESUME][:3])}{'...' if len(self.voice_commands[VoiceCommandType.RESUME]) > 3 else ''}")
+        logger.debug(f"  停止: {', '.join(self.voice_commands[VoiceCommandType.STOP][:3])}{'...' if len(self.voice_commands[VoiceCommandType.STOP]) > 3 else ''}")
+        logger.debug("=" * 50)
 
         # 启动键盘监听
         self.start_keyboard_listener()
@@ -730,22 +737,22 @@ class FunASRVoiceSystem:
 
         try:
             # 直接开始识别
-            print(f"\n🎯 开始语音识别")
-            print("请说话...")
-            print("-" * 50)
+            logger.info(f"\n🎯 开始语音识别")
+            logger.debug("请说话...")
+            logger.debug("-" * 50)
 
             self.run_recognition_cycle()
 
             # 显示汇总（只显示一次）
             if not self.system_should_stop:  # 只有当系统没有被命令停止时才显示汇总
-                print("\n" + "=" * 50)
-                print("识别汇总")
-                print("=" * 50)
+                logger.debug("\n" + "=" * 50)
+                logger.debug("识别汇总")
+                logger.debug("=" * 50)
                 
                 self.show_results_summary()
 
         except KeyboardInterrupt:
-            print(f"\n⚠️ 用户中断")
+            logger.info(f"\n⚠️ 用户中断")
             self.system_stop()
 
         finally:
@@ -768,40 +775,40 @@ class FunASRVoiceSystem:
     def show_results_summary(self):
         """显示识别结果汇总"""
         if not self.results_buffer:
-            print("\n📊 本次运行无识别结果")
+            logger.debug("\n📊 本次运行无识别结果")
             return
 
-        print(f"\n📊 识别结果汇总")
-        print("=" * 50)
+        logger.debug(f"\n📊 识别结果汇总")
+        logger.debug("=" * 50)
 
         # 统计信息
         total_results = len(self.results_buffer)
         number_results = [r for r in self.results_buffer if r['numbers']]
         text_results = [r for r in self.results_buffer if not r['numbers']]
 
-        print(f"📈 总识别次数：{total_results}")
-        print(f"🔢 纯数字识别：{len(number_results)}")
-        print(f"📝 文本识别：{len(text_results)}")
+        logger.debug(f"📈 总识别次数：{total_results}")
+        logger.debug(f"🔢 纯数字识别：{len(number_results)}")
+        logger.debug(f"📝 文本识别：{len(text_results)}")
 
         if number_results:
             all_numbers = []
             for result in number_results:
                 all_numbers.extend(result['numbers'])
-            print(f"📊 提取的数字：{all_numbers}")
+            logger.debug(f"📊 提取的数字：{all_numbers}")
 
         # 显示详细结果
-        print(f"\n📋 详细识别结果：")
+        logger.debug(f"\n📋 详细识别结果：")
         for i, result in enumerate(self.results_buffer, 1):
             status = "🔢" if result['numbers'] else "📝"
-            print(f"{i:2d}. {status} {result['original']}")
+            logger.debug(f"{i:2d}. {status} {result['original']}")
             if result['numbers']:
-                print(f"     → {result['numbers'][0]}")
+                logger.debug(f"     → {result['numbers'][0]}")
             elif result['processed'] != result['original']:
                 if self.processor.is_pure_number_or_with_unit(result['original']):
-                    print(f"     → {result['processed']}")
+                    logger.debug(f"     → {result['processed']}")
                 else:
                     clean_text = self.processor.remove_spaces(result['original'])
-                    print(f"     → {clean_text}")
+                    logger.debug(f"     → {clean_text}")
 
 def main():
     """主函数"""
@@ -812,9 +819,9 @@ def main():
     logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
     if debug_mode:
-        print("🐛 Debug模式已启用")
+        logger.info("🐛 Debug模式已启用")
     else:
-        print("🏭 生产模式")
+        logger.info("🏭 生产模式")
 
     # 创建系统实例
     system = FunASRVoiceSystem(
@@ -825,7 +832,7 @@ def main():
 
     # 初始化系统
     if not system.initialize():
-        print("❌ 系统初始化失败")
+        logger.error("❌ 系统初始化失败")
         return
 
     try:
@@ -834,14 +841,13 @@ def main():
 
     except Exception as e:
         logger.error(f"❌ 系统运行异常: {e}")
-        print(f"❌ 系统运行异常: {e}")
 
     finally:
         # 显示Excel文件路径（如果有数字数据）
         if system.number_results and system.excel_exporter:
-            print(f"\n📊 数据已保存到: {system.excel_exporter.filename}")
+            logger.info(f"\n📊 数据已保存到: {system.excel_exporter.filename}")
 
-        print("\n👋 感谢使用FunASR语音输入系统！")
+        logger.info("\n👋 感谢使用FunASR语音输入系统！")
 
 if __name__ == "__main__":
     main()

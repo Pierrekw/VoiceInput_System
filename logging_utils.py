@@ -80,10 +80,6 @@ class LoggingManager:
             # 构建完整的日志文件路径
             log_file_path = os.path.join(cls.LOGS_DIR, log_file)
             
-            # 调试信息 - 打印文件路径
-            print(f"[DEBUG] 尝试创建日志文件: {log_file_path}")
-            print(f"[DEBUG] 日志目录存在: {os.path.exists(cls.LOGS_DIR)}")
-            
             try:
                 # 创建文件处理器 - 确保使用正确的UTF-8编码
                 file_handler = logging.FileHandler(
@@ -95,12 +91,12 @@ class LoggingManager:
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
                 
-                print(f"[DEBUG] 文件处理器创建成功")
-                
-                # 使用print而不是logger记录文件创建信息（避免递归）
-                print(f"[INFO] 日志文件已配置: {log_file_path}")
+                # 使用低级别的日志记录，而不是print语句
+                logger.debug(f"日志文件已创建: {log_file_path}")
             except Exception as e:
-                print(f"[ERROR] 创建日志文件失败: {e}")
+                # 使用标准错误流输出错误信息
+                import sys
+                print(f"创建日志文件失败: {e}", file=sys.stderr)
         
         # 配置控制台日志
         if log_to_console:

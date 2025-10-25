@@ -559,7 +559,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
     def init_ui(self):
         """初始化界面"""
-        self.setWindowTitle("FunASR语音识别系统 v2.3")
+        self.setWindowTitle("FunASR语音识别系统 v2.4")
         self.setMinimumSize(900, 600)
 
         central_widget = QWidget()

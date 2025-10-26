@@ -62,7 +62,13 @@ from text_processor import TextProcessor, VoiceCommandProcessor
 from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
-from debug.debug_performance_tracker import debug_tracker
+try:
+    from debug.debug_performance_tracker import debug_tracker
+    DEBUG_TRACKER_AVAILABLE = True
+except ImportError:
+    debug_tracker = None
+    DEBUG_TRACKER_AVAILABLE = False
+    print("⚠️ Debug性能追踪模块不可用（轻量模式）")
 
 # 导入生产环境延迟记录器
 try:
@@ -598,7 +604,8 @@ class FunASRVoiceSystem:
         terminal_time = time.time() - terminal_start
 
         # 记录终端显示时间
-        debug_tracker.record_terminal_display(processed_text)
+        if debug_tracker is not None:
+            debug_tracker.record_terminal_display(processed_text)
 
         # 记录生产环境终端显示
         log_terminal_display(processed_text, float(terminal_time))
@@ -658,7 +665,8 @@ class FunASRVoiceSystem:
 
                 # Excel写入结束
                 excel_time = time.time() - excel_start
-                debug_tracker.record_excel_write(processed_text, excel_time)
+                if debug_tracker is not None:
+                    debug_tracker.record_excel_write(processed_text, excel_time)
 
                 if excel_result:
                     record_id, record_number, record_text = excel_result[0]
@@ -704,13 +712,15 @@ class FunASRVoiceSystem:
 
         if result.text.strip():
             # 记录ASR结果完成
-            debug_tracker.record_asr_result(result.text, getattr(result, 'confidence', 0.0))
+            if debug_tracker is not None:
+                debug_tracker.record_asr_result(result.text, getattr(result, 'confidence', 0.0))
 
             # 记录生产环境ASR完成
             log_asr_complete(result.text, 0.0)  # 这里可以传入实际的ASR处理时间
 
             # 文本处理开始
-            debug_tracker.record_text_processing_start(result.text)
+            if debug_tracker is not None:
+                debug_tracker.record_text_processing_start(result.text)
             text_processing_start = time.time()
 
             processed = self.processor.process_text(result.text)
@@ -718,7 +728,8 @@ class FunASRVoiceSystem:
 
             # 文本处理结束
             text_processing_time = time.time() - text_processing_start
-            debug_tracker.record_text_processing_end(processed, len(numbers) > 0)
+            if debug_tracker is not None:
+                debug_tracker.record_text_processing_end(processed, len(numbers) > 0)
 
             # 记录详细处理时间到日志
             logger.debug(f"[LATENCY] ASR结果: '{result.text}' | 文本处理: {text_processing_time*1000:.2f}ms")
@@ -974,7 +985,8 @@ class FunASRVoiceSystem:
         self.start_keyboard_listener()
 
         # 启动debug性能追踪
-        debug_tracker.start_debug_session(f"funasr_session_{int(time.time())}")
+        if debug_tracker is not None:
+            debug_tracker.start_debug_session(f"funasr_session_{int(time.time())}")
 
         # 启动生产环境延迟记录
         start_latency_session()
@@ -1014,7 +1026,8 @@ class FunASRVoiceSystem:
             self.stop_keyboard_listener()
 
             # 停止debug追踪并生成报告
-            debug_tracker.stop_debug_session()
+            if debug_tracker is not None:
+                debug_tracker.stop_debug_session()
 
             # 停止生产环境延迟记录
             end_latency_session()

@@ -166,19 +166,10 @@ class WorkingVoiceWorker(QThread):
                             if is_matching_record:
                                 has_new_record = True
 
-                                # 确保record_id被正确添加到显示文本中
-                                if record_id and record_id.strip():
-                                    # 如果有record_text（如OK/NOK信息），也一并显示
-                                    if record_text and record_text.strip():
-                                        display_text = f"[{record_id}] {record_number} {record_text}"
-                                    else:
-                                        display_text = f"[{record_id}] {record_number}"
+                                if isinstance(record_number, str) and record_text and record_text.strip():
+                                    display_text = f"[{record_id}] {record_number}"
                                 else:
-                                    # 如果没有record_id，生成一个默认的ID格式
-                                    if record_text and record_text.strip():
-                                        display_text = f"[ID] {record_number} {record_text}"
-                                    else:
-                                        display_text = f"[ID] {record_number}"
+                                    display_text = f"[{record_id}] {record_number}"
 
                                 self.recognition_result.emit(display_text)
                                 self.log_message.emit(f"🎤 识别结果: {display_text}")
@@ -1352,56 +1343,68 @@ class WorkingSimpleMainWindow(QMainWindow):
     def _load_and_display_history(self):
         """加载并显示历史识别记录"""
         try:
-            # 获取当前系统的历史数据
+            # 获取历史数据 - 从多个可能的来源获取
+            history_records = []
+            current_standard_id = 100
+
+            # 方法1：从GUI保存的voice_system获取
             if hasattr(self, 'voice_system') and self.voice_system:
                 history_records = self.voice_system.results_buffer
                 current_standard_id = self.voice_system.current_standard_id
+            # 方法2：从worker.voice_system获取（Worker初始化后但系统未完全初始化时）
+            elif hasattr(self, 'worker') and self.worker and hasattr(self.worker, 'voice_system') and self.worker.voice_system:
+                history_records = self.worker.voice_system.results_buffer
+                current_standard_id = self.worker.voice_system.current_standard_id
+            # 方法3：直接从历史文件加载（备用方案）
+            else:
+                import json
+                import os
+                history_file = os.path.join(os.getcwd(), "logs", "recognition_history.json")
+                if os.path.exists(history_file):
+                    with open(history_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    history_records = data.get('results_buffer', [])
+                    current_standard_id = data.get('current_standard_id', 100)
+                    self.append_log("📂 从历史文件加载数据")
 
-                # 清空当前显示
-                self.history_text.clear()
-                self.recognition_count = 0
+            # 清空当前显示
+            self.history_text.clear()
+            self.recognition_count = 0
 
                 if history_records:
-                    self.append_log(f"📚 加载历史记录: {len(history_records)}条")
+            self.append_log(f"📚 加载历史记录: {len(history_records)}条")
 
-                    # 显示历史记录
-                    for record in reversed(history_records):  # 最新的在前面
-                        original = record.get('original', '')
-                        processed = record.get('processed', '')
-                        numbers = record.get('numbers', [])
-                        timestamp = record.get('timestamp', 0)
+            # 显示历史记录
+            for record in reversed(history_records):  # 最新的在前面
+                    original = record.get('original', '')
+                    processed = record.get('processed', '')
+                    numbers = record.get('numbers', [])
+                    timestamp = record.get('timestamp', 0)
 
-                        # 格式化时间戳
-                        from datetime import datetime
-                        time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
+                    # 格式化时间戳
+                    from datetime import datetime
+                    time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
 
-                        # 构建历史记录条目，符合display_result的is_record要求
-                        mock_record_id = len(history_records) - history_records.index(record)  # 倒序ID
+                    # 构建历史记录条目
+                    if numbers and len(numbers) > 0:
+                        history_entry = f"🕒 {time_str} 🔢 {processed}"
+                    else:
+                        history_entry = f"🕒 {time_str} 📝 {processed}"
 
-                        if numbers and len(numbers) > 0:
-                            # 数字记录：[ID] 数字格式（符合Worker当前发送格式）
-                            history_entry = f"[{mock_record_id}] {numbers[0]}"
-                        else:
-                            # 文本记录：[ID] 文本格式
-                            text_content = processed if processed else original
-                            history_entry = f"[{mock_record_id}] {text_content}"
+                    self.history_text.append(history_entry)
+                    self.recognition_count += 1
 
-                        self.history_text.append(history_entry)
-                        self.recognition_count += 1
+                # 显示当前标准序号
+                self.append_log(f"🎯 当前标准序号: {current_standard_id}")
 
-                    # 显示当前标准序号
-                    self.append_log(f"🎯 当前标准序号: {current_standard_id}")
+                # 滚动到底部
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                self.history_text.setTextCursor(cursor)
 
-                    # 滚动到底部
-                    cursor = self.history_text.textCursor()
-                    cursor.movePosition(QTextCursor.End)
-                    self.history_text.setTextCursor(cursor)
-
-                    self.append_log(f"✅ 历史记录加载完成，共显示{len(history_records)}条记录")
-                else:
-                    self.append_log("📝 暂无历史记录")
+                self.append_log(f"✅ 历史记录加载完成，共显示{len(history_records)}条记录")
             else:
-                self.append_log("⚠️ 语音系统未初始化，无法加载历史记录")
+                self.append_log("📝 暂无历史记录")
 
         except Exception as e:
             self.append_log(f"❌ 加载历史记录失败: {str(e)}")

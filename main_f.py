@@ -52,7 +52,7 @@ from funasr_voice_TENVAD import FunASRVoiceRecognizer
 from text_processor_clean import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
-from performance_monitor import performance_monitor, PerformanceStep
+from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
 from utils.debug_performance_tracker import debug_tracker
@@ -81,7 +81,7 @@ except ImportError:
 
 # 使用统一的日志工具类
 import logging
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 # 获取配置好的日志记录器
 logger = LoggingManager.get_logger(
@@ -97,7 +97,7 @@ config_loader: Any = None
 CONFIG_AVAILABLE = False
 
 try:
-    from config_loader import config
+    from utils.config_loader import config
     config_loader = config
     CONFIG_AVAILABLE = True
 except ImportError:
@@ -277,7 +277,7 @@ class FunASRVoiceSystem:
 
     def _setup_logging(self):
         """设置日志记录"""
-        from logging_utils import get_logger
+        from utils.logging_utils import get_logger
         
         # 使用统一的日志工具获取专门的识别日志记录器
         self.recognition_logger = get_logger("voice_recognition", level=logging.INFO)

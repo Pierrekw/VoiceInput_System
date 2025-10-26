@@ -28,7 +28,7 @@ import warnings
 import logging
 
 # 导入性能监控
-from performance_monitor import performance_monitor, PerformanceStep
+from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
 try:
@@ -128,7 +128,7 @@ from dataclasses import dataclass
 from collections import deque
 
 # 使用统一的日志工具类
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 # 获取配置好的日志记录器（参考voice_gui.py的配置风格）
 logger = LoggingManager.get_logger(
@@ -295,7 +295,7 @@ class FunASRVoiceRecognizer:
     def _load_vad_config(self):
         """从配置加载器加载VAD设置"""
         try:
-            from config_loader import config
+            from utils.config_loader import config
 
             # 加载FFmpeg预处理配置
             self._ffmpeg_enabled = config.is_ffmpeg_preprocessing_enabled()
@@ -441,7 +441,7 @@ class FunASRVoiceRecognizer:
     def _get_gui_display_threshold(self) -> float:
         """获取GUI能量显示阈值（独立于VAD检测）"""
         try:
-            from config_loader import config
+            from utils.config_loader import config
             return config.get_gui_display_threshold()
         except Exception as e:
             logger.warning(f"加载GUI显示阈值失败: {e}，使用默认值0.00001")
@@ -584,7 +584,7 @@ class FunASRVoiceRecognizer:
 
         # 从配置加载全局卸载设置
         try:
-            from config_loader import get_config
+            from utils.config_loader import get_config
             config = get_config()
             global_unload = config.get('system', {}).get('global_unload', False)
         except ImportError:

@@ -12,6 +12,13 @@ from .production_latency_logger import (
     log_voice_input_end, log_asr_complete, log_terminal_display
 )
 
+# 导入核心模块
+from .performance_monitor import performance_monitor, PerformanceStep
+from .config_loader import config
+from .logging_utils import (
+    LoggingManager, get_logger, setup_logger, get_app_logger, get_silent_logger
+)
+
 __all__ = [
     # 调试工具
     'debug_tracker',
@@ -22,6 +29,18 @@ __all__ = [
     'log_voice_input_end',
     'log_asr_complete',
     'log_terminal_display',
+
+    # 核心模块
+    'performance_monitor',
+    'PerformanceStep',
+    'config',
+
+    # 日志工具
+    'LoggingManager',
+    'get_logger',
+    'setup_logger',
+    'get_app_logger',
+    'get_silent_logger',
 ]
 
 __version__ = "1.0.0"

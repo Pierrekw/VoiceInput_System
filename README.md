@@ -22,11 +22,17 @@
 - **📝 数字智能提取**: 自动识别和转换中文数字
 - **🛠️ 组件化架构**: 支持模块化开发，便于维护和扩展
 
-### 最新修复 (v2.5)
+### 最新更新 (v2.6)
+- **📁 项目结构规范化**: 创建utils工具包，将9个工具模块集中管理
+- **🔧 文件组织优化**: 根目录从29个文件减少到7个文件，结构更清晰
+- **📦 工具包集成**: 统一import路径，支持`from utils.module import`方式
+- **📝 文档管理严格化**: 严格控制MD文件创建，只保留必要的文档
+
+### v2.5重要修复
 - **🐛 修复停止阻塞问题**: 解决FFmpeg预处理导致的音频流阻塞
 - **🔧 优化架构设计**: FFmpeg改为批量预处理模式，保持实时性
 - **📝 修复日志系统**: 解决logging_utils.py中的类型错误
-- **✨ GUI组件化**: 新增gui_components.py和voice_gui_refractor.py模块化组件
+- **✨ GUI组件化**: 新增gui_components.py模块化组件
 
 ## 🚀 快速开始
 
@@ -193,27 +199,44 @@ excel:
 - **多语言**: 同时支持中文和英文命令
 - **智能过滤**: 避免误识别短文本为命令
 
-## 📁 项目结构
+## 📁 项目结构 (v2.6规范化)
 
 ```
 Voice_Input/
-├── start_funasr.py          # 主启动脚本
-├── main_f.py                # 核心系统类
-├── funasr_voice_module.py   # FunASR识别模块
-├── config_loader.py         # 配置加载器
-├── text_processor_clean.py  # 文本处理模块（重构优化）
-├── excel_exporter.py        # Excel导出模块
-├── voice_gui.py             # GUI图形界面
-├── stable_gui.py            # 稳定版GUI
-├── performance_monitor.py   # 性能监控模块
-├── config.yaml             # 配置文件
-├── model/                   # 模型文件目录
-├── reports/                 # Excel输出目录
-├── logs/                    # 日志文件目录
-└── tests/                   # 测试文件目录
-    ├── test_text_processor_refactor.py  # 文本处理器重构测试
-    ├── test_funasr.py                # 核心功能测试
-    ├── test_improvements.py          # 功能改进测试
+├── 📦 核心模块 (7个文件)
+│   ├── main_f.py                   # 主系统类
+│   ├── funasr_voice_TENVAD.py      # TEN VAD + FunASR集成模块
+│   ├── voice_gui.py                # 主GUI界面
+│   ├── excel_exporter.py           # Excel导出模块
+│   ├── text_processor_clean.py     # 文本处理模块
+│   ├── gui_components.py           # GUI组件模块
+│   └── __init__.py                 # 包初始化文件
+│
+├── 🔧 Utils工具包 (9个模块)
+│   └── utils/
+│       ├── __init__.py             # 包初始化和便捷导入
+│       ├── README.md               # 工具包说明文档
+│       ├── performance_monitor.py   # 性能监控
+│       ├── config_loader.py         # 配置管理
+│       ├── logging_utils.py         # 日志工具
+│       ├── debug_performance_tracker.py  # Debug性能追踪
+│       ├── production_latency_logger.py  # 生产延迟日志
+│       ├── configure_ten_vad.py     # TEN VAD配置
+│       ├── setup_ffmpeg_env.py      # FFmpeg环境设置
+│       ├── safe_funasr_import.py    # FunASR安全导入
+│       └── smart_decimal_config.py  # 智能小数点配置
+│
+├── 📁 其他目录
+│   ├── config.yaml                 # 主配置文件
+│   ├── archive/                     # 归档文件目录
+│   ├── Docs/                        # 文档目录
+│   │   └── DevelopmentRecord.MD     # 开发记录
+│   ├── reports/                     # Excel输出目录
+│   ├── logs/                        # 日志文件目录
+│   └── tests/                       # 测试文件目录
+│       ├── test_text_processor_refactor.py  # 文本处理器重构测试
+│       ├── test_funasr.py                # 核心功能测试
+│       ├── test_improvements.py          # 功能改进测试
     └── ...
 ```
 

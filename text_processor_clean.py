@@ -9,7 +9,7 @@ import re
 import logging
 from typing import Optional, Dict, Any, List, Tuple
 
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 logger = LoggingManager.get_logger(
     name='text_processor_clean',

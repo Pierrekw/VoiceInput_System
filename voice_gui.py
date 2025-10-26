@@ -13,7 +13,7 @@ import math
 import subprocess
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 logger = LoggingManager.get_logger(
     name='voice_gui',
@@ -270,7 +270,7 @@ class WorkingVoiceWorker(QThread):
 
             if event_type in ["speech_start", "speech_end", "energy_update"]:
                 try:
-                    from config_loader import config
+                    from utils.config_loader import config
                     vad_threshold = config.get_vad_energy_threshold()
                 except:
                     vad_threshold = 0.010  # 默认阈值，与config.yaml一致
@@ -369,7 +369,7 @@ class WorkingVoiceWorker(QThread):
         Returns:
             配置参数字典
         """
-        from config_loader import config
+        from utils.config_loader import config
 
         configs = {
             'fast': {

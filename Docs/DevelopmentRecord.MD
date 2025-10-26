@@ -1,5 +1,104 @@
 # 开发记录
 
+## 2025年10月26日 - v2.6 Utils工具包集成与项目规范化
+
+### 🎯 主要更新
+**项目结构重大重组**: 创建Utils工具包，实现项目结构规范化，根目录文件数量减少76%
+
+### ✅ 核心改进
+
+#### 1. Utils工具包创建
+- **工具包目录**: 创建`utils/`作为专用工具包
+- **模块集成**: 将9个工具模块集中到utils目录
+- **包结构**: 完善`__init__.py`和便捷导入机制
+- **文档完善**: 创建工具包详细说明文档
+
+**移动的模块**:
+```
+utils/
+├── performance_monitor.py       # 性能监控
+├── config_loader.py             # 配置管理
+├── logging_utils.py             # 日志工具
+├── debug_performance_tracker.py # Debug性能追踪
+├── production_latency_logger.py # 生产延迟日志
+├── configure_ten_vad.py         # TEN VAD配置
+├── setup_ffmpeg_env.py          # FFmpeg环境设置
+├── safe_funasr_import.py        # FunASR安全导入
+└── smart_decimal_config.py      # 智能小数点配置
+```
+
+#### 2. Import路径统一更新
+- **主程序更新**: 更新所有主要文件的import路径
+- **统一规范**: 全部采用`from utils.module import`格式
+- **向后兼容**: 保持所有功能正常工作
+
+**更新的文件**:
+- `main_f.py` - 更新4个import语句
+- `funasr_voice_TENVAD.py` - 更新4个import语句
+- `voice_gui.py` - 更新2个import语句
+- `excel_exporter.py` - 更新2个import语句
+- `gui_components.py` - 更新1个import语句
+- `text_processor_clean.py` - 更新1个import语句
+
+#### 3. 项目结构优化
+- **文件数量**: 根目录从29个文件减少到7个文件 (减少76%)
+- **结构清晰**: 核心模块与工具模块分离
+- **维护性**: 大幅提升项目可维护性
+
+#### 4. 文档管理严格化
+- **MD文件控制**: 严格控制新建MD文件，只保留必要文档
+- **文档整合**: 信息集中到README.md和DevelopmentRecord.MD
+- **规范执行**: 严格执行v2.6项目规范化规则
+
+### 🔧 技术细节
+
+#### Utils包导入方式
+```python
+# 方式1: 直接导入 (推荐)
+from utils.performance_monitor import performance_monitor
+from utils.config_loader import config
+from utils.logging_utils import LoggingManager
+
+# 方式2: 通过包初始化导入
+import utils
+utils.performance_monitor.start_timer("测试")
+```
+
+#### 功能验证结果
+- ✅ `main_f.py` 导入正常
+- ✅ `funasr_voice_TENVAD.py` 导入正常
+- ✅ `voice_gui.py` 导入正常
+- ✅ TEN VAD 加载成功
+- ✅ 所有工具模块正常工作
+- ✅ 完全向后兼容
+
+### 📊 优化效果
+
+#### 项目结构对比
+**优化前** (29个文件):
+- 核心模块: 7个
+- 工具模块: 9个 (散布在根目录)
+- 其他文件: 13个
+
+**优化后** (7个核心文件 + utils工具包):
+- 核心模块: 7个 (根目录)
+- 工具模块: 9个 (utils目录)
+- 工具包化: 100%
+
+#### 维护性提升
+- **查找效率**: 工具模块集中管理，查找更快
+- **导入统一**: 所有工具使用统一导入格式
+- **扩展性**: 新工具可轻松加入utils包
+- **文档性**: 工具包有完整说明文档
+
+### 🎯 版本信息
+- **版本号**: v2.6
+- **更新类型**: 重大结构优化
+- **兼容性**: 完全向后兼容
+- **稳定性**: 经过完整功能验证
+
+---
+
 ## 2025年10月25日 - v2.3 TEN VAD神经网络集成更新
 
 ### 🎯 主要更新

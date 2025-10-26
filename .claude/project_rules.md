@@ -5,8 +5,8 @@
 
 ## 📋 当前版本 (v2.6)
 - **发布日期**: 2025-10-26
-- **核心特性**: TEN VAD + FFmpeg预处理 + 组件化GUI架构 + 项目规范化
-- **主要修复**: 解决停止阻塞问题、日志系统修复、类型安全优化、文件组织规范化
+- **核心特性**: TEN VAD + FFmpeg预处理 + 组件化GUI架构 + Utils工具包 + 项目规范化
+- **主要修复**: 解决停止阻塞问题、日志系统修复、类型安全优化、文件组织规范化、工具包集成
 
 ## 📁 重要目录结构规则
 
@@ -22,22 +22,28 @@ Voice_Input/
 ├── tests/                    # ⚠️ 所有测试文件必须放在这里
 │   ├── test_*.py             # 测试文件
 │   └── README.md             # 测试说明文档
+├── utils/                    # 🔧 Utils工具包 (v2.6新增)
+│   ├── __init__.py           # 包初始化和便捷导入
+│   ├── README.md             # 工具包说明文档
+│   ├── performance_monitor.py   # 性能监控
+│   ├── config_loader.py         # 配置管理
+│   ├── logging_utils.py         # 日志工具
+│   ├── debug_performance_tracker.py  # Debug性能追踪
+│   ├── production_latency_logger.py  # 生产延迟日志
+│   ├── configure_ten_vad.py     # TEN VAD配置
+│   ├── setup_ffmpeg_env.py      # FFmpeg环境设置
+│   ├── safe_funasr_import.py    # FunASR安全导入
+│   └── smart_decimal_config.py  # 智能小数点配置
 ├── main_f.py                 # 核心系统类
 ├── funasr_voice_TENVAD.py    # TEN VAD + FFmpeg集成模块
-├── funasr_voice_module.py    # 原版FunASR识别模块
-├── text_processor_clean.py   # 文本处理模块 (重构优化)
-├── excel_exporter.py         # Excel导出模块
 ├── voice_gui.py              # 主要GUI界面
-├── voice_gui_refractor.py    # 重构版GUI界面 (组件化)
-├── gui_components.py         # GUI组件模块 (新增)
-├── start_funasr.py           # 主启动脚本
-├── config_loader.py          # 配置加载器
-├── logging_utils.py          # 日志工具类 (已修复)
+├── excel_exporter.py         # Excel导出模块
+├── text_processor_clean.py   # 文本处理模块 (重构优化)
+├── gui_components.py         # GUI组件模块
 ├── config.yaml               # 配置文件
-├── performance_monitor.py    # 性能监控模块
+├── archive/                  # 归档文件目录
 ├── reports/                  # Excel输出目录
 ├── Logs/                     # 日志文件目录
-├── build_scripts/            # 构建脚本目录
 └── onnx_deps/                # ONNX依赖目录
 ```
 

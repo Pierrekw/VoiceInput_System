@@ -339,6 +339,11 @@ class FunASRVoiceRecognizer:
         if not self._ffmpeg_enabled or not self._ffmpeg_options.get('process_input', True):
             return audio_data  # 如果未启用或配置不处理输入，直接返回原数据
 
+        # 🔥 关键修复：在FFmpeg处理开始前检查停止信号
+        if self._stop_event.is_set():
+            logger.info("检测到停止信号，跳过FFmpeg预处理")
+            return audio_data
+
         try:
             import subprocess
             import tempfile
@@ -376,24 +381,25 @@ class FunASRVoiceRecognizer:
             logger.debug(f"执行FFmpeg命令: {' '.join(ffmpeg_cmd)}")
 
             try:
+                # 🔥 修复：大幅减少超时时间，避免长时间阻塞
                 result = subprocess.run(
                     ffmpeg_cmd,
                     capture_output=True,
                     text=True,
-                    timeout=30  # 30秒超时
+                    timeout=2  # 减少到2秒超时，避免阻塞停止功能
                 )
 
                 if result.returncode != 0:
-                    logger.error(f"FFmpeg预处理失败: {result.stderr}")
+                    logger.warning(f"FFmpeg预处理失败: {result.stderr}")
                     return audio_data  # 失败时返回原数据
                 else:
                     logger.debug(f"FFmpeg预处理成功: {result.stdout}")
 
             except subprocess.TimeoutExpired:
-                logger.error("FFmpeg预处理超时")
+                logger.warning("FFmpeg预处理超时，跳过此音频块的预处理")
                 return audio_data
             except Exception as e:
-                logger.error(f"FFmpeg预处理异常: {e}")
+                logger.warning(f"FFmpeg预处理异常: {e}")
                 return audio_data
 
             # 读取预处理后的音频数据
@@ -959,6 +965,11 @@ class FunASRVoiceRecognizer:
 
                         # 应用FFmpeg预处理（如果启用）
                         if self._ffmpeg_enabled:
+                            # 🔥 关键修复：在FFmpeg预处理前检查停止信号
+                            if self._stop_event.is_set():
+                                logger.info("检测到停止信号，跳过FFmpeg预处理")
+                                break
+
                             with PerformanceStep("FFmpeg预处理", {
                                 'data_length': len(audio_data),
                                 'current_time': current_time
@@ -1073,6 +1084,11 @@ class FunASRVoiceRecognizer:
                 with self._audio_stream() as stream:
                     while self._is_running and not self._stop_event.is_set():
                         try:
+                            # 🔥 关键修复：在音频读取前检查停止信号
+                            if self._stop_event.is_set():
+                                logger.info("连续识别检测到停止信号，退出循环")
+                                break
+
                             data = stream.read(self.chunk_size, exception_on_overflow=False)
                             current_time = time.time()
 

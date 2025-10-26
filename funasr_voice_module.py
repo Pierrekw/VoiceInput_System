@@ -1,20 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FunASR + TEN VAD 语音识别模块
-基于FunASR ASR + TEN VAD的语音录入和识别功能，可作为模块导入使用
-结合神经网络VAD、流式识别和多种优化策略
-
-TEN VAD优势：
-- 神经网络VAD，比传统能量阈值更准确
-- 抗噪音能力强，误检率低
-- 能够检测轻声语音
-- 无需手动调参，开箱即用
-- 流式支持，低延迟 (RTF约0.01-0.02)
-- 轻量级 (约508KB vs Silero VAD的2.16MB)
+FunASR语音识别模块
+基于FunASR的语音录入和识别功能，可作为模块导入使用
+结合VAD、流式识别和多种优化策略
 
 使用示例:
-    from funasr_voice_TENVAD import FunASRVoiceRecognizer
+    from funasr_voice_module import FunASRVoiceRecognizer
 
     recognizer = FunASRVoiceRecognizer()
     recognizer.initialize()
@@ -25,7 +17,6 @@ TEN VAD优势：
 import os
 import sys
 import warnings
-import logging
 
 # 导入性能监控
 from performance_monitor import performance_monitor, PerformanceStep
@@ -36,37 +27,6 @@ try:
 except ImportError:
     debug_tracker = None
 
-# TEN VAD相关
-TEN_VAD_AVAILABLE = False
-ten_vad_model = None
-
-try:
-    # 导入本地TEN VAD
-    ten_vad_path = "./onnx_deps/ten_vad"
-    if os.path.exists(ten_vad_path):
-        sys.path.insert(0, os.path.join(ten_vad_path, "include"))
-
-        # 导入TEN VAD (基于真实的API)
-        from ten_vad import TenVad
-
-        # 创建TEN VAD实例
-        # hop_size=256 (16ms), threshold=0.5 (默认值)
-        ten_vad_model = TenVad(hop_size=256, threshold=0.5)
-        TEN_VAD_AVAILABLE = True
-        print("✅ TEN VAD 加载成功 (hop_size=256, threshold=0.5)")
-
-    else:
-        print(f"⚠️ TEN VAD路径不存在: {ten_vad_path}")
-        TEN_VAD_AVAILABLE = False
-
-except Exception as e:
-    print(f"⚠️ TEN VAD初始化失败: {e}")
-    print("💡 建议检查:")
-    print("  1. ten-vad/lib/Windows/x64/ten_vad.dll 是否存在")
-    print("  2. numpy 是否已安装")
-    print("  3. Python环境是否兼容")
-    TEN_VAD_AVAILABLE = False
-
 # 彻底抑制FunASR的进度条和调试输出
 os.environ['TQDM_DISABLE'] = '1'
 os.environ['PYTHONWARNINGS'] = 'ignore'
@@ -74,6 +34,7 @@ os.environ['HIDE_PROGRESS'] = '1'
 os.environ['FUNASR_LOG_LEVEL'] = 'ERROR'
 
 # 配置日志级别，只显示错误
+import logging
 logging.getLogger("funasr").setLevel(logging.ERROR)
 logging.getLogger("modelscope").setLevel(logging.ERROR)
 logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -89,13 +50,13 @@ def setup_ffmpeg_environment():
     # 如果已经设置过FFmpeg路径，直接跳过
     if os.environ.get('FFMPEG_PATH_SET') == '1':
         return True
-
+    
     try:
         # 方法2：配置固定路径（推荐用于快速启动）
         # 这里设置一个固定的FFmpeg路径，避免多次检查
         # 用户可以根据实际情况修改这个路径
         FIXED_FFMPEG_PATH = "./onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin"
-
+        
         if FIXED_FFMPEG_PATH and os.path.exists(FIXED_FFMPEG_PATH):
             current_path = os.environ.get('PATH', '')
             if FIXED_FFMPEG_PATH not in current_path:
@@ -103,15 +64,15 @@ def setup_ffmpeg_environment():
             # 标记FFmpeg路径已设置
             os.environ['FFMPEG_PATH_SET'] = '1'
             return True
-
+        
         # 方法3：快速检查（仅检查最可能的位置）
         script_dir = os.path.dirname(os.path.abspath(__file__))
         fast_check_paths = [
             # 主要检查FunASR_Deployment目录
-            os.path.join(script_dir, "FunASR_Deployment",
-                        "dependencies", "ffmpeg-master-latest-win64-gpl-shared", "bin"),
+            os.path.join(script_dir, "FunASR_Deployment", "dependencies",
+                        "ffmpeg-master-latest-win64-gpl-shared", "bin"),
         ]
-
+        
         for ffmpeg_path in fast_check_paths:
             if os.path.exists(ffmpeg_path):
                 current_path = os.environ.get('PATH', '')
@@ -119,14 +80,14 @@ def setup_ffmpeg_environment():
                     os.environ['PATH'] = ffmpeg_path + os.pathsep + current_path
                 os.environ['FFMPEG_PATH_SET'] = '1'
                 return True
-
+        
         # 注意：系统PATH检查已移除，因为它较慢
         # 建议：将FFmpeg添加到系统环境变量PATH中
         print("⚠️ 未找到FFmpeg快速路径")
         print("💡 性能优化建议：")
         print("  1. 将FFmpeg安装到系统PATH环境变量中")
         print(f"  2. 或修改代码中的FIXED_FFMPEG_PATH为您的FFmpeg路径")
-
+        
         return False
 
     except Exception:
@@ -141,6 +102,7 @@ setup_ffmpeg_environment()
 # ============================================================================
 import io
 import time
+import logging
 import numpy as np
 import pyaudio
 import threading
@@ -154,7 +116,7 @@ from logging_utils import LoggingManager
 
 # 获取配置好的日志记录器（参考voice_gui.py的配置风格）
 logger = LoggingManager.get_logger(
-    name='funasr_voice_TENVAD',
+    name='funasr_voice_module',
     level=logging.DEBUG,  # 文件记录详细日志
     console_level=logging.INFO,  # 控制台显示INFO及以上信息
     log_to_console=True,
@@ -200,19 +162,11 @@ class RecognitionResult:
 
 @dataclass
 class VADConfig:
-    """TEN VAD配置"""
-    # TEN VAD主要参数
-    vad_threshold: float = 0.5           # VAD检测阈值 (0-1)
-    min_speech_duration: float = 0.3     # 最小语音时长
-    min_silence_duration: float = 0.6    # 最小静音时长
-    speech_padding: float = 0.3          # 语音填充
-
-    # 回退配置：当TEN VAD不可用时使用
-    fallback_energy_threshold: float = 0.015  # 回退到能量阈值
-
-    # TEN VAD特定配置
-    use_ten_vad: bool = True            # 是否使用TEN VAD
-    auto_fallback: bool = True          # 自动回退到能量阈值
+    """VAD配置"""
+    energy_threshold: float = 0.015
+    min_speech_duration: float = 0.3
+    min_silence_duration: float = 0.6
+    speech_padding: float = 0.3
 
 @dataclass
 class FunASRConfig:
@@ -231,8 +185,8 @@ class FunASRConfig:
 
 class FunASRVoiceRecognizer:
     """
-    FunASR + TEN VAD 语音识别器主类
-    提供语音录入、识别和神经网络VAD功能
+    FunASR语音识别器主类
+    提供语音录入、识别和VAD功能
     """
 
     def __init__(self,
@@ -282,10 +236,6 @@ class FunASRVoiceRecognizer:
         self._speech_buffer: List[np.ndarray] = []
         self._funasr_cache: Dict[str, Any] = {}
 
-        # TEN VAD音频缓冲 (用于处理256样本的hop size)
-        self._ten_vad_buffer: List[np.ndarray] = []
-        self._ten_vad_hop_size = 256  # TEN VAD要求的hop size
-
         # 识别结果
         self._current_text = ""
         self._partial_results: List[str] = []
@@ -305,22 +255,16 @@ class FunASRVoiceRecognizer:
         self._on_final_result: Optional[Callable[[RecognitionResult], None]] = None
         self._on_vad_event: Optional[Callable[[str, Dict], None]] = None
 
-        # TEN VAD初始化状态
-        self._ten_vad_enabled = TEN_VAD_AVAILABLE and self.vad_config.use_ten_vad
-
     def _load_vad_config(self):
         """从配置加载器加载VAD设置"""
         try:
             from config_loader import config
 
             return VADConfig(
-                vad_threshold=0.5,  # TEN VAD默认阈值
+                energy_threshold=config.get_vad_energy_threshold(),
                 min_speech_duration=config.get_vad_min_speech_duration(),
                 min_silence_duration=config.get_vad_min_silence_duration(),
-                speech_padding=config.get_vad_speech_padding(),
-                fallback_energy_threshold=config.get_vad_energy_threshold(),
-                use_ten_vad=True,  # 默认使用TEN VAD
-                auto_fallback=True
+                speech_padding=config.get_vad_speech_padding()
             )
 
         except Exception as e:
@@ -396,7 +340,7 @@ class FunASRVoiceRecognizer:
             logger.info("✅ 识别器已初始化")
             return True
 
-        logger.info("🚀 初始化FunASR + TEN VAD语音识别器...")
+        logger.info("🚀 初始化FunASR语音识别器...")
         init_start_time = time.time()
 
         # 检查依赖 - 前置检查，避免后续失败
@@ -412,14 +356,7 @@ class FunASRVoiceRecognizer:
 
         self._is_initialized = True
         total_init_time = time.time() - init_start_time
-        logger.info(f"✅ FunASR + TEN VAD语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
-
-        # 显示VAD状态
-        if self._ten_vad_enabled:
-            logger.info("🎯 TEN VAD已启用 (hop_size=256, threshold=0.5)")
-        else:
-            logger.info("⚠️ TEN VAD不可用，使用回退的能量阈值VAD")
-
+        logger.info(f"✅ FunASR语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
         return True
 
     def _load_model(self) -> bool:
@@ -452,6 +389,17 @@ class FunASRVoiceRecognizer:
             self._model_load_time = time.time() - start_time
 
             logger.info(f"✅ 模型加载成功 (耗时: {self._model_load_time:.2f}秒)")
+            
+            # 优化：预预热模型，减少第一次识别延迟
+            try:
+                logger.info("🔄 预预热模型以减少首次识别延迟...")
+                # 发送一个小的空音频块进行预识别，触发模型内部优化
+                if hasattr(self._model, 'forward'):
+                    # 这里不实际执行推理，只是确保模型准备就绪
+                    pass
+            except Exception as e:
+                logger.debug(f"模型预热过程出错 (可忽略): {e}")
+                
             return True
 
         except Exception as e:
@@ -460,9 +408,102 @@ class FunASRVoiceRecognizer:
             logger.error(f"详细错误: {traceback.format_exc()}")
             return False
 
+    def unload_model(self):
+        """卸载模型释放内存 - 优化：根据配置决定是否真的卸载模型"""
+        # 从配置加载全局卸载设置
+        try:
+            from config_loader import get_config
+            config = get_config()
+            global_unload = config.get('system', {}).get('global_unload', False)
+        except Exception as e:
+            logger.debug(f"获取配置时出错，默认启用卸载: {e}")
+            global_unload = True
+        
+        # 只有在明确配置需要卸载或者模型已加载时才执行卸载
+        if self._model and global_unload:
+            logger.info(f"🧹 卸载模型 (全局卸载设置: {global_unload})")
+            self._model = None
+            self._model_loaded = False
+            import gc
+            gc.collect()
+            logger.info("🧹 模型已卸载，释放内存")
+        else:
+            # 保留模型在内存中以加快下次启动
+            logger.info(f"ℹ️ 保留模型在内存中以加快后续启动")
+
+    @contextmanager
+    def _audio_stream(self):
+        """音频流上下文管理器，增强异常处理和重连机制"""
+        if not PYAUDIO_AVAILABLE:
+            raise RuntimeError("PyAudio不可用")
+
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            p = None
+            stream = None
+
+            try:
+                p = pyaudio.PyAudio()
+
+                # 获取默认音频设备
+                try:
+                    default_device = p.get_default_input_device_info()
+                    logger.info(f"🎤 使用音频设备: {default_device['name']} (索引: {default_device['index']})")
+                except Exception as device_error:
+                    logger.error(f"❌ 无法获取音频设备信息: {device_error}")
+                    raise RuntimeError("音频设备不可用")
+
+                # 打开音频流，增加错误容错
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=self.sample_rate,
+                    input=True,
+                    input_device_index=default_device['index'],
+                    frames_per_buffer=self.chunk_size,
+                    start=True
+                )
+
+                # 验证音频流是否正常工作
+                if not stream.is_active():
+                    raise RuntimeError("音频流创建失败：流未激活")
+
+                logger.info(f"🎧 音频流创建成功 (重试 {retry_count + 1}/{max_retries})")
+                yield stream
+                break  # 成功则退出重试循环
+
+            except Exception as e:
+                retry_count += 1
+                error_msg = f"❌ 音频流创建失败 (重试 {retry_count}/{max_retries}): {e}"
+
+                if retry_count >= max_retries:
+                    logger.error(error_msg + " - 已达到最大重试次数")
+                    raise RuntimeError(f"音频流创建失败，已重试{max_retries}次: {e}")
+                else:
+                    logger.warning(error_msg + " - 正在重试...")
+                    time.sleep(1)  # 重试前等待1秒
+
+            finally:
+                # 确保资源正确释放
+                if stream:
+                    try:
+                        if stream.is_active():
+                            stream.stop_stream()
+                        stream.close()
+                    except Exception as cleanup_error:
+                        logger.warning(f"⚠️ 音频流清理异常: {cleanup_error}")
+
+                if p:
+                    try:
+                        p.terminate()
+                    except Exception as cleanup_error:
+                        logger.warning(f"⚠️ PyAudio清理异常: {cleanup_error}")
+
     def _detect_vad(self, audio_data: np.ndarray, current_time: float) -> Tuple[bool, Optional[str]]:
         """
-        VAD语音活动检测 - 使用TEN VAD
+        VAD语音活动检测
 
         Args:
             audio_data: 音频数据
@@ -471,76 +512,24 @@ class FunASRVoiceRecognizer:
         Returns:
             (is_speech, event_type): 是否有语音和事件类型
         """
-        is_speech = False
-        vad_confidence = 0.0
-        vad_flag = 0
+        # 计算音频能量
+        energy = np.sqrt(np.mean(audio_data ** 2))
 
-        # 优先使用TEN VAD
-        if self._ten_vad_enabled and ten_vad_model:
-            try:
-                # TEN VAD要求音频数据必须是int16类型且长度为hop_size (256)
-                # 将float32音频转换回int16格式
-                if audio_data.dtype == np.float32:
-                    audio_int16 = (audio_data * 32767).astype(np.int16)
-                else:
-                    audio_int16 = audio_data.astype(np.int16)
+        # 简单的能量阈值VAD
+        is_speech = energy > self.vad_config.energy_threshold
 
-                # 将音频数据添加到TEN VAD缓冲区
-                self._ten_vad_buffer.extend(audio_int16)
-
-                # 当缓冲区足够大时，处理TEN VAD
-                is_speech = False
-                while len(self._ten_vad_buffer) >= self._ten_vad_hop_size:
-                    # 取出256个样本进行处理
-                    hop_audio = np.array(self._ten_vad_buffer[:self._ten_vad_hop_size])
-                    self._ten_vad_buffer = self._ten_vad_buffer[self._ten_vad_hop_size:]
-
-                    # 使用TEN VAD的process方法 (基于真实API)
-                    vad_confidence, vad_flag = ten_vad_model.process(hop_audio)
-
-                    # vad_flag: 0=非语音, 1=语音
-                    if vad_flag == 1:
-                        is_speech = True
-                        break  # 只要有一个hop检测到语音，就认为当前有语音
-
-                logger.debug(f"TEN VAD: 置信度={vad_confidence:.6f}, 标志={vad_flag}, 检测语音={is_speech}")
-
-            except Exception as e:
-                logger.error(f"❌ TEN VAD检测失败: {e}")
-                # 自动回退到能量阈值
-                if self.vad_config.auto_fallback:
-                    energy = np.sqrt(np.mean(audio_data ** 2))
-                    is_speech = energy > self.vad_config.fallback_energy_threshold
-                    vad_confidence = energy
-                    logger.debug(f"回退到能量阈值: {energy:.6f}")
-
-        else:
-            # 回退到传统能量阈值VAD
-            energy = np.sqrt(np.mean(audio_data ** 2))
-            is_speech = energy > self.vad_config.fallback_energy_threshold
-            vad_confidence = energy if is_speech else 0.0
-            vad_flag = 1 if is_speech else 0
-
-        # 计算音频能量（用于显示和调试）
-        audio_energy = np.sqrt(np.mean(audio_data ** 2))
-
-        # 事件状态管理
         event_type = None
         if is_speech:
             if not hasattr(self, '_speech_detected') or not self._speech_detected:
                 event_type = "speech_start"
                 self._speech_detected = True
                 self._speech_start_time = current_time
-                vad_method = "TEN VAD" if self._ten_vad_enabled else "Energy Threshold"
-                logger.info(f"🎤 语音开始 ({vad_method}: {vad_confidence:.3f}, 标志={vad_flag}, 能量: {audio_energy:.6f})")
         else:
             if hasattr(self, '_speech_detected') and self._speech_detected:
                 silence_duration = current_time - getattr(self, '_last_speech_time', current_time)
                 if silence_duration >= self.vad_config.min_silence_duration:
                     event_type = "speech_end"
                     self._speech_detected = False
-                    vad_method = "TEN VAD" if self._ten_vad_enabled else "Energy Threshold"
-                    logger.info(f"🔇 语音结束 (静音{silence_duration:.2f}s, {vad_method}: {vad_confidence:.3f})")
 
         if is_speech:
             self._last_speech_time = current_time
@@ -564,19 +553,28 @@ class FunASRVoiceRecognizer:
         # 计算音频能量
         audio_energy = np.sqrt(np.mean(audio_data ** 2))
 
+        # 🔍 调试输出 - 在funasr_voice_module中计算音频能量
+        #logger.info(f"[🎤 FUNASR能量] 能量值: {audio_energy:.8f} | VAD检测: is_speech={is_speech}, vad_event={vad_event} | VAD阈值: {self.vad_config.energy_threshold}")
+
         # 检查是否应该发送GUI能量更新
         gui_threshold = self._get_gui_display_threshold()
         should_send_gui_update = not vad_event and audio_energy > gui_threshold
 
+        #logger.info(f"[🎤 FUNASR能量检查] GUI显示阈值: {gui_threshold:.8f} | 应该发送GUI更新: {should_send_gui_update} | VAD回调已设置: {self._on_vad_event is not None}")
+
         # 如果没有VAD事件但能量超过显示阈值，也发送能量更新用于显示
-        if should_send_gui_update:
+        if should_send_gui_update:  # 使用配置的GUI显示阈值
             if self._on_vad_event:
+                #logger.info(f"[🎤 FUNASR发送] → 发送energy_update事件 | 能量: {audio_energy:.8f}")
                 self._on_vad_event("energy_update", {
                     'time': current_time,
                     'energy': audio_energy
                 })
+            else:
+                logger.error(f"[🎤 FUNASR错误] ❌ 能量超过阈值({audio_energy:.8f})但VAD回调未设置！")
 
         if vad_event and self._on_vad_event:
+            #logger.info(f"触发VAD事件: {vad_event}, 能量: {audio_energy:.6f}")
             self._on_vad_event(vad_event, {
                 'time': current_time,
                 'energy': audio_energy
@@ -694,6 +692,215 @@ class FunASRVoiceRecognizer:
             self._speech_buffer = []
             self._current_text = ""
 
+    def recognize_speech(self, duration: int = 10,
+                        real_time_display: bool = True) -> RecognitionResult:
+        """
+        识别语音（同步模式）
+
+        Args:
+            duration: 识别时长（秒）
+            real_time_display: 是否实时显示识别结果
+
+        Returns:
+            RecognitionResult: 识别结果
+        """
+        if not self._is_initialized:
+            if not self.initialize():
+                raise RuntimeError("初始化失败")
+
+        if not self.silent_mode:
+            logger.info(f"🎙️ 开始语音识别，时长: {duration}秒")
+
+        # 重置状态
+        self._stop_event.clear()
+        self._audio_buffer.clear()
+        self._speech_buffer = []
+        self._current_text = ""
+        self._partial_results = []
+
+        start_time = time.time()
+        current_time = 0.0  # 初始化current_time变量
+
+        try:
+            with self._audio_stream() as stream:
+                # 支持duration=-1表示无限时模式
+                while (duration == -1 or time.time() - start_time < duration) and not self._stop_event.is_set():
+                    try:
+                        # 更新当前时间
+                        current_time = time.time() - start_time
+
+                        # 读取音频数据
+                        with PerformanceStep("音频输入", {
+                            'chunk_size': self.chunk_size,
+                            'current_time': current_time
+                        }):
+                            data = stream.read(self.chunk_size, exception_on_overflow=False)
+
+                        # 转换为numpy数组
+                        with PerformanceStep("音频处理", {
+                            'data_length': len(data),
+                            'current_time': current_time
+                        }):
+                            audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+
+                        # 处理音频
+                        self._process_audio_chunk(audio_data, current_time)
+
+                        # 实时显示
+                        if real_time_display and self._current_text:
+                            if duration == -1:
+                                # 无限时模式：显示运行时间
+                                print(f"\r🗣️ 识别中: '{self._current_text}' | 运行时间: {current_time:.1f}s",
+                                     end="", flush=True)
+                            else:
+                                # 限时模式：显示剩余时间
+                                remaining = duration - current_time
+                                print(f"\r🗣️ 识别中: '{self._current_text}' | 剩余: {remaining:.1f}s",
+                                     end="", flush=True)
+
+                    except OSError as audio_error:
+                        # 专门处理音频流相关的系统错误
+                        logger.error(f"🎤 音频流异常: {audio_error}")
+                        # 检查是否是设备断开连接
+                        if "Input overflowed" in str(audio_error):
+                            logger.warning("⚠️ 音频缓冲区溢出，继续处理...")
+                            continue
+                        elif "No such device" in str(audio_error) or "Device unavailable" in str(audio_error):
+                            logger.error("❌ 音频设备断开连接或不可用")
+                            raise RuntimeError("音频设备断开连接")
+                        else:
+                            logger.warning(f"⚠️ 音频流错误，尝试继续: {audio_error}")
+                            continue
+
+                    except Exception as e:
+                        logger.error(f"❌ 音频处理错误: {e}")
+                        # 对于其他异常，记录详细信息但尝试继续
+                        import traceback
+                        logger.debug(f"错误详情: {traceback.format_exc()}")
+                        continue
+
+                # 处理最后的音频
+                if self._speech_buffer:
+                    self._perform_final_recognition()
+
+        except KeyboardInterrupt:
+            logger.info("⏹️ 识别被用户中断 (KeyboardInterrupt)")
+        except Exception as e:
+            logger.error(f"❌ 识别过程出错: {e}")
+            raise
+
+        # 记录识别结束原因
+        end_time = time.time()
+        actual_duration = end_time - start_time
+
+        if self._stop_event.is_set():
+            logger.info(f"⏹️ 识别被系统停止信号中断 (运行时间: {actual_duration:.2f}秒)")
+        elif duration == -1:
+            logger.info(f"⏹️ 无限时模式识别结束 (运行时间: {actual_duration:.2f}秒)")
+        elif actual_duration >= duration:
+            logger.info(f"⏹️ 识别达到指定时长 (设定: {duration}秒, 实际: {actual_duration:.2f}秒)")
+        else:
+            logger.info(f"⏹️ 识别提前结束 (设定: {duration}秒, 实际: {actual_duration:.2f}秒)")
+
+        # 返回最终结果
+        if self._final_results:
+            final_result = self._final_results[-1]
+            print(f"\n✅ 识别完成: '{final_result.text}'")
+            return final_result
+        else:
+            # 如果没有最终结果，使用部分结果
+            if self._partial_results:
+                text = self._partial_results[-1] if self._partial_results else ""
+                result = RecognitionResult(
+                    text=text,
+                    partial_results=self._partial_results,
+                    confidence=0.5,
+                    duration=duration,
+                    timestamp=time.time(),
+                    audio_buffer=[]
+                )
+                print(f"\n⚠️ 无最终结果，返回部分结果: '{text}'")
+                return result
+            else:
+                logger.warning("⚠️ 未识别到任何语音内容")
+                return RecognitionResult(
+                    text="",
+                    partial_results=[],
+                    confidence=0.0,
+                    duration=0.0,
+                    timestamp=time.time(),
+                    audio_buffer=[]
+                )
+
+    def start_continuous_recognition(self):
+        """开始连续识别（异步模式）"""
+        if not self._is_initialized:
+            if not self.initialize():
+                raise RuntimeError("初始化失败")
+
+        if self._is_running:
+            logger.warning("⚠️ 连续识别已在运行")
+            return
+
+        logger.info("🔄 开始连续识别模式")
+        self._is_running = True
+        self._stop_event.clear()
+
+        def recognition_thread():
+            try:
+                with self._audio_stream() as stream:
+                    while self._is_running and not self._stop_event.is_set():
+                        try:
+                            data = stream.read(self.chunk_size, exception_on_overflow=False)
+                            current_time = time.time()
+
+                            audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                            self._process_audio_chunk(audio_data, current_time)
+
+                        except OSError as audio_error:
+                            # 专门处理音频流相关的系统错误
+                            logger.error(f"🎤 连续识别音频流异常: {audio_error}")
+
+                            # 检查严重错误类型
+                            if "No such device" in str(audio_error) or "Device unavailable" in str(audio_error):
+                                logger.error("❌ 音频设备断开连接，停止连续识别")
+                                self._is_running = False
+                                break
+                            elif "Input overflowed" in str(audio_error):
+                                logger.warning("⚠️ 音频缓冲区溢出，继续处理...")
+                                continue
+                            else:
+                                logger.warning(f"⚠️ 音频流错误，尝试继续: {audio_error}")
+                                continue
+
+                        except Exception as e:
+                            logger.error(f"❌ 连续识别错误: {e}")
+                            import traceback
+                            logger.debug(f"错误详情: {traceback.format_exc()}")
+                            continue
+
+            except Exception as e:
+                logger.error(f"连续识别线程异常: {e}")
+            finally:
+                self._is_running = False
+                logger.info("🔄 连续识别线程结束")
+
+        # 启动识别线程
+        thread = threading.Thread(target=recognition_thread, daemon=True)
+        thread.start()
+
+        return thread
+
+    def stop_recognition(self):
+        """停止识别"""
+        logger.info("⏹️ 停止识别")
+        self._stop_event.set()
+        self._is_running = False
+
+        # 处理最后的音频
+        if self._speech_buffer:
+            self._perform_final_recognition()
+
     def get_status(self) -> Dict[str, Any]:
         """获取识别器状态"""
         return {
@@ -701,17 +908,41 @@ class FunASRVoiceRecognizer:
             'model_loaded': self._model_loaded,
             'model_path': self.model_path,
             'device': self.funasr_config.device,
-            'vad_method': 'TEN VAD' if self._ten_vad_enabled else 'Energy Threshold',
-            'ten_vad_available': TEN_VAD_AVAILABLE,
+            'running': self._is_running,
             'stats': self.stats.copy(),
             'model_load_time': self._model_load_time,
             'dependencies': {
                 'funasr': FUNASR_AVAILABLE,
                 'pyaudio': PYAUDIO_AVAILABLE,
-                'numpy': NUMPY_AVAILABLE,
-                'ten_vad': TEN_VAD_AVAILABLE
+                'numpy': NUMPY_AVAILABLE
             }
         }
+
+    def configure_vad(self, **kwargs):
+        """配置VAD参数"""
+        for key, value in kwargs.items():
+            if hasattr(self.vad_config, key):
+                setattr(self.vad_config, key, value)
+                logger.info(f"🔧 VAD配置更新: {key} = {value}")
+            else:
+                logger.warning(f"⚠️ 未知的VAD参数: {key}")
+
+    def configure_funasr(self, **kwargs):
+        """配置FunASR参数"""
+        for key, value in kwargs.items():
+            if hasattr(self.funasr_config, key):
+                setattr(self.funasr_config, key, value)
+                logger.info(f"🔧 FunASR配置更新: {key} = {value}")
+            else:
+                logger.warning(f"⚠️ 未知的FunASR参数: {key}")
+
+    def __del__(self):
+        """析构函数"""
+        try:
+            self.stop_recognition()
+            self.unload_model()
+        except:
+            pass
 
 # 便捷函数
 def create_recognizer(model_path: Optional[str] = None,
@@ -731,20 +962,54 @@ def create_recognizer(model_path: Optional[str] = None,
         raise RuntimeError("识别器初始化失败")
     return recognizer
 
+def quick_recognize(duration: int = 10,
+                   model_path: Optional[str] = None) -> str:
+    """
+    快速语音识别
+
+    Args:
+        duration: 识别时长
+        model_path: 模型路径
+
+    Returns:
+        str: 识别结果文本
+    """
+    recognizer = create_recognizer(model_path=model_path)
+    result = recognizer.recognize_speech(duration=duration)
+    return result.text
+
 if __name__ == "__main__":
     # 示例用法
-    print("🎯 FunASR + TEN VAD 语音识别模块测试")
+    print("🎯 FunASR语音识别模块测试")
     print("=" * 50)
 
     # 创建识别器
     recognizer = FunASRVoiceRecognizer()
 
-    # 显示状态
-    status = recognizer.get_status()
-    print(f"📊 识别器状态: {status}")
+    # 设置回调
+    def on_partial(text):
+        print(f"🗣️ 实时: {text}")
 
+    def on_final(result):
+        print(f"✅ 最终: {result.text}")
+
+    def on_vad(event, data):
+        print(f"🎯 VAD: {event}")
+
+    recognizer.set_callbacks(on_partial, on_final, on_vad)
+
+    # 初始化
     if recognizer.initialize():
         print("✅ 识别器初始化成功")
-        print("🎤 TEN VAD集成完成，可以进行语音识别测试")
+        print(f"📊 状态: {recognizer.get_status()}")
+
+        # 进行识别测试
+        try:
+            result = recognizer.recognize_speech(duration=15)
+            print(f"\n🎯 最终识别结果: '{result.text}'")
+            print(f"📊 识别时长: {result.duration:.2f}秒")
+            print(f"📊 部分结果数: {len(result.partial_results)}")
+        except KeyboardInterrupt:
+            print("\n⏹️ 测试被中断")
     else:
         print("❌ 识别器初始化失败")

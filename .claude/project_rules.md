@@ -67,32 +67,32 @@ modify main_f.py  # ✅ 正确方式
 
 ### 📁 文件组织规则 (v2.6新增)
 
-#### 1. MD文档文件管理
+#### 1. MD文档文件管理 (严格控制)
+
+**🚨 重要限制**: 严禁随意创建新的MD文件！
+
+**允许的MD文档**:
 ```
-Docs/                      # ⚠️ 所有MD文档必须放在这里
-├── DEVELOPMENT_DOCUMENTATION.md
-├── DevelopmentRecord.MD
-├── FFMPEG_PREPROCESSING_GUIDE.md
-├── GUI_README.md
-├── My_Study/
-│   ├── Study.MD
-│   └── 服务配置指南.md
-├── PySide6_GUI设计指南.md
-├── PySide6_实战技术.md
-├── SOLUTION_SUMMARY.md
-├── START_GUI.md
-├── TEN_VAD_Integration_Report.md
-├── claude_configuration_summary.md
-├── mypy_check_report.md
-├── nuitka_build_guide.md
-├── refactor_issues_fixes.md
-├── ten_vad_parameters_guide.md
-├── text_processor_refactor_summary.md
-├── 学习背景指南.md
-└── 音频响应说明.md
+项目根目录/
+├── README.md                           # 主项目说明文档
+
+Docs/目录/
+├── DevelopmentRecord.MD                # 开发记录 (唯一允许的开发文档)
+└── [分支特定文档]/                       # 新分支可建一个MD文档
+    └── [分支名].md                      # 仅在必要时，需用户批准
 ```
 
-**例外**: 只有 `README.md` 可以放在根目录，其他所有MD文件必须在Docs/目录内
+**🚫 禁止的MD文件**:
+- ❌ 未经用户批准新建任何MD文件
+- ❌ 创建重复、冗余的文档
+- ❌ 为小功能创建单独的MD文档
+- ❌ 创建临时性MD文档
+
+**✅ 文档管理原则**:
+- 主项目信息全部记录在 README.md
+- 开发过程记录在 Docs/DevelopmentRecord.MD
+- 新分支可创建一个文档，但需要用户批准
+- 其他所有信息都应整合到现有文档中
 
 #### 2. 日志文件统一管理
 ```
@@ -234,10 +234,24 @@ mypy logging_utils.py --ignore-missing-imports
 - ❌ 在根目录创建 `test_*.py` 文件
 - ❌ 创建 `xxx_new.py`, `xxx_fixed.py`, `xxx_final.py` 等重复文件
 - ❌ 在根目录创建 `.log` 文件
-- ❌ 在根目录创建除README.md外的MD文件
+- ❌ **在根目录创建除README.md外的MD文件**
+- ❌ **未经用户批准创建任何新的MD文件**
+- ❌ **为小功能或临时需求创建MD文档**
 - ❌ 忘记添加导入路径修复
 - ❌ 测试文件命名不规范
 - ❌ 不使用logging_utils.py管理日志
+
+### 🚨 文档创建红线 (v2.6重要更新)
+**绝对禁止**:
+1. 不得创建任何新的MD文件，除非用户明确批准
+2. 不得为每个小功能创建单独文档
+3. 不得创建重复内容的文档
+4. 不得创建临时性或测试性MD文档
+
+**唯一允许**:
+1. README.md (主项目文档)
+2. Docs/DevelopmentRecord.MD (开发记录)
+3. 新分支的一个文档 (需要用户批准)
 
 ## 🚀 启动方式和命令 (v2.5更新)
 

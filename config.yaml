@@ -6,7 +6,7 @@ audio:
   # FFmpeg音频预处理 (默认关闭)
   # 启用后可显著提升语音质量，增强VAD和ASR识别准确性
   ffmpeg_preprocessing:
-    enabled: true  # 测试阶段启用
+    enabled: false  # 禁用以调试音频能量问题
 
     # FFmpeg滤镜链参数 (可自定义)
     # highpass=f=80: 移除低频噪音(如空调声、手柄噪音)

@@ -984,15 +984,9 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.status_label.setText("🟢 正在启动...")
         self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50; padding: 10px;")
 
-        # 清空识别历史记录并重置文本格式
+        # 加载并显示历史记录，而不是清空
         if hasattr(self, 'history_text') and self.history_text:
-            self.history_text.clear()
-            # 显式重置文本格式为默认格式，防止之前的格式影响新文本
-            cursor = self.history_text.textCursor()
-            cursor.movePosition(QTextCursor.Start)
-            cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
-            cursor.setCharFormat(QTextCharFormat())  # 应用默认格式
-            self.history_text.setTextCursor(cursor)
+            self._load_and_display_history()
 
         self.log_text.clear()
         self.current_text_label.setText("正在初始化...")
@@ -1344,6 +1338,59 @@ class WorkingSimpleMainWindow(QMainWindow):
         # 记录日志
         logger.info(f"🎤 识别(record): {result}")
         
+    def _load_and_display_history(self):
+        """加载并显示历史识别记录"""
+        try:
+            # 获取当前系统的历史数据
+            if hasattr(self, 'voice_system') and self.voice_system:
+                history_records = self.voice_system.results_buffer
+                current_standard_id = self.voice_system.current_standard_id
+
+                # 清空当前显示
+                self.history_text.clear()
+                self.recognition_count = 0
+
+                if history_records:
+                    self.append_log(f"📚 加载历史记录: {len(history_records)}条")
+
+                    # 显示历史记录
+                    for record in reversed(history_records):  # 最新的在前面
+                        original = record.get('original', '')
+                        processed = record.get('processed', '')
+                        numbers = record.get('numbers', [])
+                        timestamp = record.get('timestamp', 0)
+
+                        # 格式化时间戳
+                        from datetime import datetime
+                        time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
+
+                        # 构建历史记录条目
+                        if numbers and len(numbers) > 0:
+                            history_entry = f"🕒 {time_str} 🔢 {processed}"
+                        else:
+                            history_entry = f"🕒 {time_str} 📝 {processed}"
+
+                        self.history_text.append(history_entry)
+                        self.recognition_count += 1
+
+                    # 显示当前标准序号
+                    self.append_log(f"🎯 当前标准序号: {current_standard_id}")
+
+                    # 滚动到底部
+                    cursor = self.history_text.textCursor()
+                    cursor.movePosition(QTextCursor.End)
+                    self.history_text.setTextCursor(cursor)
+
+                    self.append_log(f"✅ 历史记录加载完成，共显示{len(history_records)}条记录")
+                else:
+                    self.append_log("📝 暂无历史记录")
+            else:
+                self.append_log("⚠️ 语音系统未初始化，无法加载历史记录")
+
+        except Exception as e:
+            self.append_log(f"❌ 加载历史记录失败: {str(e)}")
+            logger.error(f"加载历史记录失败: {str(e)}")
+
     def update_partial_result(self, text):
         """更新部分识别结果"""
         current_status = self.status_label.text()
@@ -1582,6 +1629,11 @@ class WorkingSimpleMainWindow(QMainWindow):
             
     def on_system_initialized(self):
         """系统初始化完成"""
+        # 保存语音系统引用以便后续使用
+        if hasattr(self.worker, 'voice_system'):
+            self.voice_system = self.worker.voice_system
+            self.append_log("🔗 语音系统引用已建立")
+
         self.append_log(f"✅ 系统初始化完成，准备开始识别... (当前模式: {self.current_mode})")
         self.current_text_label.setText("系统就绪，可以开始说话了...")
 

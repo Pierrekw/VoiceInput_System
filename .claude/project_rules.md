@@ -3,10 +3,10 @@
 ## 🎯 项目概述
 这是一个基于FunASR框架的高性能中文语音识别系统，集成TEN VAD神经网络、FFmpeg音频预处理、GUI图形界面，支持实时语音识别、性能监控、延迟优化和Excel数据导出功能。
 
-## 📋 当前版本 (v2.5)
+## 📋 当前版本 (v2.6)
 - **发布日期**: 2025-10-26
-- **核心特性**: TEN VAD + FFmpeg预处理 + 组件化GUI架构
-- **主要修复**: 解决停止阻塞问题、日志系统修复、类型安全优化
+- **核心特性**: TEN VAD + FFmpeg预处理 + 组件化GUI架构 + 项目规范化
+- **主要修复**: 解决停止阻塞问题、日志系统修复、类型安全优化、文件组织规范化
 
 ## 📁 重要目录结构规则
 
@@ -50,13 +50,84 @@ python tests/test_funasr_voice_module.py
 # 错误方式 - 不要在根目录创建测试文件
 # ❌ python test_something.py  (禁止)
 ```
-### 修改文件的标准方式
+### 🎯 修改核心模块的标准方式 (v2.6新增)
 ```bash
-# 修改原文件 (正确方式)
-modify test_processor_refactor.py
+# 1. 修改重要模块前必须备份 (避免文件混乱)
+cp main_f.py main_f_bak.py
+cp funasr_voice_TENVAD.py funasr_voice_TENVAD_bak.py
+cp voice_gui.py voice_gui_bak.py
 
-# 错误方式 - 新建新文件
-# ❌ create new test_processor_refactor_clean.py [example]  (禁止)
+# 2. 然后在原文件中修改，不要创建新文件
+modify main_f.py  # ✅ 正确方式
+
+# 3. 禁止的命名方式 (避免文件混乱)
+# ❌ main_f_new.py, main_f_fixed.py, main_f_final.py, main_f_v2.py
+# ❌ main_f_new_fixed_final.py, main_f_2025_10_26.py
+```
+
+### 📁 文件组织规则 (v2.6新增)
+
+#### 1. MD文档文件管理
+```
+Docs/                      # ⚠️ 所有MD文档必须放在这里
+├── DEVELOPMENT_DOCUMENTATION.md
+├── DevelopmentRecord.MD
+├── FFMPEG_PREPROCESSING_GUIDE.md
+├── GUI_README.md
+├── My_Study/
+│   ├── Study.MD
+│   └── 服务配置指南.md
+├── PySide6_GUI设计指南.md
+├── PySide6_实战技术.md
+├── SOLUTION_SUMMARY.md
+├── START_GUI.md
+├── TEN_VAD_Integration_Report.md
+├── claude_configuration_summary.md
+├── mypy_check_report.md
+├── nuitka_build_guide.md
+├── refactor_issues_fixes.md
+├── ten_vad_parameters_guide.md
+├── text_processor_refactor_summary.md
+├── 学习背景指南.md
+└── 音频响应说明.md
+```
+
+**例外**: 只有 `README.md` 可以放在根目录，其他所有MD文件必须在Docs/目录内
+
+#### 2. 日志文件统一管理
+```
+Logs/                      # ⚠️ 所有日志文件必须放在这里
+├── voice_recognition.log
+├── voice_recognition_debug.log
+├── performance_test.log
+├── debug_performance_test.log
+├── gui_debug.log
+├── excel_export.log
+└── [模块名]_[功能].log    # 标准命名格式
+```
+
+**日志使用规范**:
+- 新建Python文件必须使用 `logging_utils.py` 管理日志
+- 确保日志文件名包含模块名，方便debug
+- 禁止在项目根目录创建.log文件
+- 禁止使用Python默认logging而不指定文件名
+
+#### 3. 新建Python文件的日志要求
+```python
+# 标准日志使用模板
+import logging
+from logging_utils import setup_logger
+
+# 设置带文件名的日志
+logger = setup_logger(
+    name='模块名',
+    log_file='Logs/模块名_功能.log'
+)
+
+def some_function():
+    logger.info("这是一条信息日志")
+    logger.debug("这是调试信息")
+    logger.error("这是错误信息")
 ```
 
 
@@ -136,10 +207,11 @@ mypy logging_utils.py --ignore-missing-imports
 
 ### 3. 文档要求
 - 新功能需要更新 README.md
-- 重要修改需要记录到 DevelopmentRecord.md
+- 重要修改需要记录到 Docs/DevelopmentRecord.MD
 - 测试文件需要包含在 tests/README.md 中
+- **新增**: 所有新文档必须放在 Docs/ 目录内，只有README.md可以在根目录
 
-## 🚨 重要提醒
+## 🚨 重要提醒 (v2.6更新)
 
 ### 当Claude需要创建测试文件时:
 1. ✅ **必须**放在 `tests/` 目录下
@@ -147,10 +219,25 @@ mypy logging_utils.py --ignore-missing-imports
 3. ✅ **必须**添加正确的导入路径
 4. ✅ **必须**从项目根目录运行测试
 
+### 当Claude需要修改核心模块时:
+1. ✅ **必须**先备份原文件: `cp xx.py xx_bak.py`
+2. ✅ **必须**在原文件中修改，不创建新文件
+3. ✅ **必须**使用 `logging_utils.py` 管理日志
+4. ✅ **必须**确保日志文件在 Logs/ 目录
+
+### 当Claude需要创建文档时:
+1. ✅ **必须**放在 `Docs/` 目录下
+2. ✅ **只有README.md可以放在根目录**
+3. ✅ **必须**使用有意义的文件名
+
 ### 常见错误 (禁止):
 - ❌ 在根目录创建 `test_*.py` 文件
+- ❌ 创建 `xxx_new.py`, `xxx_fixed.py`, `xxx_final.py` 等重复文件
+- ❌ 在根目录创建 `.log` 文件
+- ❌ 在根目录创建除README.md外的MD文件
 - ❌ 忘记添加导入路径修复
 - ❌ 测试文件命名不规范
+- ❌ 不使用logging_utils.py管理日志
 
 ## 🚀 启动方式和命令 (v2.5更新)
 
@@ -215,9 +302,15 @@ mypy voice_gui.py gui_components.py voice_gui_refractor.py main_f.py funasr_voic
 mypy text_processor_clean.py --ignore-missing-imports --strict
 ```
 
-## 🔧 v2.5版本重要修复 (2025-10-26)
+## 🔧 v2.6版本重要修复 (2025-10-26)
 
-### 已解决的关键问题
+### 新增项目规范化规则
+1. **📁 文件组织规范**: 所有MD文档统一放在Docs/目录，日志文件统一放在Logs/目录
+2. **🔧 模块修改规范**: 重要模块修改前必须备份，避免创建重复文件
+3. **📝 日志管理规范**: 新建Python文件必须使用logging_utils.py管理日志
+4. **🎯 命名规范**: 禁止xxx_new、xxx_fixed、xxx_final等混乱的命名方式
+
+### v2.5版本已解决的关键问题
 1. **🐛 停止阻塞问题**: FFmpeg预处理导致的音频流阻塞已完全修复
 2. **📝 日志系统错误**: logging_utils.py中super()类型错误已修复
 3. **🔍 类型安全问题**: 所有核心模块通过MyPy严格类型检查
@@ -325,6 +418,6 @@ mypy text_processor_clean.py --ignore-missing-imports --strict
 
 ---
 **创建时间**: 2025-10-22
-**最后更新**: 2025-10-22
-**版本**: v1.0
-**项目状态**: 活跃开发中，支持质量检测场景
+**最后更新**: 2025-10-26
+**版本**: v2.6
+**项目状态**: 活跃开发中，支持质量检测场景 + 项目规范化

@@ -235,14 +235,53 @@ def get_app_logger(module_name: str, debug: bool = False) -> logging.Logger:
 def get_silent_logger(name: str) -> logging.Logger:
     """
     便捷函数：获取静默日志记录器（只输出到文件）
-    
+
     Args:
         name: 日志记录器名称
-        
+
     Returns:
         配置好的logging.Logger实例
     """
     return LoggingManager.get_silent_logger(name=name)
+
+
+def setup_logger(name: str, log_file: str = None) -> logging.Logger:
+    """
+    便捷函数：设置标准日志记录器
+
+    这是项目规则中推荐的标准用法，确保日志文件包含模块名
+
+    Args:
+        name: 模块名称（建议使用 '模块名_功能' 格式）
+        log_file: 日志文件名（可选，默认会自动生成包含模块名的文件名）
+
+    Returns:
+        配置好的logging.Logger实例
+
+    Example:
+        # 标准用法模板
+        logger = setup_logger(
+            name='模块名',
+            log_file='Logs/模块名_功能.log'
+        )
+        logger.info("这是一条信息日志")
+    """
+    # 如果没有指定日志文件，自动生成包含模块名的文件名
+    if log_file is None:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_file = f"{name}_{timestamp}.log"
+
+    # 确保日志文件路径在Logs目录下
+    if not log_file.startswith('Logs/'):
+        log_file = f"Logs/{log_file}"
+
+    return LoggingManager.get_logger(
+        name=name,
+        log_file=log_file,
+        level=logging.DEBUG,  # 文件中使用DEBUG级别记录所有信息
+        file_level=logging.DEBUG,
+        console_level=logging.INFO  # 控制台只显示INFO及以上级别
+    )
 
 
 def test_log_levels():

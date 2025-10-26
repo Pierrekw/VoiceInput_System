@@ -46,9 +46,16 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 import warnings
 warnings.filterwarnings('ignore')
 
-# 导入FunASR相关模块
-from funasr_voice_tenvad import FunASRVoiceRecognizer
-#from funasr_voice_module import FunASRVoiceRecognizer
+# 安全导入FunASR相关模块
+try:
+    from funasr_voice_tenvad import FunASRVoiceRecognizer
+    FUNASR_AVAILABLE = True
+except ImportError as e:
+    FUNASR_AVAILABLE = False
+    FunASRVoiceRecognizer = None
+    # 暂时用print，因为logger还未初始化
+    print(f"⚠️ FunASR语音识别模块不可用: {e}")
+    print("ℹ️ 程序将在轻量模式下运行，语音识别功能不可用")
 from text_processor import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
@@ -91,6 +98,13 @@ logger = LoggingManager.get_logger(
     log_to_console=True,
     log_to_file=True
 )
+
+# 记录FunASR状态
+if FUNASR_AVAILABLE:
+    logger.info("✅ FunASR语音识别模块加载成功")
+else:
+    logger.warning("⚠️ FunASR语音识别模块不可用，程序将在轻量模式下运行")
+    logger.info("ℹ️ 语音识别功能将被禁用，其他功能正常")
 
 # 导入配置加载模块
 config_loader: Any = None
@@ -194,7 +208,11 @@ class FunASRVoiceSystem:
         self.standard_id_history: List[int] = [100]  # 标准序号历史记录
 
         # 创建核心组件
-        self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
+        if FUNASR_AVAILABLE:
+            self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
+        else:
+            self.recognizer = None
+            logger.warning("FunASR不可用，语音识别功能将被禁用")
         self.processor = TextProcessor()
         self.command_processor = VoiceCommandProcessor()
 
@@ -386,18 +404,22 @@ class FunASRVoiceSystem:
             import os
             os.environ['TQDM_DISABLE'] = '1'
 
-            success = self.recognizer.initialize()
-            if success:
-                logger.info("✅ FunASR识别器初始化成功")
+            if self.recognizer is not None:
+                success = self.recognizer.initialize()
+                if success:
+                    logger.info("✅ FunASR识别器初始化成功")
 
-                # 设置VAD事件回调
-                if hasattr(self.recognizer, 'set_callbacks'):
-                    self.recognizer.set_callbacks(on_vad_event=self._handle_vad_event)
-                    logger.info("✅ VAD事件回调已设置")
+                    # 设置VAD事件回调
+                    if hasattr(self.recognizer, 'set_callbacks'):
+                        self.recognizer.set_callbacks(on_vad_event=self._handle_vad_event)
+                        logger.info("✅ VAD事件回调已设置")
 
-                return True
+                    return True
+                else:
+                    logger.error("❌ FunASR识别器初始化失败")
+                    return False
             else:
-                logger.error("❌ FunASR识别器初始化失败")
+                logger.warning("⚠️ FunASR不可用，跳过识别器初始化")
                 return False
         except Exception as e:
             logger.error(f"❌ 系统初始化异常: {e}")
@@ -826,7 +848,8 @@ class FunASRVoiceSystem:
 
         # 立即停止识别器
         try:
-            self.recognizer.stop_recognition()
+            if self.recognizer is not None:
+                self.recognizer.stop_recognition()
         except:
             pass
 
@@ -893,6 +916,11 @@ class FunASRVoiceSystem:
 
     def run_recognition_cycle(self):
         """运行识别循环"""
+        # 检查识别器是否可用
+        if self.recognizer is None:
+            logger.warning("⚠️ FunASR识别器不可用，跳过语音识别")
+            return
+
         # 设置回调（保留VAD回调）
         self.recognizer.set_callbacks(
             on_final_result=self.on_recognition_result,
@@ -904,10 +932,13 @@ class FunASRVoiceSystem:
 
         try:
             # 执行识别
-            self.recognizer.recognize_speech(
-                duration=self.recognition_duration,
-                real_time_display=False
-            )
+            if self.recognizer is not None:
+                self.recognizer.recognize_speech(
+                    duration=self.recognition_duration,
+                    real_time_display=False
+                )
+            else:
+                logger.warning("⚠️ FunASR识别器不可用，无法执行语音识别")
 
         except KeyboardInterrupt:
             logger.info(f"\n⚠️ 用户中断")
@@ -990,8 +1021,9 @@ class FunASRVoiceSystem:
 
             # 清理资源
             try:
-                self.recognizer.stop_recognition()
-                self.recognizer.unload_model()
+                if self.recognizer is not None:
+                    self.recognizer.stop_recognition()
+                    self.recognizer.unload_model()
             except:
                 pass
 

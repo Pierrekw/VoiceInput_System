@@ -10,10 +10,21 @@ import threading
 import logging
 from typing import Any, List, Tuple, Union, Optional, Dict
 
+# 使用统一的日志工具类
+import logging
+from logging_utils import LoggingManager
+
+# 获取配置好的日志记录器
+logger = LoggingManager.get_logger(
+    name='excel_exporter',
+    level=logging.DEBUG,  # 文件记录DEBUG级别
+    console_level=logging.INFO,  # 控制台显示INFO级别
+    log_to_console=True,
+    log_to_file=True
+)
+
 # 新增：导入配置系统
 from config_loader import config
-
-logger = logging.getLogger(__name__)
 
 class ExcelExporter:
     def __init__(self, filename: Optional[str] = None):
@@ -30,9 +41,9 @@ class ExcelExporter:
         self.columns = []
         
         if header_language == "en":
-            self.columns.extend(["ID", "Measurement", "Timestamp"])
+            self.columns.extend(["ID", "Measurement", "Timestamp", "Processed Text"])
         else:
-            self.columns.extend(["编号", "测量值", "时间戳"])
+            self.columns.extend(["编号", "测量值", "时间戳", "处理文本"])
             
         # 根据配置决定是否添加原始语音列
         if include_original:
@@ -106,9 +117,9 @@ class ExcelExporter:
 
     def append_with_text(
             self,
-            data: List[Tuple[float, str]],  # (数值, 原始语音文本)
+            data: List[Tuple[Union[float, str], str, str]],  # (数值或文本, 原始语音文本, 处理文本)
             auto_generate_ids: bool = True
-        ) -> List[Tuple[int, float, str]]:  # 返回 [(ID, 数值, 原始文本)]
+        ) -> List[Tuple[int, Union[float, str], str]]:  # 返回 [(ID, 数值或文本, 原始文本)]
             """
             新增方法：写入带原始语音文本的数据
             返回本次写入的所有记录（包含生成的ID）
@@ -131,7 +142,7 @@ class ExcelExporter:
                     
                     # 生成新记录
                     new_records = []
-                    for val, original_text in data:
+                    for val, original_text, processed_text in data:
                         new_record: Dict[str, Union[int, float, str]] = {}
                         
                         # 根据配置决定是否添加编号
@@ -139,12 +150,18 @@ class ExcelExporter:
                             new_id = self.get_next_id()
                             new_record["编号"] = new_id
                             
-                        # 添加测量值
-                        new_record["测量值"] = self._float_cell(val)
+                        # 添加测量值（支持文本和数值）
+                        if isinstance(val, str):
+                            new_record["测量值"] = val  # 文本值直接写入
+                        else:
+                            new_record["测量值"] = self._float_cell(val)  # 数值值转换
                         
                         # 根据配置决定是否添加时间戳
                         if include_timestamp:
                             new_record["时间戳"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 添加处理文本
+                        new_record["处理文本"] = processed_text
                         
                         # 根据配置决定是否添加原始语音字段
                         if include_original:
@@ -154,10 +171,13 @@ class ExcelExporter:
                         
                         # 如果启用了自动编号，记录到会话数据
                         if auto_numbering:
-                            self._session_data.append((new_id, self._float_cell(val), original_text))
+                            # 记录原始值而不是转换后的值
+                            record_val = val if isinstance(val, str) else self._float_cell(val)
+                            self._session_data.append((new_id, record_val, original_text))
                         else:
                             # 对于没有ID的情况，使用-1作为占位符
-                            self._session_data.append((-1, self._float_cell(val), original_text))
+                            record_val = val if isinstance(val, str) else self._float_cell(val)
+                            self._session_data.append((-1, record_val, original_text))
     
                     # 合并数据
                     if existing_data.empty:

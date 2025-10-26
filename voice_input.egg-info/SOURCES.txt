@@ -5,12 +5,18 @@ audio_capture_v.py
 excel_exporter.py
 main.py
 pyproject.toml
-backup/New_method.py
-backup/audio_capture_v - 副本.py
-backup/audio_capture_v.py
-backup/data_processing.py
-backup/excel_exporter.py
-backup/main.py
+backup/callback_example.py
+backup/examples_async/__init__.py
+backup/examples_async/async_demo.py
+backup/examples_async/basic_integration_demo.py
+backup/examples_async/container_setup_example.py
+backup/examples_async/direct_adapter_demo.py
+backup/examples_async/event_driven_demo.py
+backup/examples_async/example_async_system.py
+backup/examples_async/example_shared_config.py
+backup/examples_async/example_sync_system.py
+backup/examples_async/integration_demo.py
+backup/examples_async/simple_integration_test.py
 voice_input.egg-info/PKG-INFO
 voice_input.egg-info/SOURCES.txt
 voice_input.egg-info/dependency_links.txt

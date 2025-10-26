@@ -1,8 +1,12 @@
+Multi_Thread_Simple
+My_Study
 TTSengine
-WaveOutput
 audio_capture_v
 backup
 claude
 excel_exporter
+exports
+logs
 main
 model
+utils

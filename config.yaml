@@ -1,119 +1,211 @@
-# 语音输入系统配置文件
-# 可以在不修改源代码的情况下通过此文件调整系统参数
-
-# ===== 模型配置 =====
-model:
-  # 默认模型路径 - 影响所有需要加载模型的模块
-  # 使用位置: config_loader.py, audio_capture_v.py, main.py, model_manager.py, preload_model.py, unload_model_global.py
-  default_path: "model/cn"
-  # 可选模型路径列表
-  available_models:
-    - name: "中文标准模型（高精度）"
-      path: "model/cn"
-      description: "完整的中文语音识别模型，准确率高"
-    - name: "中文小模型（快速加载）"
-      path: "model/cns"
-      description: "精简版中文语音识别模型，启动速度快，占用内存少"
-    - name: "英文标准模型"
-      path: "model/us"
-      description: "完整的英文语音识别模型"
-    - name: "英文小模型"
-      path: "model/uss"
-      description: "精简版英文语音识别模型"
-  
-# ===== 识别配置 =====
-recognition:
-  # 语音识别超时时间（秒），范围[1, 60]
-  # 使用位置: audio_capture_v.py, main.py
-  timeout_seconds: 60
-  # 缓冲大小（最大记录数）
-  # 使用位置: audio_capture_v.py
-  buffer_size: 10000
-  # 暂停超时乘数
-  # 使用位置: audio_capture_v.py
-  pause_timeout_multiplier: 3
-  # 睡眠设置（秒）
-  sleep_times:
-    # 非常小的睡眠值，用于高频检测（不干扰测试） e.g. 0.01s
-    # 中等睡眠时间，用于一般场景，兼顾响应性和系统资源 e.g. 0.1s
-    # 长睡眠时间，用于调试和测试场景 e.g. >=0.5s  
-   
-    # 使用位置: audio_capture_v.py: (701 - 倒计时检测),(757 - 暂停状态检测), (770 - TTS播报时) (1117 - 测试模式 键盘监听循环)
-    production: 0.01      
-    
-    # 使用位置: test_keyboard_response.py ; 注意 test_sleep_optimization.py 是硬编码   
-    test: 2
-
-# ===== 系统配置 =====
-system:
-  # 日志级别：DEBUG, INFO, WARNING, ERROR, CRITICAL
-  # 使用位置: main.py
-  log_level: "INFO"
-  # 全局卸载控制：true - 退出时全局卸载模型，false - 仅清除本地引用
-  # 使用位置: main.py
-  global_unload: false
-  # 测试模式：true - 启用测试模式，false - 禁用测试模式
-  # 使用位置: audio_capture_v.py, main.py
-  test_mode: false
-  # VOSK日志级别：-1(DEBUG), 0(INFO), 1(WARNING), 2(ERROR), 3(CRITICAL)
-  # 使用位置: main.py
-  vosk_log_level: 0
-
-# ===== 音频配置 =====
 audio:
-  # 音频采样率
-  # 使用位置: audio_capture_v.py, model_manager.py
+  # 针对torch 2.3.1+cpu版本优化的音频配置
+  chunk_size: 200  # 减小chunk_size以降低CPU处理负担
   sample_rate: 16000
-  # 音频块大小
-  # 使用位置: audio_capture_v.py
-  chunk_size: 8000
 
-# ===== Excel导出配置 =====
-excel:
-  # 默认文件名
-  # 使用位置: excel_exporter.py
-  file_name: "measurement_data.xlsx"
-  # 自动导出：true - 自动创建和使用Excel导出器，false - 禁用自动导出
-  # 使用位置: audio_capture_v.py, main.py
-  auto_export: true
-  # 格式设置
-  formatting:
-    # 是否启用自动编号
-    # 使用位置: excel_exporter.py
-    auto_numbering: true
-    # 是否包含时间戳
-    # 使用位置: excel_exporter.py
-    include_timestamp: true
-    # 表头语言："zh"(中文), "en"(英文)
-    # 使用位置: excel_exporter.py
-    header_language: "zh"
-    # 原文信息是否包含在导出数据中
-    # 使用位置: excel_exporter.py
-    include_original: true
+  # FFmpeg音频预处理 (默认关闭)
+  # 启用后可显著提升语音质量，增强VAD和ASR识别准确性
+  ffmpeg_preprocessing:
+    enabled: true  # 测试阶段启用
 
-# ===== 语音命令配置 =====
-voice_commands:
-  # 暂停命令 - 影响语音控制功能
-  # 使用位置: audio_capture_v.py
-  pause_commands: ["暂停录音", "暂停"]
-  # 继续命令 - 影响语音控制功能
-  # 使用位置: audio_capture_v.py
-  resume_commands: ["继续录音", "继续", "恢复"]
-  # 停止命令 - 影响语音控制功能
-  # 使用位置: audio_capture_v.py
-  stop_commands: ["停止录音", "停止", "结束"]
+    # FFmpeg滤镜链参数 (可自定义)
+    # highpass=f=80: 移除低频噪音(如空调声、手柄噪音)
+    # afftdn=nf=-25: 基于FFT的降噪，减少稳定背景噪音
+    # loudnorm: 音量标准化，提升语音清晰度
+    # volume=2.0: 音量增强，提高信噪比
+    filter_chain: "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0"
 
-# ===== 错误修正配置 =====
+    # 预处理选项
+    options:
+      # 是否在语音开始时进行预处理
+      process_input: true
+
+      # 是否保存预处理后的音频文件(调试用)
+      save_processed: false
+
+      # 预处理后的临时文件名前缀
+      processed_prefix: "processed_"
 error_correction:
-  # 错误修正字典文件路径
-  # 使用位置: audio_capture_v.py
-  dictionary_path: "voice_correction_dict.txt"
-  # 启用自动错误修正
-  # 使用位置: audio_capture_v.py
+  dictionary_path: voice_correction_dict.txt
   enabled: true
+excel:
+  auto_export: true
+  file_name: report
+  formatting:
+    auto_numbering: true
+    header_language: zh
+    include_original: true
+    include_timestamp: true
+model:
+  default_path: ./model/cn
+  device: cpu
+  funasr:
+    # 针对torch 2.3.1+cpu版本进一步优化的FunASR配置
+    # 使用更激进的chunk_size以提高识别响应速度
+    chunk_size:
+    - 0
+    - 6   # 进一步降低chunk_size以提高响应速度
+    - 3   # 相应调整stride以保持连续性
+    decoder_chunk_look_back: 1
+    disable_update: true
+    encoder_chunk_look_back: 1  # 进一步减少内存使用
+    path: ./model/fun
+    trust_remote_code: false
+recognition:
+  buffer_size: 10000
+  pause_timeout_multiplier: 3
+  timeout_seconds: -1
+  # 🔧 数字识别优化配置
+  # 增加缓冲区大小以支持更长的数字序列识别
+  decimal_optimization:
+    enabled: true
+    # 延长音频采集时间，确保完整的小数被识别
+    extended_capture_time: 2.0
+    # 提高数字识别的置信度阈值
+    confidence_threshold: 0.7
+special_texts:
+  enabled: true
+  exportable_texts:
+  - base_text: OK
+    variants:
+    - OK
+    - ok
+    - Okay
+    - okay 
+    - 合格
+    - 通过
+  - base_text: NOK
+    variants:
+    - NotOK
+    - notok
+    - noteok
+    - NoteOK
+    - NG
+    - 不合格
+    - 不OK
+    - 不通过 
+system:
+  global_unload: false
+  log_level: INFO
+  test_mode: false
+  vosk_log_level: 0
+# ===== VAD语音活动检测配置 =====
+# VAD (Voice Activity Detection) 负责检测语音的开始和结束
+# 🔑 min_silence_duration 是影响延迟的关键参数！
 
-# ===== TTS配置 =====
-tts:
-  # TTS默认状态: "on"(开启) 或 "off"(关闭)
-  # 使用位置: audio_capture_v.py
-  default_state: "off"
+vad:
+  # VAD模式选择 - 可选值: "fast", "balanced", "accuracy", "customized"
+  # fast: 快速响应模式 - 减少延迟但可能误检测 (推荐日常使用)
+  # balanced: 平衡模式 - 默认设置
+  # accuracy: 高准确性模式 - 增加稳定性但延迟较高
+  # customized: 自定义模式 - 使用下面的具体参数设置
+  # 针对torch 2.3.1+cpu版本优化，使用自定义平衡配置
+  mode: "customized"
+
+  # ===== 自定义VAD参数 (仅在mode="customized"时生效) =====
+  # 针对torch 2.3.1+cpu版本优化的VAD参数
+  # 在accuracy和balanced之间找到最佳平衡点
+
+  # 能量阈值 - 检测语音的最小能量
+  # 优化：降低阈值以更好地检测轻声数字
+  energy_threshold: 0.010
+
+  # GUI能量显示阈值 - 用于能量条显示的最小能量（独立于VAD检测）
+  # 较低的值使能量条更敏感，但不影响语音识别准确性， 比如0.00001
+  gui_display_threshold: 0.01
+
+  # 最小语音持续时间 - 检测到语音后至少持续多久才认为是有效语音
+  # 优化：降低以提高首次响应速度
+  min_speech_duration: 0.2
+
+  # 最小静音持续时间 - 语音结束后需要静音多久才认为说话结束
+  # 🔧 优化：适度减少以提高首次响应速度，但保持对小数识别的支持
+  # 平衡首次响应速度和识别准确性
+  min_silence_duration: 0.6
+
+  # 语音填充 - 在语音前后添加额外的音频时间
+  # 优化：调整为更平衡的值，保持识别完整性同时提高响应速度
+  speech_padding: 0.3
+
+  # ===== VAD预设配置定义 (系统内部使用，请勿修改) =====
+  presets:
+    fast:
+      # 🚀 快速响应模式 - 适合日常使用
+      # 预估延迟: 0.35秒 (不含说话时间)
+      energy_threshold: 0.01
+      min_speech_duration: 0.1
+      min_silence_duration: 0.2
+      speech_padding: 0.2
+      description: "快速响应模式 - 减少延迟但可能误检测"
+      use_case: "日常交流，追求速度"
+
+    balanced:
+      # ⚖️ 平衡模式 - 默认推荐
+      # 预估延迟: 0.75秒 (不含说话时间)
+      energy_threshold: 0.015
+      min_speech_duration: 0.3
+      min_silence_duration: 0.6
+      speech_padding: 0.3
+      description: "平衡模式 - 默认设置"
+      use_case: "大多数使用场景的推荐选择"
+
+    accuracy:
+      # 🎯 高准确性模式 - 适合重要场合
+      # 预估延迟: 1.15秒 (不含说话时间)
+      energy_threshold: 0.02
+      min_speech_duration: 0.5
+      min_silence_duration: 1.0
+      speech_padding: 0.4
+      description: "高准确性模式 - 增加稳定性但延迟较高"
+      use_case: "重要会议，正式场合"
+
+  # ===== 使用说明 =====
+  # 1. 快速切换模式：
+  #    修改 mode 字段为 "fast", "balanced", "accuracy" 之一
+  #
+  # 2. 自定义配置：
+  #    设置 mode: "customized"，然后调整下面的参数
+  #
+  # 3. 延迟估算：
+  #    总延迟 = 说话时间 + min_silence_duration + ASR处理时间(~0.15s)
+  #
+  # 4. 推荐配置：
+  #    • 日常使用: mode: "fast"
+  #    • 办公环境: mode: "balanced"
+  #    • 重要场合: mode: "accuracy"
+  #    • 特殊需求: mode: "customized" + 手动调整参数
+  #
+  # 5. 故障排除：
+  #    • 识别经常中断: 增加 min_silence_duration 到 0.8+
+  #    • 响应太慢: 减少 min_silence_duration 到 0.2-
+  #    • 误检测噪音: 增加 energy_threshold 到 0.02+
+  #    • 漏掉轻声: 减少 energy_threshold 到 0.01-
+voice_commands:
+  config:
+    confidence_threshold: 0.8
+    match_mode: fuzzy
+    min_match_length: 2
+  pause_commands:
+  - 暂停
+  - 暂停录音
+  - 暂停识别
+  - pause
+  - 暂停一下
+  - 等一下
+  resume_commands:
+  - 继续
+  - 继续录音
+  - 恢复
+  - 恢复识别
+  - resume
+  - 继续识别
+  - 开始
+  stop_commands:
+  - 停止
+  - 停止录音
+  - 结束
+  - exit
+  - stop
+  - 停止识别
+  - 结束识别
+  - 退出

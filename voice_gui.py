@@ -46,6 +46,7 @@ class WorkingVoiceWorker(QThread):
     status_changed = Signal(str)
     voice_command_state_changed = Signal(str)  # 语音命令状态变化信号
     voice_activity = Signal(int)  # 语音活动级别信号 (0-100)
+    command_result = Signal(str)  # 命令结果信号
     finished = Signal()
     system_initialized = Signal()
 
@@ -168,7 +169,17 @@ class WorkingVoiceWorker(QThread):
 
                             is_matching_record = False
                             if record_text:
-                                if record_text == processed_text or record_text == original_text:
+                                # 🎯 修复：检查命令结果格式 [CMD]
+                                if record_text.startswith("[CMD]"):
+                                    # 命令结果直接匹配
+                                    if numbers and len(numbers) > 0:
+                                        if isinstance(record_number, (int, float)):
+                                            try:
+                                                if float(record_number) == numbers[0]:
+                                                    is_matching_record = True
+                                            except:
+                                                pass
+                                elif record_text == processed_text or record_text == original_text:
                                     is_matching_record = True
                                 elif numbers and len(numbers) > 0:
                                     if isinstance(record_number, (int, float)):
@@ -183,7 +194,11 @@ class WorkingVoiceWorker(QThread):
                             if is_matching_record:
                                 has_new_record = True
 
-                                if isinstance(record_number, str) and record_text and record_text.strip():
+                                # 🎯 修复：优化显示逻辑，特别是命令结果
+                                if record_text and record_text.startswith("[CMD]"):
+                                    # 命令结果：直接显示命令文本
+                                    display_text = record_text
+                                elif isinstance(record_number, str) and record_text and record_text.strip():
                                     display_text = f"[{record_id}] {record_number}"
                                 else:
                                     display_text = f"[{record_id}] {record_number}"
@@ -296,7 +311,22 @@ class WorkingVoiceWorker(QThread):
             self.status_changed.emit("已停止")
             self.log_message.emit(f"🎤 {message}")
             self.voice_command_state_changed.emit("stopped")
+        elif state == "command":
+            # 🎯 通过信号确保在主线程中添加到history_text
+            try:
+                # 直接使用接收到的格式化命令，不再添加时间戳
+                formatted_command = message
 
+                # 通过命令结果信号发送到主线程
+                self.command_result.emit(formatted_command)
+
+                # 记录到日志
+                self.append_log(f"🎤 命令识别: {message}")
+
+            except Exception as e:
+                logger.error(f"发送命令到历史记录失败: {e}")
+
+    
     def _handle_vad_event(self, event_type: str, event_data: Dict):
         """处理VAD事件，更新语音能量显示"""
         energy = event_data.get('energy', 0)
@@ -1045,6 +1075,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
         self.worker.log_message.connect(self.append_log)
         self.worker.recognition_result.connect(self.display_result)
+        self.worker.command_result.connect(self.handle_command_result)
         self.worker.partial_result.connect(self.update_partial_result)
         self.worker.status_changed.connect(self.update_status)
         self.worker.voice_command_state_changed.connect(self.handle_voice_command_state_change)
@@ -1312,6 +1343,53 @@ class WorkingSimpleMainWindow(QMainWindow):
             #self.status_bar.showMessage("已停止 - 语音命令控制")
             self.append_log("🎤 语音命令：系统已停止，点击'🎤 开始识别'按钮重新开始")
 
+    def add_command_to_history(self, command_message: str):
+        """将命令添加到历史记录"""
+        try:
+            def update_ui():
+                # 获取当前时间戳
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H:%M:%S")
+
+                # 创建命令记录格式，类似于数字记录但标记为命令
+                formatted_command = f"[CMD] {timestamp} {command_message}"
+
+                # 添加到历史文本框
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                cursor.insertText(f"{formatted_command}\n")
+
+                # 滚动到底部
+                self.history_text.ensureCursorVisible()
+
+                # 同时添加到历史记录列表（如果存在）
+                if hasattr(self, 'history_data'):
+                    self.history_data.append({
+                        'type': 'command',
+                        'content': command_message,
+                        'timestamp': timestamp,
+                        'formatted': formatted_command
+                    })
+
+            # 在主线程中更新UI
+            if hasattr(self, 'history_text'):
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, update_ui)
+
+        except Exception as e:
+            self.append_log(f"❌ 添加命令到历史记录失败: {e}")
+
+    def _add_to_history_text(self, text: str):
+        """直接添加文本到历史文本框"""
+        try:
+            if hasattr(self, 'history_text'):
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                cursor.insertText(f"{text}\n")
+                self.history_text.ensureCursorVisible()
+        except Exception as e:
+            logger.error(f"添加文本到历史记录失败: {e}")
+
     def display_result(self, result):
         """显示识别结果 - 只显示record类型的信息"""
         if not result or not result.strip():
@@ -1345,7 +1423,10 @@ class WorkingSimpleMainWindow(QMainWindow):
             self.current_text_label.setText(display_text)
 
             # 构建历史记录条目
-            if standard_id:
+            if result.startswith("[CMD]"):
+                # 命令记录格式
+                history_entry = f"🎤 {result}"
+            elif standard_id:
                 history_entry = f"🔢 [标准序号{standard_id}] {result}"
             else:
                 history_entry = f"🔢 {result}"
@@ -1452,8 +1533,15 @@ class WorkingSimpleMainWindow(QMainWindow):
             self._excel_file_paths = []
             
         if event.button() == Qt.LeftButton:
-            # 获取点击位置
-            cursor = self.history_text.cursorForPosition(event.pos())
+            # 获取点击位置 (兼容PySide6 6.6+)
+            # pos() 在新版本中已弃用，使用 position() 替代
+            try:
+                # 优先使用新方法
+                position = event.position()
+                cursor = self.history_text.cursorForPosition(position.toPoint())
+            except AttributeError:
+                # 回退到旧方法 (向后兼容)
+                cursor = self.history_text.cursorForPosition(event.pos())
             cursor.select(QTextCursor.LineUnderCursor)
             line_text = cursor.selectedText().strip()
 
@@ -1765,6 +1853,22 @@ class WorkingSimpleMainWindow(QMainWindow):
                 event.ignore()
         else:
             event.accept()
+
+    def handle_command_result(self, command_text: str):
+        """处理命令结果，添加到历史记录"""
+        try:
+            # 直接添加到历史文本框
+            if hasattr(self, 'history_text'):
+                self.history_text.append(command_text)
+                self.recognition_count += 1
+
+                # 滚动到底部
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                self.history_text.setTextCursor(cursor)
+
+        except Exception as e:
+            logger.error(f"处理命令结果失败: {e}")
 
 
 def main():

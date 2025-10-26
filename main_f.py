@@ -452,6 +452,10 @@ class FunASRVoiceSystem:
         if standard_id:
             self.set_standard_id(standard_id)
             logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
+
+            # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
+            command_display_text = f"[命令] 切换到标准序号 {standard_id}"
+            self._add_command_to_results(command_display_text, text, standard_id)
         else:
             # 回退到旧的逻辑（向后兼容）
             logger.debug(f"模式匹配未成功，尝试回退逻辑")
@@ -463,10 +467,50 @@ class FunASRVoiceSystem:
                 if standard_id > 0 and standard_id % 100 == 0:
                     self.set_standard_id(standard_id)
                     logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
+
+                    # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
+                    command_display_text = f"[命令] 切换到标准序号 {standard_id}"
+                    self._add_command_to_results(command_display_text, text, standard_id)
                 else:
                     logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
             else:
                 logger.warning(f"未能从命令中提取有效的标准序号: '{text}'")
+
+    def _add_command_to_results(self, display_text: str, original_text: str, standard_id: int):
+        """
+        将语音命令添加到结果列表，以便GUI显示
+
+        Args:
+            display_text: 显示的文本
+            original_text: 原始识别的文本
+            standard_id: 标准序号
+        """
+        try:
+            # 生成唯一的命令ID
+            import time
+            command_id = f"CMD_{int(time.time() * 1000) % 100000}"
+
+            # 添加到number_results列表，格式与正常识别结果一致
+            if not hasattr(self, 'number_results'):
+                self.number_results = []
+
+            self.number_results.append((command_id, standard_id, display_text))
+
+            logger.debug(f"语音命令已添加到结果列表: {display_text}")
+
+            # 🎯 触发状态变化回调，通知GUI显示命令
+            if self.state_change_callback:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                formatted_command = f"🎤 [CMD] {timestamp} 🎤 语音命令: {display_text}"
+                self.state_change_callback("command", formatted_command)
+
+            # 添加到识别日志，确保命令被记录
+            if hasattr(self, 'recognition_logger'):
+                self.recognition_logger.info(f"语音命令识别: '{original_text}' -> {display_text}")
+
+        except Exception as e:
+            logger.error(f"添加命令到结果列表失败: {e}")
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
@@ -559,6 +603,7 @@ class FunASRVoiceSystem:
         special_text_match = self._check_special_text(processed_text)
 
         # 处理纯数字结果或特定文本结果
+        logger.debug(f"处理结果检查: numbers={bool(numbers)}, excel_exporter={bool(self.excel_exporter)}, special_text_match={bool(special_text_match)}")
         if (numbers and self.excel_exporter) or (special_text_match and self.excel_exporter):
             # 添加到结果列表
             try:

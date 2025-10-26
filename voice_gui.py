@@ -47,6 +47,7 @@ class WorkingVoiceWorker(QThread):
     voice_command_state_changed = Signal(str)  # 语音命令状态变化信号
     voice_activity = Signal(int)  # 语音活动级别信号 (0-100)
     finished = Signal()
+
     system_initialized = Signal()
 
     def __init__(self, mode='customized'):
@@ -95,17 +96,17 @@ class WorkingVoiceWorker(QThread):
                 self.log_message.emit("❌ 语音系统初始化失败")
                 return
 
-            #logger.debug(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
+            logger.debug(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
             
             self.voice_system.set_state_change_callback(self._handle_voice_command_state_change)
-            #logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
+            logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
 
             # 🔥 关键修复：设置VAD回调以解决GUI无响应问题
             if hasattr(self.voice_system, 'set_vad_callback'):
-                #logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
+                logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
                 try:
                     self.voice_system.set_vad_callback(self._handle_vad_event)
-                    #logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
+                    logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
                     self.log_message.emit("✅ 已设置VAD能量监听")
 
 
@@ -165,8 +166,9 @@ class WorkingVoiceWorker(QThread):
                             if is_matching_record:
                                 has_new_record = True
 
-                                if isinstance(record_number, str) and record_text and record_text.strip():
-                                    display_text = f"[{record_id}] {record_number}"
+                                # 构建完整的显示文本，包含ID、数字和文本内容
+                                if record_text and record_text.strip():
+                                    display_text = f"[{record_id}] {record_number} {record_text}"
                                 else:
                                     display_text = f"[{record_id}] {record_number}"
 
@@ -1287,8 +1289,9 @@ class WorkingSimpleMainWindow(QMainWindow):
 
         result = result.strip()
 
-        is_record = result.startswith('[') and ']' in result and ('] ' in result or ']' in result and len(result) > 3)
-
+        # 修复识别逻辑，确保正确处理带数字的记录格式
+        is_record = result.startswith('[') and ']' in result and len(result) > 3
+        logger.info(f"识别结果: {is_record}")
         if not is_record:
             if hasattr(self, 'append_log'):
                 self.append_log(f"过滤非record信息: {result}")
@@ -1353,7 +1356,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 if history_records:
                     self.append_log(f"📚 加载历史记录: {len(history_records)}条")
 
-                    # 显示历史记录
+                    # 显示历史记录，模拟Worker发送的格式
                     for record in reversed(history_records):  # 最新的在前面
                         original = record.get('original', '')
                         processed = record.get('processed', '')
@@ -1364,11 +1367,20 @@ class WorkingSimpleMainWindow(QMainWindow):
                         from datetime import datetime
                         time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
 
-                        # 构建历史记录条目
+                        # 模拟Worker格式：[{record_id}] {record_number} {record_text}
                         if numbers and len(numbers) > 0:
-                            history_entry = f"🕒 {time_str} 🔢 {processed}"
+                            # 模拟record格式，符合display_result的is_record要求
+                            mock_record_id = len(history_records) - history_records.index(record)  # 倒序ID
+                            mock_record_number = numbers[0]
+                            mock_record_text = processed if processed else original
+
+                            # 构建符合[xxx]格式的历史记录条目
+                            history_entry = f"🕒 {time_str} [{mock_record_id}] {mock_record_number} {mock_record_text}"
                         else:
-                            history_entry = f"🕒 {time_str} 📝 {processed}"
+                            # 非数字记录，也添加时间戳和模拟格式
+                            mock_record_id = len(history_records) - history_records.index(record)
+                            mock_record_text = processed if processed else original
+                            history_entry = f"🕒 {time_str} [{mock_record_id}] 文本 {mock_record_text}"
 
                         self.history_text.append(history_entry)
                         self.recognition_count += 1

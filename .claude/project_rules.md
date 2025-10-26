@@ -29,17 +29,12 @@ Voice_Input/
 │   ├── config_loader.py         # 配置管理
 │   ├── logging_utils.py         # 日志工具
 │   ├── debug_performance_tracker.py  # Debug性能追踪
-│   ├── production_latency_logger.py  # 生产延迟日志
-│   ├── configure_ten_vad.py     # TEN VAD配置
-│   ├── setup_ffmpeg_env.py      # FFmpeg环境设置
-│   ├── safe_funasr_import.py    # FunASR安全导入
-│   └── smart_decimal_config.py  # 智能小数点配置
+│   └── production_latency_logger.py  # 生产延迟日志
 ├── main_f.py                 # 核心系统类
 ├── funasr_voice_TENVAD.py    # TEN VAD + FFmpeg集成模块
 ├── voice_gui.py              # 主要GUI界面
 ├── excel_exporter.py         # Excel导出模块
 ├── text_processor_clean.py   # 文本处理模块 (重构优化)
-├── gui_components.py         # GUI组件模块
 ├── config.yaml               # 配置文件
 ├── archive/                  # 归档文件目录
 ├── reports/                  # Excel输出目录

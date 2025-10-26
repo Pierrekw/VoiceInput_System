@@ -412,6 +412,12 @@ class FunASRVoiceSystem:
         Returns:
             语音命令类型
         """
+        # 🔥 修复：优先检查标准序号命令
+        command_prefixes = config_loader.get_standard_id_command_prefixes()
+        standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
+        if standard_id:
+            return VoiceCommandType.STANDARD_ID
+
         # 转换命令字典格式以适配新的处理器
         command_dict = {
             command_type.value: keywords
@@ -652,7 +658,11 @@ class FunASRVoiceSystem:
             # 检查是否为语音命令
             command_type = self.recognize_voice_command(processed)
 
-            if command_type != VoiceCommandType.UNKNOWN:
+            if command_type == VoiceCommandType.STANDARD_ID:
+                # 直接处理标准序号命令
+                self._handle_standard_id_command(processed)
+            elif command_type != VoiceCommandType.UNKNOWN:
+                # 处理其他语音命令（暂停、继续、停止）
                 self.handle_voice_command(command_type)
             else:
                 # 处理普通识别结果

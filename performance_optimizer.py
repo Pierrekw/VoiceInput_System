@@ -164,7 +164,7 @@ def main():
         print("\n📝 使用方法:")
         print("  1. 备份当前配置: 已自动完成")
         print("  2. 应用优化配置: cp config_optimized.yaml config.yaml")
-        print("  3. 测试性能: python performance_test.py --duration 10")
+        print("  3. 测试性能: python tests/test_performance.py --duration 10")
         print("  4. 如有问题恢复: cp config_backup_*.yaml config.yaml")
 
         print("\n⚠️ 注意事项:")

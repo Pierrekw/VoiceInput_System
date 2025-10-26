@@ -16,6 +16,22 @@
 - 测试文件命名规范: `test_*.py`
 - 测试函数命名规范: `def test_*()`
 
+#### 📋 tests/ 目录下的测试文件 (v2.5更新)
+```bash
+tests/
+├── test_debug_performance.py      # 性能调试测试 (从根目录移动)
+├── test_performance.py           # 性能测试 (从根目录移动)
+├── test_ffmpeg_preprocessing.py  # FFmpeg预处理测试 (从根目录移动)
+├── test_vad_comparison.py        # VAD对比测试 (从根目录移动)
+├── test_text_processor_refactor.py    # 文本处理器重构测试
+├── test_funasr.py                    # FunASR核心功能测试
+├── test_improvements.py              # 功能改进测试
+├── test_excel_functionality.py       # Excel功能测试
+├── test_gui_cache_fix.py             # GUI缓存修复测试
+├── integrated_test.py                # 集成测试
+└── README.md                         # 测试说明文档
+```
+
 ```
 Voice_Input/
 ├── .claude/                  # Claude配置目录 (当前文件)
@@ -147,10 +163,12 @@ mypy logging_utils.py --ignore-missing-imports
 3. ✅ **必须**添加正确的导入路径
 4. ✅ **必须**从项目根目录运行测试
 
-### 常见错误 (禁止):
+### 常见错误 (禁止) - v2.5更新:
 - ❌ 在根目录创建 `test_*.py` 文件
 - ❌ 忘记添加导入路径修复
 - ❌ 测试文件命名不规范
+- ❌ 在根目录运行测试文件（已移动到tests/目录）
+- ❌ 引用旧的测试文件路径（如performance_test.py）
 
 ## 🚀 启动方式和命令 (v2.5更新)
 
@@ -192,17 +210,29 @@ from funasr_voice_TENVAD import FunASRVoiceRecognizer
 from funasr_voice_module import FunASRVoiceRecognizer
 ```
 
-### 测试命令
+### 测试命令 (v2.5更新)
 ```bash
-# 运行重构测试 (最重要)
+# 📊 核心功能测试
 python tests/test_text_processor_refactor.py
-
-# 运行其他测试
 python tests/test_funasr.py
 python tests/test_improvements.py
 
-# 性能测试
-python performance_test.py
+# 🔍 性能和调试测试 (从根目录移动)
+python tests/test_performance.py
+python tests/test_debug_performance.py
+
+# 🔧 功能专项测试
+python tests/test_ffmpeg_preprocessing.py
+python tests/test_vad_comparison.py
+python tests/test_excel_functionality.py
+python tests/test_gui_cache_fix.py
+
+# 🧪 集成测试
+python tests/integrated_test.py
+
+# ❌ 错误方式 - 不要在根目录运行测试
+# python performance_test.py  (已移动到tests/)
+# python debug_performance_test.py  (已移动到tests/)
 ```
 
 ### 配置验证

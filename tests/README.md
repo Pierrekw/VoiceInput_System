@@ -16,9 +16,17 @@
 - **`test_improvements.py`** - 功能改进测试
 - **`test_original_method.py`** - 原始方法对比测试
 
-### 性能测试
+### 性能测试 (v2.5更新)
+- **`test_performance.py`** - 性能测试 (从根目录移动)
+- **`test_debug_performance.py`** - 性能调试测试 (从根目录移动)
 - **`test_production_latency.py`** - 生产环境延迟测试
 - **`test_gui_cache_fix.py`** - GUI缓存修复测试
+
+### 功能专项测试 (v2.5更新)
+- **`test_ffmpeg_preprocessing.py`** - FFmpeg预处理测试 (从根目录移动)
+- **`test_vad_comparison.py`** - VAD对比测试 (从根目录移动)
+- **`test_excel_functionality.py`** - Excel功能测试
+- **`test_start_options.py`** - 启动选项测试
 
 ### 问题修复测试
 - **`test_chinese_number_errors.py`** - 中文数字错误修复测试
@@ -31,16 +39,24 @@
 
 ## 🚀 运行测试
 
-### 运行单个测试
+### 运行单个测试 (v2.5更新)
 ```bash
-# 运行文本处理器重构测试（推荐）
-python test_text_processor_refactor.py
+# 📊 核心功能测试
+python tests/test_text_processor_refactor.py
+python tests/test_funasr.py
+python tests/test_improvements.py
 
-# 运行核心功能测试
-python test_funasr.py
+# 🔍 性能和调试测试 (从根目录移动)
+python tests/test_performance.py
+python tests/test_debug_performance.py
 
-# 运行性能测试
-python test_production_latency.py
+# 🔧 功能专项测试 (从根目录移动)
+python tests/test_ffmpeg_preprocessing.py
+python tests/test_vad_comparison.py
+python tests/test_excel_functionality.py
+
+# 🧪 集成测试
+python tests/integrated_test.py
 ```
 
 ### 从项目根目录运行
@@ -98,6 +114,32 @@ python tests/test_funasr.py
 2. **查看日志**: 分析错误信息和堆栈跟踪
 3. **检查配置**: 确认配置文件正确
 4. **隔离问题**: 使用单个测试文件定位问题
+
+## 🎉 测试状态
+
+## 📋 更新日志 (v2.5)
+
+### 2025-10-26 - 测试文件整理
+✅ **完成的改进:**
+- 将4个根目录的test文件移动到tests/目录
+- 统一测试文件命名规范 (test_*.py)
+- 更新项目规则文档中的测试命令
+- 更新测试说明文档
+
+📁 **移动的文件:**
+- `debug_performance_test.py` → `tests/test_debug_performance.py`
+- `performance_test.py` → `tests/test_performance.py`
+- `test_ffmpeg_preprocessing.py` → `tests/test_ffmpeg_preprocessing.py`
+- `vad_comparison_test.py` → `tests/test_vad_comparison.py`
+
+🔧 **更新的文档:**
+- `.claude/project_rules.md` - 更新测试文件列表和命令
+- `tests/README.md` - 更新测试文件说明和运行指南
+- `performance_optimizer.py` - 更新测试命令引用
+
+✨ **新增测试类别:**
+- 性能和调试测试
+- 功能专项测试
 
 ## 🎉 测试状态
 

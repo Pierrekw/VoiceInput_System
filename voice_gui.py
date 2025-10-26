@@ -79,9 +79,9 @@ class WorkingVoiceWorker(QThread):
             #logger.info(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")            
 
             self.voice_system = FunASRVoiceSystem(
-                recognition_duration=-1,  # 不限时识别
-                continuous_mode=True,      # 连续识别模式
-                debug_mode=False           # 生产模式
+                recognition_duration=60,   # 60秒识别时长（与命令行版本一致）
+                continuous_mode=False,     # 批次模式（与命令行版本一致）
+                debug_mode=False           # 调式模式
             )
 
             logger.info(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")            
@@ -216,12 +216,36 @@ class WorkingVoiceWorker(QThread):
                     on_partial_result=gui_partial_result_callback
                 )
 
-            self.log_message.emit("🎙️ 开始连续语音识别...")
+            self.log_message.emit("🎙️ 开始连续语音识别（60秒自动重启模式）...")
             self.status_changed.emit("正在识别...")
 
             self.voice_system.start_keyboard_listener()
 
-            self.voice_system.run_continuous()
+            # 🔧 修复：实现60秒自动重启的连续识别
+            # 使用与命令行版本相同的参数，但通过循环实现GUI的连续性
+            while self.running:
+                try:
+                    self.log_message.emit("🔄 开始新的60秒识别周期...")
+                    self.voice_system.run_continuous()
+
+                    # 如果到这里说明正常完成了60秒，检查是否需要继续
+                    if self.running:
+                        self.log_message.emit("⏱️ 60秒周期完成，准备重启...")
+                        # 短暂等待后继续下一个周期
+                        import time
+                        time.sleep(1)
+                    else:
+                        break
+
+                except Exception as e:
+                    if self.running:  # 只有在仍在运行时才处理错误
+                        self.log_message.emit(f"❌ 识别周期错误: {e}")
+                        logger.error(f"识别周期错误: {e}")
+                        # 错误后也尝试重启
+                        import time
+                        time.sleep(2)
+                    else:
+                        break
 
         except Exception as e:
             self.log_message.emit(f"❌ 识别过程错误: {e}")

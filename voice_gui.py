@@ -1591,6 +1591,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         if not text:
             self.validation_errors['part_no'] = "零件号不能为空"
             self.part_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+            self.part_no_input.setPlaceholderText("⚠️ 请输入零件号（必填）")
         elif len(text) < 3:
             self.validation_errors['part_no'] = "零件号至少需要3个字符"
             self.part_no_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
@@ -1600,8 +1601,35 @@ class WorkingSimpleMainWindow(QMainWindow):
         else:
             self.validation_errors.pop('part_no', None)
             self.part_no_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
+            self.part_no_input.setPlaceholderText("✅ 零件号格式正确")
 
         self.update_start_button_state()
+        self.update_input_warnings()
+
+    def update_input_warnings(self):
+        """更新输入警示信息"""
+        # 在识别历史区域顶部显示警示信息
+        if hasattr(self, 'history_text') and self.history_text:
+            # 如果有验证错误，显示警示
+            if self.validation_errors:
+                warning_text = "⚠️ 输入验证错误：\n"
+                for field, error in self.validation_errors.items():
+                    field_name = {
+                        'part_no': '零件号',
+                        'batch_no': '批次号',
+                        'inspector': '检验员'
+                    }.get(field, field)
+                    warning_text += f"• {field_name}: {error}\n"
+
+                warning_text += "\n请修正这些错误后再开始识别。"
+
+                # 在状态标签显示警示
+                self.status_label.setText("⚠️ 请修正输入错误")
+                self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #ff9800; padding: 10px;")
+            else:
+                # 清除警示
+                self.status_label.setText("✅ 输入信息完整，可以开始识别")
+                self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50; padding: 10px;")
 
     def validate_batch_no(self, text):
         """验证批次号输入"""

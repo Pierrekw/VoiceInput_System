@@ -253,19 +253,16 @@ class FunASRVoiceSystem:
             reports_dir = os.path.join(os.getcwd(), "reports")
             os.makedirs(reports_dir, exist_ok=True)
 
-            # 暂时使用默认文件名，稍后在GUI中创建时使用模板
-            now = datetime.now()
-            filename = f"report_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
-            filepath = os.path.join(reports_dir, filename)
-
-            self.excel_exporter = ExcelExporterEnhanced(filename=filepath)
-            logger.info(f"Excel导出器已设置: {filepath}")
+            # 不创建文件，等待GUI设置时使用模板创建
+            # 这样可以确保所有Excel文件都使用模板
+            self.excel_exporter = None
+            logger.info(f"Excel导出器已准备就绪，等待GUI设置模板")
         except Exception as e:
             logger.error(f"设置Excel导出器失败: {e}")
 
     def setup_excel_from_gui(self, part_no: str, batch_no: str, inspector: str):
         """从GUI设置Excel模板"""
-        if not EXCEL_AVAILABLE or not self.excel_exporter:
+        if not EXCEL_AVAILABLE:
             logger.warning("Excel导出模块不可用")
             return False
 
@@ -274,10 +271,13 @@ class FunASRVoiceSystem:
             now = datetime.now()
             filename = f"Report_{part_no}_{batch_no}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-            # 更新Excel导出器的文件名
+            # 创建reports目录
             reports_dir = os.path.join(os.getcwd(), "reports")
+            os.makedirs(reports_dir, exist_ok=True)
             filepath = os.path.join(reports_dir, filename)
-            self.excel_exporter.filename = filepath
+
+            # 创建Excel导出器实例
+            self.excel_exporter = ExcelExporterEnhanced(filename=filepath)
 
             # 使用模板创建Excel文件
             success = self.excel_exporter.create_from_template(part_no, batch_no, inspector)
@@ -404,7 +404,7 @@ class FunASRVoiceSystem:
 
     def recognize_voice_command(self, text: str) -> VoiceCommandType:
         """
-        识别语音命令，支持配置化的匹配模式
+        识别语音命令，优先使用新的模式匹配，支持配置化的匹配模式
 
         Args:
             text: 识别的文本
@@ -412,21 +412,37 @@ class FunASRVoiceSystem:
         Returns:
             语音命令类型
         """
+        logger.debug(f"🔍 [DEBUG] recognize_voice_command 开始处理: '{text}'")
+
+        # 优先检查标准序号命令（使用新的模式匹配）
+        standard_id_prefixes = config_loader.get_standard_id_command_prefixes()
+        standard_id_result = self.command_processor.match_standard_id_command(text, standard_id_prefixes)
+
+        if standard_id_result:
+            logger.debug(f"🔍 [DEBUG] 模式匹配识别到标准序号命令: {standard_id_result}")
+            return VoiceCommandType.STANDARD_ID
+
+        # 对于其他命令类型，使用传统的匹配方法
         # 转换命令字典格式以适配新的处理器
         command_dict = {
             command_type.value: keywords
             for command_type, keywords in self.voice_commands.items()
+            if command_type != VoiceCommandType.STANDARD_ID  # 排除标准序号命令
         }
+        logger.debug(f"🔍 [DEBUG] 传统命令字典: {list(command_dict.keys())}")
 
         # 使用新的语音命令处理器
         result = self.command_processor.match_command(text, command_dict)
+        logger.debug(f"🔍 [DEBUG] 传统命令匹配结果: {result}")
 
         if result:
             # 将字符串结果转换回枚举类型
             for command_type in VoiceCommandType:
                 if command_type.value == result:
+                    logger.debug(f"🔍 [DEBUG] 匹配到命令类型: {command_type}")
                     return command_type
 
+        logger.debug(f"🔍 [DEBUG] 未匹配到任何命令，返回UNKNOWN")
         return VoiceCommandType.UNKNOWN
 
     def _handle_standard_id_command(self, text: str):
@@ -436,30 +452,22 @@ class FunASRVoiceSystem:
         Args:
             text: 识别的文本
         """
+        logger.debug(f"🔍 [DEBUG] 开始处理标准序号命令: '{text}'")
+
         # 获取标准序号命令前缀
         command_prefixes = config_loader.get_standard_id_command_prefixes()
+        logger.debug(f"🔍 [DEBUG] 可用命令前缀: {command_prefixes}")
 
-        # 使用新的模式匹配方法
+        # 使用新的模式匹配方法（已经在recognize_voice_command中验证过）
         standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
+        logger.debug(f"🔍 [DEBUG] 模式匹配结果: {standard_id}")
 
         if standard_id:
             self.set_standard_id(standard_id)
             logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
         else:
-            # 回退到旧的逻辑（向后兼容）
-            logger.debug(f"模式匹配未成功，尝试回退逻辑")
-            # 提取数字
-            numbers = self.processor.extract_numbers(text)
-            if numbers:
-                standard_id = int(numbers[0])
-                # 检查是否为有效的标准序号（100的倍数）
-                if standard_id > 0 and standard_id % 100 == 0:
-                    self.set_standard_id(standard_id)
-                    logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
-                else:
-                    logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
-            else:
-                logger.warning(f"未能从命令中提取有效的标准序号: '{text}'")
+            # 这种情况不应该发生，因为recognize_voice_command已经验证过了
+            logger.error(f"🔍 [DEBUG] 逻辑错误：未通过模式匹配但仍然调用了处理方法: '{text}'")
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
@@ -539,9 +547,13 @@ class FunASRVoiceSystem:
             self.recognition_logger.info(log_message)
 
         # 检查语音命令
+        logger.debug(f"🔍 [DEBUG] 开始识别语音命令: '{processed_text}'")
         command_type = self.recognize_voice_command(processed_text)
+        logger.debug(f"🔍 [DEBUG] 语音命令识别结果: {command_type}")
+
         if command_type == VoiceCommandType.STANDARD_ID:
             # 处理标准序号命令
+            logger.debug(f"🔍 [DEBUG] 检测到标准序号命令，调用处理方法")
             self._handle_standard_id_command(processed_text)
             return
         elif command_type != VoiceCommandType.UNKNOWN:

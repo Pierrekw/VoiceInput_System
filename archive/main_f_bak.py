@@ -47,19 +47,19 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 导入FunASR相关模块
-from funasr_voice_tenvad import FunASRVoiceRecognizer
+from funasr_voice_TENVAD import FunASRVoiceRecognizer
 #from funasr_voice_module import FunASRVoiceRecognizer
-from text_processor import TextProcessor, VoiceCommandProcessor
+from text_processor_clean import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
-from utils.performance_monitor import performance_monitor, PerformanceStep
+from performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
-from debug.debug_performance_tracker import debug_tracker
+from debug_performance_tracker import debug_tracker
 
 # 导入生产环境延迟记录器
 try:
-    from utils.production_latency_logger import (
+    from production_latency_logger import (
         start_latency_session, end_latency_session,
         log_voice_input_end, log_asr_complete, log_terminal_display
     )
@@ -73,15 +73,15 @@ except ImportError:
 
 # 导入Excel导出模块
 try:
-    from excel_utils import ExcelExporterEnhanced
+    from excel_exporter import ExcelExporter
     EXCEL_AVAILABLE = True
 except ImportError:
     EXCEL_AVAILABLE = False
-    ExcelExporterEnhanced = None  # type: ignore
+    ExcelExporter = None  # type: ignore
 
 # 使用统一的日志工具类
 import logging
-from utils.logging_utils import LoggingManager
+from logging_utils import LoggingManager
 
 # 获取配置好的日志记录器
 logger = LoggingManager.get_logger(
@@ -194,7 +194,7 @@ class FunASRVoiceSystem:
         self.command_processor = VoiceCommandProcessor()
 
         # Excel导出器
-        self.excel_exporter: Optional[ExcelExporterEnhanced] = None
+        self.excel_exporter: Optional[ExcelExporter] = None
         self._setup_excel_exporter()
 
         # 日志设置
@@ -247,44 +247,17 @@ class FunASRVoiceSystem:
             reports_dir = os.path.join(os.getcwd(), "reports")
             os.makedirs(reports_dir, exist_ok=True)
 
-            # 暂时使用默认文件名，稍后在GUI中创建时使用模板
+            # 生成文件名: report_yyyymmdd_hhmmss.xlsx
             now = datetime.now()
             filename = f"report_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
             filepath = os.path.join(reports_dir, filename)
 
-            self.excel_exporter = ExcelExporterEnhanced(filename=filepath)
+            self.excel_exporter = ExcelExporter(filename=filepath)
+            # 预先创建Excel文件，避免在首次识别后才创建
+            self.excel_exporter.create_new_file()
             logger.info(f"Excel导出器已设置: {filepath}")
         except Exception as e:
             logger.error(f"设置Excel导出器失败: {e}")
-
-    def setup_excel_from_gui(self, part_no: str, batch_no: str, inspector: str):
-        """从GUI设置Excel模板"""
-        if not EXCEL_AVAILABLE or not self.excel_exporter:
-            logger.warning("Excel导出模块不可用")
-            return False
-
-        try:
-            # 生成新的文件名: Report_零件号_批次号_timestamp.xlsx
-            now = datetime.now()
-            filename = f"Report_{part_no}_{batch_no}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
-
-            # 更新Excel导出器的文件名
-            reports_dir = os.path.join(os.getcwd(), "reports")
-            filepath = os.path.join(reports_dir, filename)
-            self.excel_exporter.filename = filepath
-
-            # 使用模板创建Excel文件
-            success = self.excel_exporter.create_from_template(part_no, batch_no, inspector)
-            if success:
-                logger.info(f"Excel模板已创建: {filepath}")
-                return True
-            else:
-                logger.warning(f"Excel模板创建失败，使用默认方式")
-                self.excel_exporter.create_new_file()
-                return False
-        except Exception as e:
-            logger.error(f"设置Excel模板失败: {e}")
-            return False
 
     def _log_voice_commands_config(self):
         """记录语音命令配置信息"""
@@ -701,9 +674,6 @@ class FunASRVoiceSystem:
         except:
             pass
 
-        # Excel最终处理：重新编号
-        self._finalize_excel()
-
         # 输出性能分析报告
         try:
             performance_report = performance_monitor.export_performance_report()
@@ -722,45 +692,6 @@ class FunASRVoiceSystem:
 
         # 清理性能监控数据
         performance_monitor.clear_records()
-
-    def _finalize_excel(self):
-        """Excel最终处理：格式化、测量规范查询和保存"""
-        if not EXCEL_AVAILABLE or not self.excel_exporter:
-            return
-
-        try:
-            # 执行Excel最终格式化（包括测量规范查询、判断结果、格式化等）
-            logger.info("🔄 正在执行Excel最终格式化...")
-            success = self.excel_exporter.finalize_excel_file()
-
-            if success:
-                logger.info("✅ Excel最终格式化完成")
-
-                # 输出Excel文件信息
-                if os.path.exists(self.excel_exporter.filename):
-                    file_size = os.path.getsize(self.excel_exporter.filename)
-                    logger.info(f"📁 Excel文件已保存: {os.path.basename(self.excel_exporter.filename)}")
-                    logger.info(f"📊 文件大小: {self._format_file_size(file_size)}")
-
-                    # 统计记录数量
-                    record_count = len(self.excel_exporter.get_session_data())
-                    logger.info(f"📈 记录数量: {record_count} 条")
-            else:
-                logger.error("❌ Excel最终格式化失败")
-
-        except Exception as e:
-            logger.error(f"Excel最终处理失败: {e}")
-
-    def _format_file_size(self, size_bytes):
-        """格式化文件大小显示"""
-        if size_bytes == 0:
-            return "0 B"
-        size_names = ["B", "KB", "MB", "GB"]
-        i = 0
-        while size_bytes >= 1024 and i < len(size_names) - 1:
-            size_bytes /= 1024.0
-            i += 1
-        return f"{size_bytes:.1f} {size_names[i]}"
 
     def run_recognition_cycle(self):
         """运行识别循环"""

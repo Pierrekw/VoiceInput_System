@@ -13,7 +13,7 @@ import math
 import subprocess
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from utils.logging_utils import LoggingManager
+from logging_utils import LoggingManager
 
 logger = LoggingManager.get_logger(
     name='voice_gui',
@@ -26,8 +26,7 @@ logger = LoggingManager.get_logger(
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QTextBrowser, QLabel, QPushButton, QGroupBox, QStatusBar,
-    QMessageBox, QSplitter, QTabWidget, QComboBox, QFormLayout, QProgressBar,
-    QLineEdit, QFrame
+    QMessageBox, QSplitter, QTabWidget, QComboBox, QFormLayout, QProgressBar
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QTextCursor, QPalette, QColor, QTextCharFormat
@@ -55,11 +54,6 @@ class WorkingVoiceWorker(QThread):
         self._is_paused = False
         self.voice_system = None
         self.mode = mode
-        self.input_values = {}  # 存储GUI输入的值
-
-    def set_input_values(self, values: Dict[str, str]):
-        """设置GUI输入的值"""
-        self.input_values = values.copy()
 
     def run(self):
         """运行语音识别"""
@@ -117,20 +111,6 @@ class WorkingVoiceWorker(QThread):
                 logger.error(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")                
 
             self.log_message.emit("✅ 语音系统初始化成功")
-
-            # 设置Excel模板
-            if self.input_values:
-                part_no = self.input_values.get('part_no', '')
-                batch_no = self.input_values.get('batch_no', '')
-                inspector = self.input_values.get('inspector', '')
-
-                if part_no and batch_no and inspector:
-                    success = self.voice_system.setup_excel_from_gui(part_no, batch_no, inspector)
-                    if success:
-                        self.log_message.emit(f"✅ Excel模板已创建: {part_no}_{batch_no}")
-                    else:
-                        self.log_message.emit("⚠️ Excel模板创建失败，使用默认方式")
-
             self.status_changed.emit("系统就绪")
             self.system_initialized.emit()
 
@@ -574,13 +554,6 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.current_mode = 'customized'  # 设置默认模式，必须在init_ui之前
         self.voice_energy_bar = None  # 语音能量条
         self._excel_info_shown = False  # 防止重复显示Excel信息
-
-        # 输入验证相关属性
-        self.part_no_input = None
-        self.batch_no_input = None
-        self.inspector_input = None
-        self.validation_errors = {}
-
         self.init_ui()
         self.setup_timer()
 
@@ -657,42 +630,6 @@ class WorkingSimpleMainWindow(QMainWindow):
         mode_layout.addRow("", self.mode_description)
         
         layout.addWidget(mode_group)
-
-        # 添加输入信息组
-        input_group = QGroupBox("报告信息")
-        input_layout = QFormLayout(input_group)
-
-        # 零件号输入
-        self.part_no_input = QLineEdit()
-        self.part_no_input.setPlaceholderText("请输入零件号，如: PART001")
-        self.part_no_input.textChanged.connect(self.validate_part_no)
-        input_layout.addRow("零件号 *:", self.part_no_input)
-
-        # 批次号输入
-        self.batch_no_input = QLineEdit()
-        self.batch_no_input.setPlaceholderText("请输入批次号，如: B202501")
-        self.batch_no_input.textChanged.connect(self.validate_batch_no)
-        input_layout.addRow("批次号 *:", self.batch_no_input)
-
-        # 检验员输入
-        self.inspector_input = QLineEdit()
-        self.inspector_input.setPlaceholderText("请输入检验员姓名，如: 张三")
-        self.inspector_input.textChanged.connect(self.validate_inspector)
-        input_layout.addRow("检验员 *:", self.inspector_input)
-
-        # 添加分隔线
-        separator_line = QFrame()
-        separator_line.setFrameShape(QFrame.HLine)
-        separator_line.setFrameShadow(QFrame.Sunken)
-        input_layout.addRow(separator_line)
-
-        # 添加说明文字
-        info_label = QLabel("⚠️ 带星号(*)的字段为必填项，\n请在开始识别前填写完整")
-        info_label.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
-        info_label.setWordWrap(True)
-        input_layout.addRow(info_label)
-
-        layout.addWidget(input_group)
 
         control_group = QGroupBox("控制")
         control_layout = QVBoxLayout(control_group)
@@ -953,34 +890,10 @@ class WorkingSimpleMainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
 
-        # 验证输入信息
-        if not self.are_inputs_valid():
-            error_messages = list(self.validation_errors.values())
-            QMessageBox.warning(
-                self, '输入验证失败',
-                f"请修正以下错误后再开始识别:\n\n" + "\n".join(f"• {msg}" for msg in error_messages),
-                QMessageBox.Ok
-            )
-            return
-
-        # 获取输入值
-        input_values = self.get_input_values()
-        part_no = input_values['part_no']
-        batch_no = input_values['batch_no']
-        inspector = input_values['inspector']
-
-        self.append_log(f"📋 报告信息: 零件号={part_no}, 批次号={batch_no}, 检验员={inspector}")
-
         self.start_button.setEnabled(False)
         self.pause_button.setEnabled(True)
         self.stop_button.setEnabled(True)
         self.mode_combo.setEnabled(False)  # 运行时禁用模式更改
-
-        # 禁用输入框，防止运行时修改
-        self.part_no_input.setEnabled(False)
-        self.batch_no_input.setEnabled(False)
-        self.inspector_input.setEnabled(False)
-
         self.status_label.setText("🟢 正在启动...")
         self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50; padding: 10px;")
 
@@ -1013,10 +926,7 @@ class WorkingSimpleMainWindow(QMainWindow):
             
         self.worker = WorkingVoiceWorker(mode=self.current_mode)
         self.worker.voice_activity.connect(self.update_voice_energy)
-
-        # 传递输入信息到worker
-        self.worker.set_input_values(input_values)
-
+        
         self.worker.log_message.connect(self.append_log)
         self.worker.recognition_result.connect(self.display_result)
         self.worker.partial_result.connect(self.update_partial_result)
@@ -1078,12 +988,6 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.mode_combo.setEnabled(True)  # 重新启用模式更改
         self.pause_button.setText("⏸️ 暂停")
-
-        # 重新启用输入框
-        self.part_no_input.setEnabled(True)
-        self.batch_no_input.setEnabled(True)
-        self.inspector_input.setEnabled(True)
-
         self.timer.stop()
 
         self.status_label.setText("🔴 已停止")
@@ -1122,7 +1026,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                         file_mtime = os.path.getmtime(file_path)
                         mtime_str = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
-                        record_count = len(excel_exporter.get_session_data())
+                        record_count = len(excel_exporter._session_data) if hasattr(excel_exporter, '_session_data') else 0
 
                         if record_count == 0:
                             try:
@@ -1301,28 +1205,9 @@ class WorkingSimpleMainWindow(QMainWindow):
             return
 
         def update_ui():
-            # 获取当前标准序号（如果可用）
-            standard_id = ""
-            try:
-                if hasattr(self, 'worker') and self.worker and hasattr(self.worker, 'voice_system') and self.worker.voice_system:
-                    if hasattr(self.worker.voice_system, 'excel_exporter') and self.worker.voice_system.excel_exporter:
-                        standard_id = self.worker.voice_system.excel_exporter.current_standard_id
-            except Exception as e:
-                logger.debug(f"获取标准序号失败: {e}")
+            self.current_text_label.setText(f"识别结果: {result}")
 
-            # 构建显示文本
-            if standard_id:
-                display_text = f"标准序号{standard_id}: {result}"
-            else:
-                display_text = f"识别结果: {result}"
-
-            self.current_text_label.setText(display_text)
-
-            # 构建历史记录条目
-            if standard_id:
-                history_entry = f"🔢 [标准序号{standard_id}] {result}"
-            else:
-                history_entry = f"🔢 {result}"
+            history_entry = f"🔢 {result}"
 
             if hasattr(self, 'history_text') and self.history_text:
                 self.history_text.append(history_entry)
@@ -1333,15 +1218,13 @@ class WorkingSimpleMainWindow(QMainWindow):
                 self.history_text.setTextCursor(cursor)
 
             if hasattr(self, 'append_log'):
-                if standard_id:
-                    self.append_log(f"语音识别(record) [标准序号{standard_id}]: {result}")
-                else:
-                    self.append_log(f"语音识别(record): {result}")
+                self.append_log(f"语音识别(record): {result}")
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, update_ui)
 
-        # 记录日志
+
+        # 替换为logger.info，这样可以受日志级别控制
         logger.info(f"🎤 识别(record): {result}")
         
     def update_partial_result(self, text):
@@ -1584,131 +1467,6 @@ class WorkingSimpleMainWindow(QMainWindow):
         """系统初始化完成"""
         self.append_log(f"✅ 系统初始化完成，准备开始识别... (当前模式: {self.current_mode})")
         self.current_text_label.setText("系统就绪，可以开始说话了...")
-
-    def validate_part_no(self, text):
-        """验证零件号输入"""
-        text = text.strip()
-        if not text:
-            self.validation_errors['part_no'] = "零件号不能为空"
-            self.part_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        elif len(text) < 3:
-            self.validation_errors['part_no'] = "零件号至少需要3个字符"
-            self.part_no_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
-        elif len(text) > 20:
-            self.validation_errors['part_no'] = "零件号不能超过20个字符"
-            self.part_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        else:
-            self.validation_errors.pop('part_no', None)
-            self.part_no_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
-
-        self.update_start_button_state()
-
-    def validate_batch_no(self, text):
-        """验证批次号输入"""
-        text = text.strip()
-        if not text:
-            self.validation_errors['batch_no'] = "批次号不能为空"
-            self.batch_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        elif len(text) < 3:
-            self.validation_errors['batch_no'] = "批次号至少需要3个字符"
-            self.batch_no_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
-        elif len(text) > 15:
-            self.validation_errors['batch_no'] = "批次号不能超过15个字符"
-            self.batch_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        else:
-            self.validation_errors.pop('batch_no', None)
-            self.batch_no_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
-
-        self.update_start_button_state()
-
-    def validate_inspector(self, text):
-        """验证检验员输入"""
-        text = text.strip()
-        if not text:
-            self.validation_errors['inspector'] = "检验员姓名不能为空"
-            self.inspector_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        elif len(text) < 2:
-            self.validation_errors['inspector'] = "检验员姓名至少需要2个字符"
-            self.inspector_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
-        elif len(text) > 10:
-            self.validation_errors['inspector'] = "检验员姓名不能超过10个字符"
-            self.inspector_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        elif not all(char.isalpha() or char in '·' for char in text):
-            self.validation_errors['inspector'] = "检验员姓名只能包含中文字符"
-            self.inspector_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
-        else:
-            self.validation_errors.pop('inspector', None)
-            self.inspector_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
-
-        self.update_start_button_state()
-
-    def update_start_button_state(self):
-        """根据验证状态更新开始按钮"""
-        has_errors = len(self.validation_errors) > 0
-
-        if hasattr(self, 'start_button') and self.start_button:
-            if has_errors:
-                self.start_button.setEnabled(False)
-                error_messages = list(self.validation_errors.values())
-                self.start_button.setToolTip(f"请修正以下错误后再开始:\n" + "\n".join(f"• {msg}" for msg in error_messages))
-                self.start_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #ccc;
-                        color: #666;
-                        font-size: 12px;
-                        font-weight: bold;
-                        border: none;
-                        border-radius: 6px;
-                        padding: 8px;
-                    }
-                """)
-            else:
-                self.start_button.setEnabled(True)
-                self.start_button.setToolTip("所有必填项已填写完整，可以开始识别")
-                self.start_button.setStyleSheet("""
-                    QPushButton {
-                        font-size: 12px;
-                        font-weight: bold;
-                        border: none;
-                        border-radius: 6px;
-                        padding: 8px;
-                        background-color: #2196f3;
-                        color: white;
-                    }
-                    QPushButton:hover {
-                        background-color: #1976d2;
-                    }
-                    QPushButton:pressed {
-                        background-color: #0d47a1;
-                    }
-                """)
-
-    def get_input_values(self):
-        """获取输入框的值"""
-        return {
-            'part_no': self.part_no_input.text().strip() if self.part_no_input else "",
-            'batch_no': self.batch_no_input.text().strip() if self.batch_no_input else "",
-            'inspector': self.inspector_input.text().strip() if self.inspector_input else ""
-        }
-
-    def clear_input_fields(self):
-        """清空输入框"""
-        if self.part_no_input:
-            self.part_no_input.clear()
-            self.part_no_input.setStyleSheet("")
-        if self.batch_no_input:
-            self.batch_no_input.clear()
-            self.batch_no_input.setStyleSheet("")
-        if self.inspector_input:
-            self.inspector_input.clear()
-            self.inspector_input.setStyleSheet("")
-
-        self.validation_errors.clear()
-        self.update_start_button_state()
-
-    def are_inputs_valid(self):
-        """检查所有输入是否有效"""
-        return len(self.validation_errors) == 0
 
     def keyPressEvent(self, event):
         """处理按键事件"""

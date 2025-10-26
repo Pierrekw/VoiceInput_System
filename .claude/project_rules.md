@@ -10,11 +10,24 @@
 
 ## 📁 重要目录结构规则
 
-### 🧪 测试文件位置 (重要!)
+### 🧪 测试和调试文件位置 (重要!)
 - **所有测试文件都必须放在 `tests/` 目录下**
-- **禁止在项目根目录创建测试文件**
+- **所有调试开发文件都必须放在 `debug/` 目录下**
+- **禁止在项目根目录创建测试和调试文件**
 - 测试文件命名规范: `test_*.py`
+- 调试文件命名规范: `debug_*.py`
 - 测试函数命名规范: `def test_*()`
+
+### 🔧 工具文件位置 (重要!)
+- **所有工具类和辅助函数都必须放在 `utils/` 目录下**
+- **禁止在项目根目录创建工具文件**
+- 工具文件命名规范: `*.py` (如 `file_utils.py`, `data_utils.py`)
+- 工具函数命名规范: `def function_name()`
+
+### 📚 文档文件位置 (重要!)
+- **所有.md文件都必须放在 `docs/` 目录下**
+- **只有README.md可以放在根目录**
+- 禁止在根目录创建其他.md文件
 
 #### 📋 tests/ 目录下的测试文件 (v2.5更新)
 ```bash
@@ -35,36 +48,79 @@ tests/
 ```
 Voice_Input/
 ├── .claude/                  # Claude配置目录 (当前文件)
+├── docs/                     # ⚠️ 所有.md文档必须放在这里 (除了README.md)
+│   └── DevelopmentRecord.md   # 开发记录
 ├── tests/                    # ⚠️ 所有测试文件必须放在这里
-│   ├── test_*.py             # 测试文件
+│   ├── test_*.py             # 测试文件 (39个文件)
+│   ├── final_*.py            # 集成测试文件
+│   ├── FINAL_VERIFICATION_REPORT.md
 │   └── README.md             # 测试说明文档
-├── main_f.py                 # 核心系统类
-├── funasr_voice_TENVAD.py    # TEN VAD + FFmpeg集成模块
-├── funasr_voice_module.py    # 原版FunASR识别模块
-├── text_processor_clean.py   # 文本处理模块 (重构优化)
-├── excel_exporter.py         # Excel导出模块
-├── voice_gui.py              # 主要GUI界面
-├── voice_gui_refractor.py    # 重构版GUI界面 (组件化)
-├── gui_components.py         # GUI组件模块 (新增)
-├── start_funasr.py           # 主启动脚本
-├── config_loader.py          # 配置加载器
-├── logging_utils.py          # 日志工具类 (已修复)
-├── config.yaml               # 配置文件
-├── performance_monitor.py    # 性能监控模块
+├── debug/                    # ⚠️ 所有调试开发文件必须放在这里
+│   ├── debug_*.py            # 调试文件
+│   ├── check_*.py            # 检查文件 (9个文件)
+│   └── README.md             # 调试说明文档
+├── utils/                    # ⚠️ 所有工具类和辅助函数必须放在这里
+│   ├── create_*.py           # 创建工具 (4个文件)
+│   ├── performance_*.py      # 性能工具 (4个文件)
+│   ├── audio_performance_optimizer.py
+│   ├── logging_utils.py      # 日志工具
+│   ├── update_template.py    # 更新工具
+│   └── README.md             # 工具说明文档
+├── archive/                  # 🗂️ 备份和旧版本文件
+│   ├── *_backup.py           # 备份文件 (2个文件)
+│   ├── *_bak.py              # 旧版本文件 (2个文件)
+│   ├── funasr_voice_*.py     # 旧版语音模块 (3个文件)
+│   ├── excel_exporter*.py    # 旧版导出模块 (2个文件)
+│   ├── voice_gui_*.py        # 旧版GUI文件 (2个文件)
+│   ├── configure_ten_vad.py  # 配置工具
+│   ├── setup_ffmpeg_env.py   # 环境设置
+│   ├── smart_decimal_config.py
+│   ├── TTSengine.py          # 语音引擎
+│   ├── safe_funasr_import.py  # 安全导入
+│   └── README.md             # 备份说明文档
+├── main_f.py                 # ✅ 核心系统类
+├── excel_exporter_enhanced.py # ✅ 增强Excel导出模块
+├── voice_gui.py              # ✅ 主要GUI界面
+├── funasr_voice_TENVAD.py    # ✅ TEN VAD + FFmpeg集成模块
+├── text_processor_clean.py   # ✅ 文本处理模块
+├── measure_spec_manager.py   # ✅ 测量规范管理器
+├── config_loader.py          # ✅ 配置加载器
+├── config.yaml               # ✅ 配置文件
+├── README.md                 # ✅ 项目说明 (唯一允许在根目录的.md文件)
+├── setup.py                  # ✅ 项目安装脚本
+├── requirements.txt          # ✅ 依赖文件
+├── voice_correction_dict.txt # ✅ 语音纠正词典
 ├── reports/                  # Excel输出目录
-├── Logs/                     # 日志文件目录
+│   └── templates/            # Excel模板目录
+├── logs/                     # 日志文件目录
+├── model/                    # 模型目录
+├── onnx_deps/                # ONNX依赖目录
+├── backup/                   # 备份目录
 ├── build_scripts/            # 构建脚本目录
-└── onnx_deps/                # ONNX依赖目录
+├── examples/                 # 示例目录
+├── outputs/                  # 输出目录
+└── __init__.py               # 包初始化
 ```
 
-### 运行测试的标准方式
+### 运行测试、调试和工具的标准方式
 ```bash
 # 从项目根目录运行测试 (正确方式)
 python tests/test_text_processor_refactor.py
 python tests/test_funasr_voice_module.py
 
-# 错误方式 - 不要在根目录创建测试文件
+# 从项目根目录运行调试 (正确方式)
+python debug/debug_excel_format.py
+python debug/debug_performance.py
+
+# 从项目根目录使用工具 (正确方式)
+from utils.file_utils import *
+from utils.data_utils import process_data
+from utils.excel_utils import ExcelHelper
+
+# 错误方式 - 不要在根目录创建测试、调试和工具文件
 # ❌ python test_something.py  (禁止)
+# ❌ python debug_something.py  (禁止)
+# ❌ 创建 utils_tool.py  (禁止，应该放在utils/目录)
 ```
 ### 修改文件的标准方式
 ```bash
@@ -157,18 +213,44 @@ mypy logging_utils.py --ignore-missing-imports
 
 ## 🚨 重要提醒
 
-### 当Claude需要创建测试文件时:
-1. ✅ **必须**放在 `tests/` 目录下
-2. ✅ **必须**使用 `test_*.py` 命名
-3. ✅ **必须**添加正确的导入路径
-4. ✅ **必须**从项目根目录运行测试
+### 当Claude需要创建测试和调试文件时:
+1. ✅ **测试文件必须**放在 `tests/` 目录下
+2. ✅ **调试文件必须**放在 `debug/` 目录下
+3. ✅ **工具文件必须**放在 `utils/` 目录下
+4. ✅ **必须**使用 `test_*.py`, `debug_*.py` 或相应的工具命名
+5. ✅ **必须**添加正确的导入路径
+6. ✅ **必须**从项目根目录运行
 
-### 常见错误 (禁止) - v2.5更新:
-- ❌ 在根目录创建 `test_*.py` 文件
+### 当Claude需要创建文档文件时:
+1. ✅ **必须**放在 `docs/` 目录下
+2. ✅ **只有README.md可以放在根目录**
+3. ✅ **必须**使用 `.md` 扩展名
+
+### 当Claude需要处理备份和旧版本文件时:
+1. ✅ **必须**放在 `archive/` 目录下
+2. ✅ **可以**保留原有的 `*_backup.py`, `*_bak.py` 命名
+3. ✅ **应该**添加说明文档
+
+### 根目录保留的核心文件 (实际整理结果):
+- ✅ **核心业务文件 (8个)**:
+  - main_f.py, excel_exporter_enhanced.py, voice_gui.py
+  - funasr_voice_TENVAD.py, text_processor_clean.py, measure_spec_manager.py
+  - config_loader.py, __init__.py
+- ✅ **配置文件 (3个)**:
+  - config.yaml, requirements.txt, voice_correction_dict.txt
+- ✅ **安装脚本 (1个)**:
+  - setup.py
+- ✅ **README.md (1个)**:
+  - 唯一允许在根目录的文档文件
+
+**总计: 13个核心文件** (非常精简！)
+
+### 常见错误 (禁止) - v2.6更新:
+- ❌ 在根目录创建 `test_*.py`, `debug_*.py`, `check_*.py` 文件
+- ❌ 在根目录创建 `create_*.py`, `utils_*.py` 工具文件
+- ❌ 在根目录创建 `.md` 文件 (除了README.md)
 - ❌ 忘记添加导入路径修复
-- ❌ 测试文件命名不规范
-- ❌ 在根目录运行测试文件（已移动到tests/目录）
-- ❌ 引用旧的测试文件路径（如performance_test.py）
+- ❌ 文件命名不规范
 
 ## 🚀 启动方式和命令 (v2.5更新)
 
@@ -210,16 +292,19 @@ from funasr_voice_TENVAD import FunASRVoiceRecognizer
 from funasr_voice_module import FunASRVoiceRecognizer
 ```
 
-### 测试命令 (v2.5更新)
+### 测试、调试和工具使用命令 (v2.6更新)
 ```bash
 # 📊 核心功能测试
 python tests/test_text_processor_refactor.py
 python tests/test_funasr.py
 python tests/test_improvements.py
 
-# 🔍 性能和调试测试 (从根目录移动)
-python tests/test_performance.py
-python tests/test_debug_performance.py
+# 🔍 调试和开发测试
+python debug/debug_excel_format.py
+python debug/debug_performance.py
+python debug/check_excel_content.py
+python debug/check_template.py
+python debug/check_user_template.py
 
 # 🔧 功能专项测试
 python tests/test_ffmpeg_preprocessing.py
@@ -229,10 +314,21 @@ python tests/test_gui_cache_fix.py
 
 # 🧪 集成测试
 python tests/integrated_test.py
+python tests/final_integration_test.py
+python tests/final_complete_test.py
+python tests/test_20rows_formatting.py
 
-# ❌ 错误方式 - 不要在根目录运行测试
-# python performance_test.py  (已移动到tests/)
-# python debug_performance_test.py  (已移动到tests/)
+# 🛠️ 工具使用
+from utils.create_clean_template import create_clean_template
+from utils.create_missing_specs import create_missing_specs
+from utils.update_template import update_template
+from utils.logging_utils import get_logger
+from utils.performance_monitor import PerformanceMonitor
+
+# ❌ 错误方式 - 不要在根目录运行这些文件
+# python performance_test.py  (已移动到debug/)
+# python check_excel.py  (已移动到debug/)
+# python create_template.py  (已移动到utils/)
 ```
 
 ### 配置验证
@@ -337,9 +433,11 @@ mypy text_processor_clean.py --ignore-missing-imports --strict
 ## 📞 获取帮助
 
 ### 查看文档
-- `README.md` - 完整的项目说明和使用指南
-- `DevelopmentRecord.md` - 详细的开发记录和技术决策
+- `README.md` - 完整的项目说明和使用指南 (根目录)
+- `docs/DevelopmentRecord.md` - 详细的开发记录和技术决策
+- `docs/API文档.md` - API接口文档
 - `tests/README.md` - 测试文件说明和运行指南
+- `debug/README.md` - 调试文件说明和使用指南
 
 ### 运行验证
 ```bash

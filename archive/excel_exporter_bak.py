@@ -8,7 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment
 import threading
 import logging
-from typing import Any, List, Tuple, Union, Optional, Dict, Set
+from typing import Any, List, Tuple, Union, Optional, Dict
 
 # 使用统一的日志工具类
 import logging
@@ -35,35 +35,26 @@ class ExcelExporter:
         self.filename: str = filename
         # 使用配置系统获取是否包含原始语音的设置
         include_original = config.get("excel.formatting.include_original", True)
-
+        
         # 根据header_language配置设置列名
         header_language = config.get("excel.formatting.header_language", "zh")
         self.columns = []
-
+        
         if header_language == "en":
-            self.columns.extend(["Standard ID", "Excel ID", "Measurement", "Timestamp", "Processed Text", "Voice ID"])
+            self.columns.extend(["ID", "Measurement", "Timestamp", "Processed Text"])
         else:
-            self.columns.extend(["标准序号", "Excel编号", "测量值", "时间戳", "处理文本", "语音录入编号"])
-
+            self.columns.extend(["编号", "测量值", "时间戳", "处理文本"])
+            
         # 根据配置决定是否添加原始语音列
         if include_original:
             if header_language == "en":
                 self.columns.append("Original Text")
             else:
                 self.columns.append("原始语音")
-
-        # ⭐ 新增：内存行号管理属性
-        self.voice_id_counter: int = 0  # 语音录入ID计数器
-        self.deleted_voice_ids: Set[int] = set()  # 已删除的voice_id集合
-        self.voice_id_to_row: Dict[int, int] = {}  # voice_id -> excel_row 映射
-        self.next_insert_row: int = 4  # 下一个插入行号（从第4行开始，前3行是表头）
-        self.active_record_count: int = 0  # 当前有效记录数量
-        self.current_standard_id: int = 100  # 当前标准序号
-        self.template_path: str = "reports/report_template.xlsx"  # 模板文件路径
-
-        self._last_id: int = 0  # Excel编号计数器（停止时重新编号）
+                
+        self._last_id: int = 0
         self._initialize_last_id()
-        # 记录本次会话的所有数据
+        # 新增：记录本次会话的所有数据
         self._session_data: List[Tuple[Union[int, str, float], Any, str]] = []
 
     @staticmethod
@@ -115,275 +106,8 @@ class ExcelExporter:
                     self._last_id = 0
 
     def get_next_id(self) -> int:
-        # ❌ 删除此方法，改为停止时重新编号
-        # self._last_id += 1
-        # return self._last_id
-        logger.warning("get_next_id()已弃用，请使用renumber_excel_ids()进行重新编号")
+        self._last_id += 1
         return self._last_id
-
-    # ⭐ 新增方法：获取下一个语音录入ID
-    def get_next_voice_id(self) -> int:
-        """
-        获取下一个语音录入ID（永远递增）
-        用于G列的语音录入编号
-        """
-        self.voice_id_counter += 1
-        return self.voice_id_counter
-
-    # ⭐ 新增方法：获取下一个插入位置
-    def get_next_insert_position(self) -> Tuple[int, int]:
-        """
-        获取下一个数据插入位置（纯内存操作，性能极佳）
-        返回: (voice_id, excel_row)
-        """
-        voice_id = self.get_next_voice_id()
-        excel_row = self.next_insert_row
-
-        # 更新内存状态
-        self.voice_id_to_row[voice_id] = excel_row
-        self.next_insert_row += 1
-        self.active_record_count += 1
-
-        logger.debug(f"分配插入位置: voice_id={voice_id}, excel_row={excel_row}")
-        return voice_id, excel_row
-
-    # ⭐ 新增方法：从模板创建文件
-    def create_from_template(self, part_no: str, batch_no: str, inspector: str) -> bool:
-        """
-        从模板创建新的Excel文件
-
-        Args:
-            part_no: 零件号
-            batch_no: 批次号
-            inspector: 检验员姓名
-
-        Returns:
-            bool: 创建成功返回True
-        """
-        try:
-            if not os.path.exists(self.template_path):
-                logger.warning(f"模板文件不存在: {self.template_path}，使用默认创建方式")
-                self.create_new_file()
-                return False
-
-            # 复制模板文件
-            import shutil
-            shutil.copy2(self.template_path, self.filename)
-            logger.info(f"从模板创建Excel文件: {self.filename}")
-
-            # 写入表头信息
-            self.write_header_info(part_no, batch_no, inspector)
-
-            # 初始化内存状态
-            self.next_insert_row = 4  # 从第4行开始写入数据
-            self.active_record_count = 0
-
-            return True
-
-        except Exception as e:
-            logger.error(f"从模板创建Excel文件失败: {e}")
-            # 降级到默认创建方式
-            self.create_new_file()
-            return False
-
-    # ⭐ 新增方法：写入表头信息
-    def write_header_info(self, part_no: str, batch_no: str, inspector: str) -> None:
-        """
-        写入表头信息（零件号、批次号、检验员）
-
-        Args:
-            part_no: 零件号
-            batch_no: 批次号
-            inspector: 检验员姓名
-        """
-        try:
-            import openpyxl
-            from openpyxl import load_workbook
-
-            workbook = load_workbook(self.filename)
-            worksheet = workbook.active
-
-            # 写入B1: 零件号
-            worksheet.cell(row=1, column=2, value=part_no)
-
-            # 写入D1: 批次号
-            worksheet.cell(row=1, column=4, value=batch_no)
-
-            # 写入F1: 检验员
-            worksheet.cell(row=1, column=6, value=inspector)
-
-            workbook.save(self.filename)
-            logger.info(f"表头信息已写入: 零件号={part_no}, 批次号={batch_no}, 检验员={inspector}")
-
-        except Exception as e:
-            logger.error(f"写入表头信息失败: {e}")
-
-    # ⭐ 新增方法：删除指定语音ID的行
-    def delete_row_by_voice_id(self, voice_id: int) -> bool:
-        """
-        删除指定语音ID的行
-
-        Args:
-            voice_id: 要删除的语音ID
-
-        Returns:
-            bool: 删除成功返回True
-        """
-        try:
-            # 检查是否存在
-            if voice_id not in self.voice_id_to_row:
-                logger.warning(f"voice_id {voice_id} 不存在")
-                return False
-
-            excel_row = self.voice_id_to_row[voice_id]
-
-            # 删除Excel行
-            self._delete_excel_row_by_number(excel_row)
-
-            # 更新内存状态
-            self.deleted_voice_ids.add(voice_id)
-            del self.voice_id_to_row[voice_id]
-            self.active_record_count -= 1
-
-            # 重新计算行号映射
-            self._recalculate_row_mappings_after_deletion(excel_row)
-
-            # 更新下一个插入行号
-            self.next_insert_row = max(self.voice_id_to_row.values(), default=3) + 1
-
-            logger.info(f"删除完成: voice_id={voice_id}, 下一插入行={self.next_insert_row}")
-            return True
-
-        except Exception as e:
-            logger.error(f"删除voice_id {voice_id}失败: {e}")
-            return False
-
-    # ⭐ 新增方法：删除后重新计算行号映射
-    def _recalculate_row_mappings_after_deletion(self, deleted_row: int) -> None:
-        """
-        删除后重新计算行号映射
-        删除第5行后，原来第6行变成第5行，第7行变成第6行...
-        """
-        updated_mappings = {}
-
-        for voice_id, old_row in self.voice_id_to_row.items():
-            if old_row > deleted_row:
-                # 行号在删除行之后的，需要减1
-                updated_mappings[voice_id] = old_row - 1
-            else:
-                # 行号在删除行之前的，保持不变
-                updated_mappings[voice_id] = old_row
-
-        self.voice_id_to_row = updated_mappings
-        logger.debug(f"重新计算行号映射完成: {self.voice_id_to_row}")
-
-    # ⭐ 新增方法：按行号删除Excel行
-    def _delete_excel_row_by_number(self, row_number: int) -> None:
-        """
-        按行号删除Excel行
-
-        Args:
-            row_number: 要删除的行号（从1开始）
-        """
-        try:
-            import openpyxl
-            from openpyxl import load_workbook
-
-            workbook = load_workbook(self.filename)
-            worksheet = workbook.active
-
-            # 删除指定行
-            worksheet.delete_rows(row_number)
-
-            workbook.save(self.filename)
-            logger.debug(f"已删除Excel第{row_number}行")
-
-        except Exception as e:
-            logger.error(f"删除Excel第{row_number}行失败: {e}")
-
-    # ⭐ 新增方法：写入到指定行
-    def _write_to_specific_row(self, row: int, voice_id: int, value: Any, **kwargs) -> None:
-        """
-        写入数据到指定行
-
-        Args:
-            row: Excel行号
-            voice_id: 语音录入ID
-            value: 测量值
-            **kwargs: 其他参数（如原始语音、处理文本等）
-        """
-        try:
-            import openpyxl
-            from openpyxl import load_workbook
-
-            workbook = load_workbook(self.filename)
-            worksheet = workbook.active
-
-            # 写入数据到指定列
-            worksheet.cell(row=row, column=1, value=self.current_standard_id)  # A列: 标准序号
-            worksheet.cell(row=row, column=6, value=pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"))  # F列: 时间戳
-            worksheet.cell(row=row, column=7, value=voice_id)  # G列: 语音录入ID
-
-            # 根据数据类型写入测量值
-            if isinstance(value, str):
-                worksheet.cell(row=row, column=4, value=value)  # D列: 测量值
-            else:
-                worksheet.cell(row=row, column=4, value=float(value))  # D列: 测量值
-
-            # 写入其他参数
-            if 'original_text' in kwargs:
-                if '原始语音' in self.columns:
-                    col_index = self.columns.index('原始语音') + 1
-                    worksheet.cell(row=row, column=col_index, value=kwargs['original_text'])
-
-            if 'processed_text' in kwargs:
-                if '处理文本' in self.columns:
-                    col_index = self.columns.index('处理文本') + 1
-                    worksheet.cell(row=row, column=col_index, value=kwargs['processed_text'])
-
-            workbook.save(self.filename)
-            logger.debug(f"数据已写入第{row}行: voice_id={voice_id}, value={value}")
-
-        except Exception as e:
-            logger.error(f"写入第{row}行失败: {e}")
-
-    # ⭐ 新增方法：停止时重新编号Excel ID列
-    def renumber_excel_ids(self) -> None:
-        """
-        停止录音时，重新为Excel编号列（C列）分配连续编号
-
-        流程：
-        1. 读取当前Excel文件
-        2. 获取所有未删除的行（通过语音ID判断）
-        3. 按行顺序分配连续编号：1, 2, 3...
-        4. 批量更新Excel文件的C列
-        """
-        try:
-            import openpyxl
-            from openpyxl import load_workbook
-
-            workbook = load_workbook(self.filename)
-            worksheet = workbook.active
-
-            # 获取所有有效记录并按行号排序
-            active_records = sorted(self.voice_id_to_row.items(), key=lambda x: x[1])
-
-            if not active_records:
-                logger.info("没有需要重新编号的记录")
-                return
-
-            # 重新编号
-            for i, (voice_id, row) in enumerate(active_records, 1):
-                if voice_id not in self.deleted_voice_ids:
-                    # 写入Excel编号到C列
-                    worksheet.cell(row=row, column=3, value=i)  # C列: Excel编号
-                    logger.debug(f"重新编号: voice_id={voice_id}, row={row}, excel_id={i}")
-
-            workbook.save(self.filename)
-            logger.info(f"Excel重新编号完成，共{len(active_records)}条记录")
-
-        except Exception as e:
-            logger.error(f"Excel重新编号失败: {e}")
 
     def create_new_file(self) -> None:
         df = pd.DataFrame(columns=self.columns)
@@ -395,45 +119,87 @@ class ExcelExporter:
             self,
             data: List[Tuple[Union[float, str], str, str]],  # (数值或文本, 原始语音文本, 处理文本)
             auto_generate_ids: bool = True
-        ) -> List[Tuple[int, Union[float, str], str]]:  # 返回 [(Voice_ID, 数值或文本, 原始文本)]
+        ) -> List[Tuple[int, Union[float, str], str]]:  # 返回 [(ID, 数值或文本, 原始文本)]
             """
-            📍 修改方法：写入带语音ID的数据（支持双ID系统）
-            返回本次写入的所有记录（包含生成的语音ID）
+            新增方法：写入带原始语音文本的数据
+            返回本次写入的所有记录（包含生成的ID）
             """
             if not data:
                 logger.warning("没有数据可写入")
                 return []
-
+    
             with self._lock:
                 try:
                     if not os.path.exists(self.filename):
                         self.create_new_file()
-
-                    # 📍 使用新的写入方式：直接写入到指定行
-                    result = []
+    
+                    existing_data = pd.read_excel(self.filename)
+                    
+                    # 获取配置设置
+                    include_original = config.get("excel.formatting.include_original", True)
+                    auto_numbering = config.get("excel.formatting.auto_numbering", True)
+                    include_timestamp = config.get("excel.formatting.include_timestamp", True)
+                    
+                    # 生成新记录
+                    new_records = []
                     for val, original_text, processed_text in data:
-                        # 获取插入位置（语音ID和Excel行号）
-                        voice_id, excel_row = self.get_next_insert_position()
-
-                        # 直接写入到指定行
-                        self._write_to_specific_row(
-                            row=excel_row,
-                            voice_id=voice_id,
-                            value=val,
-                            original_text=original_text,
-                            processed_text=processed_text
-                        )
-
-                        # 记录到会话数据
-                        record_val = val if isinstance(val, str) else self._float_cell(val)
-                        self._session_data.append((voice_id, record_val, original_text))
-
-                        # 返回结果
-                        result.append((voice_id, record_val, original_text))
-
+                        new_record: Dict[str, Union[int, float, str]] = {}
+                        
+                        # 根据配置决定是否添加编号
+                        if auto_numbering:
+                            new_id = self.get_next_id()
+                            new_record["编号"] = new_id
+                            
+                        # 添加测量值（支持文本和数值）
+                        if isinstance(val, str):
+                            new_record["测量值"] = val  # 文本值直接写入
+                        else:
+                            new_record["测量值"] = self._float_cell(val)  # 数值值转换
+                        
+                        # 根据配置决定是否添加时间戳
+                        if include_timestamp:
+                            new_record["时间戳"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 添加处理文本
+                        new_record["处理文本"] = processed_text
+                        
+                        # 根据配置决定是否添加原始语音字段
+                        if include_original:
+                            new_record["原始语音"] = original_text
+                        
+                        new_records.append(new_record)
+                        
+                        # 如果启用了自动编号，记录到会话数据
+                        if auto_numbering:
+                            # 记录原始值而不是转换后的值
+                            record_val = val if isinstance(val, str) else self._float_cell(val)
+                            self._session_data.append((new_id, record_val, original_text))
+                        else:
+                            # 对于没有ID的情况，使用-1作为占位符
+                            record_val = val if isinstance(val, str) else self._float_cell(val)
+                            self._session_data.append((-1, record_val, original_text))
+    
+                    # 合并数据
+                    if existing_data.empty:
+                        updated_data = pd.DataFrame(new_records)
+                    else:
+                        updated_data = pd.concat([existing_data, pd.DataFrame(new_records)], ignore_index=True)
+    
+                    updated_data.to_excel(self.filename, index=False)
+                    
+                    # 返回写入的记录列表
+                    result = []
+                    for _, r in pd.DataFrame(new_records).iterrows():
+                        # 根据是否启用了自动编号来处理返回数据
+                        if auto_numbering:
+                            result.append((r["编号"], r["测量值"], r.get("原始语音", "")))
+                        else:
+                            # 对于没有ID的情况，使用-1作为占位符
+                            result.append((-1, r["测量值"], r.get("原始语音", "")))
+                    
                     logger.debug(f"成功写入 {len(result)} 条数据到 {self.filename}")
                     return result
-
+    
                 except Exception as e:
                     logger.error(f"写入Excel失败: {e}")
                     return []

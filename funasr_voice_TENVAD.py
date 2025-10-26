@@ -28,11 +28,11 @@ import warnings
 import logging
 
 # 导入性能监控
-from performance_monitor import performance_monitor, PerformanceStep
+from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
 try:
-    from debug_performance_tracker import debug_tracker
+    from debug.debug_performance_tracker import debug_tracker
 except ImportError:
     debug_tracker = None
 
@@ -128,7 +128,7 @@ from dataclasses import dataclass
 from collections import deque
 
 # 使用统一的日志工具类
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 # 获取配置好的日志记录器（参考voice_gui.py的配置风格）
 logger = LoggingManager.get_logger(

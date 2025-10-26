@@ -31,52 +31,11 @@ error_correction:
 excel:
   auto_export: true
   file_name: report
-  template_path: reports/templates/enhanced_measure_template.xlsx
-  output_directory: reports
-  file_naming_pattern: Report_{part_no}_{batch_no}_{timestamp}
-
-  # Excel模板和格式配置
-  template:
-    enabled: true
-    header_row: 3  # 模板标题在第3行
-    data_start_row: 5  # 数据从第5行开始（跳过示例数据）
-    skip_existing_data: true  # 跳过模板中的现有数据，从新行开始写入
-
   formatting:
     auto_numbering: true
     header_language: zh
     include_original: true
     include_timestamp: true
-    cell_alignment: center  # 单元格居中对齐
-
-  # 双ID系统配置
-  id_system:
-    voice_id_column: G  # 语音录入ID在G列
-    excel_id_column: C   # Excel编号在C列
-    standard_id_column: A  # 标准序号在A列
-
-  # 输入验证配置
-  input_validation:
-    part_no:
-      min_length: 3
-      max_length: 20
-      required: true
-      pattern: "^[A-Za-z0-9_-]+$"
-    batch_no:
-      min_length: 3
-      max_length: 15
-      required: true
-      pattern: "^[A-Za-z0-9_-]+$"
-    inspector:
-      min_length: 2
-      max_length: 10
-      required: true
-      pattern: "^[\u4e00-\u9fa5·]+$"  # 只允许中文字符和间隔号
-
-  # 性能优化配置
-  performance:
-    memory_row_management: true  # 启用内存行号管理
-    batch_size: 50  # 批量写入大小
 model:
   default_path: ./model/cn
   device: cpu

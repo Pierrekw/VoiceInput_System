@@ -9,6 +9,7 @@ repos:
         types: [python]
         exclude: ^(.venv|venv|__pycache__|tests?/.*\.py$|archive/.*\.py$)
         pass_filenames: true  # Let pre-commit pass only staged Python files
+        args: [--explicit-package-bases]  # Fix module path resolution
 
       # - id: pytest
       #   name: pytest with coverage

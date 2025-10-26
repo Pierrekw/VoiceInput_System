@@ -32,7 +32,7 @@ from performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
 try:
-    from debug_performance_tracker import debug_tracker
+    from utils.debug_performance_tracker import debug_tracker
 except ImportError:
     debug_tracker = None
 

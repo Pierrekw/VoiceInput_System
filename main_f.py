@@ -55,11 +55,11 @@ from text_processor_clean import TextProcessor, VoiceCommandProcessor
 from performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
-from debug_performance_tracker import debug_tracker
+from utils.debug_performance_tracker import debug_tracker
 
 # 导入生产环境延迟记录器
 try:
-    from production_latency_logger import (
+    from utils.production_latency_logger import (
         start_latency_session, end_latency_session,
         log_voice_input_end, log_asr_complete, log_terminal_display
     )

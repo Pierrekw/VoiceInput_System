@@ -96,6 +96,13 @@ class ExcelExporterEnhanced:
             import shutil
             shutil.copy2(self.template_path, self.filename)
 
+            # 🎯 修复：复制模板后立即填写报告信息
+            workbook = load_workbook(self.filename)
+            worksheet = workbook.active
+            self._update_header_info(worksheet)
+            workbook.save(self.filename)
+            workbook.close()
+
             # 查找下一个可用的插入位置（跳过模板中的现有数据）
             self._find_next_available_row()
 
@@ -147,13 +154,14 @@ class ExcelExporterEnhanced:
     def create_new_file(self) -> None:
         """创建新Excel文件"""
         try:
-            # 创建报告模板数据
-            headers = ["测量报告", "", "", "", "", "", "", "", ""]
-            info_row = ["零件号: " + self.part_no, "", "批次号: " + self.batch_no, "", "检验员: " + self.inspector, "", "", "", ""]
-            data_headers = ["标准序号", "标准内容", "下限", "上限", "测量值", "判断结果", "偏差", "time", "语音录入编号"]
+            # 🎯 修复：创建与正式模板格式一致的模板数据
+            headers = ["测量报告", "", "", "", "", "", "", "", "", ""]
+            info_row = ["零件号:", "", "批次号:", "", "检验员:", "", "", "", "", ""]
+            empty_row = [None, None, None, None, None, None, None, None, None, None]
+            data_headers = ["标准序号", "标准内容", "下限", "上限", "测量值序号", "测量值", "判断结果", "偏差", "时间戳", "语音录入编号"]
 
-            # 创建DataFrame
-            data = [headers, info_row, data_headers]
+            # 创建DataFrame - 注意：这里创建结构，实际信息填写在后续步骤
+            data = [headers, info_row, empty_row, data_headers]
             df = pd.DataFrame(data)
 
             # 保存Excel
@@ -306,30 +314,38 @@ class ExcelExporterEnhanced:
     def _update_header_info(self, worksheet: Worksheet) -> None:
         """更新表头信息"""
         try:
-            # 不删除模板的第2行，保持模板原样
-            # 直接填写报告信息到模板的第2行
+            # 获取配置
+            info_row = config.get("excel.template.info_row", 2)
 
-            # 检查是否已有第1行（标题行）
-            cell_a1 = worksheet.cell(row=1, column=1).value
-            if not cell_a1 or str(cell_a1).strip() != "测量报告":
-                # 在第1行插入标题
-                worksheet.insert_rows(1)
-                worksheet.cell(row=1, column=1, value=f"测量报告")
+            # 🎯 修复：不再随意插入行，保持模板结构完整
+            # 只更新指定行的内容，不改变模板结构
 
-            # 填写报告信息到模板的第2行（保持模板格式不变）
-            if worksheet.max_row >= 2:
-                # 填写零件号到第2列
-                worksheet.cell(row=2, column=2, value=self.part_no)
+            # 填写报告信息到指定的信息行（保持模板格式不变）
+            if worksheet.max_row >= info_row:
+                # 检查该行是否已经是信息行格式
+                cell_a_info = worksheet.cell(row=info_row, column=1).value
+                if cell_a_info and "零件号" in str(cell_a_info):
+                    # 填写零件号到第2列
+                    worksheet.cell(row=info_row, column=2, value=self.part_no)
 
-                # 填写批次号到第4列
-                worksheet.cell(row=2, column=4, value=self.batch_no)
+                    # 填写批次号到第4列
+                    worksheet.cell(row=info_row, column=4, value=self.batch_no)
 
-                # 填写检验员到第6列
-                worksheet.cell(row=2, column=6, value=self.inspector)
+                    # 填写检验员到第6列
+                    worksheet.cell(row=info_row, column=6, value=self.inspector)
 
-                logger.debug(f"填写报告信息: 零件号={self.part_no}, 批次号={self.batch_no}, 检验员={self.inspector}")
-
-            # 不设置任何样式，保持模板原样
+                    logger.debug(f"填写报告信息到第{info_row}行: 零件号={self.part_no}, 批次号={self.batch_no}, 检验员={self.inspector}")
+                else:
+                    # 如果不是预期的信息行格式，创建新的信息行
+                    logger.warning(f"第{info_row}行不是预期的信息行格式，将在该行创建信息")
+                    worksheet.cell(row=info_row, column=1, value="零件号:")
+                    worksheet.cell(row=info_row, column=2, value=self.part_no)
+                    worksheet.cell(row=info_row, column=3, value="批次号:")
+                    worksheet.cell(row=info_row, column=4, value=self.batch_no)
+                    worksheet.cell(row=info_row, column=5, value="检验员:")
+                    worksheet.cell(row=info_row, column=6, value=self.inspector)
+            else:
+                logger.warning(f"工作表行数不足，无法填写信息到第{info_row}行")
 
         except Exception as e:
             logger.error(f"更新表头信息失败: {e}")

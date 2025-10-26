@@ -253,9 +253,10 @@ class FunASRVoiceSystem:
             reports_dir = os.path.join(os.getcwd(), "reports")
             os.makedirs(reports_dir, exist_ok=True)
 
+            # 🎯 修复：使用正确的文件命名格式 (大写R)
             # 暂时使用默认文件名，稍后在GUI中创建时使用模板
             now = datetime.now()
-            filename = f"report_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+            filename = f"Report_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
             filepath = os.path.join(reports_dir, filename)
 
             self.excel_exporter = ExcelExporterEnhanced(filename=filepath)

@@ -38,9 +38,10 @@ excel:
   # Excel模板和格式配置
   template:
     enabled: true
-    header_row: 3  # 模板标题在第3行
+    header_row: 4  # 模板表头在第4行 (标准序号、标准内容等)
     data_start_row: 5  # 数据从第5行开始（跳过示例数据）
     skip_existing_data: true  # 跳过模板中的现有数据，从新行开始写入
+    info_row: 2  # 报告信息行 (零件号、批次号、检验员)
 
   formatting:
     auto_numbering: true

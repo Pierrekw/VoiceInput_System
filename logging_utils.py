@@ -33,15 +33,8 @@ for handler in root_logger.handlers:
 # 保存原始的StreamHandler类
 original_stream_handler = logging.StreamHandler
 
-# 重写StreamHandler，自动添加过滤器
-class FilteredStreamHandler(original_stream_handler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setLevel(logging.INFO)  # 强制设置级别为INFO
-        self.addFilter(NoDebugFilter())  # 添加过滤器
-
-# 替换原始的StreamHandler
-logging.StreamHandler = FilteredStreamHandler
+# 🔥 修复：不再替换StreamHandler类，避免super()调用问题
+# 注释掉有问题的代码，改为在使用时手动添加过滤器
 
 
 class LoggingManager:
@@ -121,6 +114,8 @@ class LoggingManager:
             # 这是为了确保控制台不会显示任何DEBUG日志
             console_handler.setLevel(logging.INFO)
             console_handler.setFormatter(formatter)
+            # 🔥 修复：手动添加过滤器，确保不显示DEBUG日志
+            console_handler.addFilter(NoDebugFilter())
             logger.addHandler(console_handler)
         
         # 配置文件日志

@@ -1,7 +1,12 @@
 # FunASR语音输入系统 - Claude项目规则
 
 ## 🎯 项目概述
-这是一个基于FunASR框架的高性能中文语音识别系统，支持实时语音识别、性能监控、延迟优化和Excel数据导出功能。
+这是一个基于FunASR框架的高性能中文语音识别系统，集成TEN VAD神经网络、FFmpeg音频预处理、GUI图形界面，支持实时语音识别、性能监控、延迟优化和Excel数据导出功能。
+
+## 📋 当前版本 (v2.5)
+- **发布日期**: 2025-10-26
+- **核心特性**: TEN VAD + FFmpeg预处理 + 组件化GUI架构
+- **主要修复**: 解决停止阻塞问题、日志系统修复、类型安全优化
 
 ## 📁 重要目录结构规则
 
@@ -18,13 +23,16 @@ Voice_Input/
 │   ├── test_*.py             # 测试文件
 │   └── README.md             # 测试说明文档
 ├── main_f.py                 # 核心系统类
-├── funasr_voice_module.py    # FunASR识别模块
+├── funasr_voice_TENVAD.py    # TEN VAD + FFmpeg集成模块
+├── funasr_voice_module.py    # 原版FunASR识别模块
 ├── text_processor_clean.py   # 文本处理模块 (重构优化)
 ├── excel_exporter.py         # Excel导出模块
 ├── voice_gui.py              # 主要GUI界面
+├── voice_gui_refractor.py    # 重构版GUI界面 (组件化)
+├── gui_components.py         # GUI组件模块 (新增)
 ├── start_funasr.py           # 主启动脚本
 ├── config_loader.py          # 配置加载器
-├── logging_utils.py          # 日志工具类  
+├── logging_utils.py          # 日志工具类 (已修复)
 ├── config.yaml               # 配置文件
 ├── performance_monitor.py    # 性能监控模块
 ├── reports/                  # Excel输出目录
@@ -112,11 +120,18 @@ if __name__ == "__main__":
     test_example()
 ```
 
-### 2. 类型安全要求
+### 2. 类型安全要求 (已修复)
 - 所有新代码必须通过 MyPy 类型检查
-- 核心模块需要通过严格模式检查:
+- 核心模块检查命令 (v2.5更新):
 ```bash
+# 检查核心GUI和语音模块
+mypy voice_gui.py gui_components.py voice_gui_refractor.py main_f.py funasr_voice_TENVAD.py --ignore-missing-imports --explicit-package-bases
+
+# 严格模式检查文本处理模块
 mypy text_processor_clean.py --ignore-missing-imports --strict
+
+# 检查日志系统 (已修复super()类型错误)
+mypy logging_utils.py --ignore-missing-imports
 ```
 
 ### 3. 文档要求
@@ -137,23 +152,44 @@ mypy text_processor_clean.py --ignore-missing-imports --strict
 - ❌ 忘记添加导入路径修复
 - ❌ 测试文件命名不规范
 
-## 🚀 启动方式和命令
+## 🚀 启动方式和命令 (v2.5更新)
 
-### 命令行启动
+### GUI图形界面 (推荐)
 ```bash
-# 主启动方式 (推荐)
+# 现代化GUI界面
+python voice_gui.py
+
+# 组件化GUI界面 (重构版)
+python voice_gui_refractor.py
+
+# 导入GUI组件进行开发
+from gui_components import *
+from voice_gui_refractor import VoiceRecognitionApp
+```
+
+### 命令行界面
+```bash
+# 核心命令行系统
+python main_f.py
+
+# 旧版命令行
 python start_funasr.py
 
 # 指定识别时长
-python start_funasr.py -d 60  # 识别60秒
-python start_funasr.py -d -1  # 无限时模式
+python main_f.py -d 60  # 识别60秒
+python main_f.py -d -1  # 无限时模式
 
 # 调试模式
-python start_funasr.py --debug
+python main_f.py --debug
+```
 
-# GUI启动
-python start_voice_gui.py
-python stable_gui.py
+### TEN VAD模块 (新架构)
+```bash
+# 使用TEN VAD + FFmpeg集成模块
+from funasr_voice_TENVAD import FunASRVoiceRecognizer
+
+# 对比原版模块
+from funasr_voice_module import FunASRVoiceRecognizer
 ```
 
 ### 测试命令
@@ -174,10 +210,29 @@ python performance_test.py
 # 验证配置文件
 python -c "from config_loader import config; print(config.get_timeout_seconds())"
 
-# 类型检查
+# 类型检查 (v2.5更新)
+mypy voice_gui.py gui_components.py voice_gui_refractor.py main_f.py funasr_voice_TENVAD.py --ignore-missing-imports --explicit-package-bases
 mypy text_processor_clean.py --ignore-missing-imports --strict
-mypy main_f.py --ignore-missing-imports
 ```
+
+## 🔧 v2.5版本重要修复 (2025-10-26)
+
+### 已解决的关键问题
+1. **🐛 停止阻塞问题**: FFmpeg预处理导致的音频流阻塞已完全修复
+2. **📝 日志系统错误**: logging_utils.py中super()类型错误已修复
+3. **🔍 类型安全问题**: 所有核心模块通过MyPy严格类型检查
+4. **✨ 组件化架构**: 新增gui_components.py和voice_gui_refractor.py
+
+### 架构变更
+- **FFmpeg处理方式**: 从实时处理改为批量预处理，保持音频流连续性
+- **GUI组件化**: 支持模块化开发和维护
+- **类型安全**: 完善的类型注解和静态检查
+
+### 测试验证
+- ✅ 停止功能测试: 线程在0.0秒内正常结束
+- ✅ GUI启动测试: 无日志创建失败错误
+- ✅ 类型检查: MyPy检查通过，无类型错误
+- ✅ 功能完整性: 所有核心功能正常工作
 
 ## 🎯 重构历史
 

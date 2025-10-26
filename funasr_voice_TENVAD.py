@@ -255,7 +255,8 @@ class FunASRVoiceRecognizer:
         # FFmpeg预处理配置
         self._ffmpeg_enabled = False
         self._ffmpeg_filter_chain = ""
-        self._ffmpeg_options = {}
+        self._ffmpeg_options: Dict[str, Any] = {}
+        self._ffmpeg_path = "ffmpeg"  # 默认FFmpeg路径
 
         # 音频处理
         self._audio_buffer: deque[np.ndarray] = deque(maxlen=sample_rate * 5)  # 5秒缓冲
@@ -414,10 +415,11 @@ class FunASRVoiceRecognizer:
 
                         # 确保是单声道
                         if channels == 1 and sample_width == 2:
-                            processed_data = processed_data.astype(np.float32) / 32768.0
+                            processed_float_data = processed_data.astype(np.float32) / 32768.0
+                            return processed_float_data
                         else:
                             logger.warning("FFmpeg输出格式异常，使用原始数据")
-                            processed_data = audio_data
+                            return audio_data
 
             except Exception as e:
                 logger.error(f"读取预处理后音频失败: {e}")

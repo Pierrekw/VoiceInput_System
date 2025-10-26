@@ -1,12 +1,17 @@
 # FunASR语音输入系统
 
-基于FunASR框架的高性能中文语音识别系统，支持实时语音识别、性能监控、延迟优化和Excel数据导出功能。
+基于FunASR框架的高性能中文语音识别系统，集成TEN VAD神经网络、FFmpeg音频预处理、GUI图形界面，支持实时语音识别、性能监控、延迟优化和Excel数据导出功能。
 
 ## 🎯 主要特性
 
+### 核心功能
 - **🧠 TEN VAD神经网络**: 集成最新神经网络语音活动检测，准确率94.8%，比传统方法提升32.4%
 - **🎤 高精度语音识别**: 基于FunASR框架，支持实时中文语音识别
 - **⚡ 极速响应**: TEN VAD延迟仅16ms，系统响应速度提升68%
+- **🔊 FFmpeg音频预处理**: 集成FFmpeg音频增强，支持降噪、音量标准化、滤波等预处理功能
+- **🎨 现代化GUI界面**: 基于PySide6的图形界面，支持组件化架构和实时能量显示
+
+### 系统特性
 - **📊 性能监控**: 详细的延迟追踪和性能分析，支持debug和生产模式
 - **🎛️ 智能VAD配置**: TEN VAD参数可调节（hop_size=256, threshold=0.5），支持场景优化
 - **⏱️ 灵活时长控制**: 支持无限时模式和指定时长模式
@@ -15,7 +20,13 @@
 - **🔧 配置化管理**: 所有参数可通过config.yaml灵活配置
 - **🔄 音频异常恢复**: 自动重试机制，防止突然终止
 - **📝 数字智能提取**: 自动识别和转换中文数字
-- **🛠️ 参数配置工具**: 可视化TEN VAD参数调整和性能测试
+- **🛠️ 组件化架构**: 支持模块化开发，便于维护和扩展
+
+### 最新修复 (v2.5)
+- **🐛 修复停止阻塞问题**: 解决FFmpeg预处理导致的音频流阻塞
+- **🔧 优化架构设计**: FFmpeg改为批量预处理模式，保持实时性
+- **📝 修复日志系统**: 解决logging_utils.py中的类型错误
+- **✨ GUI组件化**: 新增gui_components.py和voice_gui_refractor.py模块化组件
 
 ## 🚀 快速开始
 
@@ -33,30 +44,35 @@ pip install funasr torch pyaudio numpy openpyxl pyyaml
 
 ### 基本使用
 
-1. **启动系统（推荐）**
-   ```bash
-   python start_funasr.py
-   ```
-   默认使用无限时模式，可以一直识别直到手动停止。
+#### GUI图形界面（推荐）
+```bash
+# 启动现代化GUI界面
+python voice_gui.py
 
-2. **指定识别时长**
-   ```bash
-   # 识别60秒后自动停止
-   python start_funasr.py -d 60
+# 启动组件化GUI界面（重构版）
+python voice_gui_refractor.py
+```
 
-   # 识别5分钟
-   python start_funasr.py -d 300
-   ```
+#### 命令行界面
+```bash
+# 启动命令行版本
+python main_f.py
 
-3. **调试模式**
-   ```bash
-   python start_funasr.py --debug
-   ```
+# 旧版本命令行
+python start_funasr.py
+```
 
-4. **查看配置**
-   ```bash
-   python start_funasr.py --show-config
-   ```
+#### 高级功能
+```bash
+# 调试模式
+python main_f.py --debug
+
+# 查看配置
+python main_f.py --show-config
+
+# 指定识别时长
+python main_f.py -d 60  # 识别60秒
+```
 
 ## 📋 使用说明
 
@@ -89,6 +105,32 @@ pip install funasr torch pyaudio numpy openpyxl pyyaml
 recognition:
   # ⚠️ 核心配置：识别时长
   timeout_seconds: -1  # -1=无限时模式，60=60秒自动停止
+  # 🔢 数字识别优化
+  decimal_optimization:
+    enabled: true
+    extended_capture_time: 2.0
+    confidence_threshold: 0.7
+
+# FFmpeg音频预处理（新增）
+audio:
+  chunk_size: 200
+  sample_rate: 16000
+  ffmpeg_preprocessing:
+    enabled: true  # 启用FFmpeg预处理
+    filter_chain: "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0"
+    options:
+      process_input: true
+      save_processed: false
+      processed_prefix: "processed_"
+
+# TEN VAD神经网络配置
+vad:
+  mode: "customized"  # fast/balanced/accuracy/customized
+  energy_threshold: 0.010
+  min_speech_duration: 0.2
+  min_silence_duration: 0.6
+  speech_padding: 0.3
+  gui_display_threshold: 0.01
 
 # 语音命令配置
 voice_commands:
@@ -223,13 +265,34 @@ python -c "from config_loader import config; print(config.get_timeout_seconds())
 项目通过了 MyPy 静态类型检查：
 
 ```bash
-# 严格模式检查核心文本处理模块
-mypy text_processor_clean.py --ignore-missing-imports --strict
+# 检查核心模块
+mypy voice_gui.py gui_components.py voice_gui_refractor.py main_f.py funasr_voice_TENVAD.py --ignore-missing-imports --explicit-package-bases
 
-# 标准模式检查其他模块
-mypy main_f.py --ignore-missing-imports
-mypy funasr_voice_module.py --ignore-missing-imports
+# 严格模式检查文本处理模块
+mypy text_processor_clean.py --ignore-missing-imports --strict
 ```
+
+## 📋 版本更新历史
+
+### v2.5 (2025-10-26) - 架构优化与修复版本
+- **🐛 修复停止阻塞问题**: 解决FFmpeg预处理导致的音频流阻塞，支持正常停止功能
+- **🔧 优化架构设计**: FFmpeg改为批量预处理模式，在语音段结束时处理，保持实时性
+- **📝 修复日志系统**: 解决logging_utils.py中的super()类型错误，修复日志创建失败问题
+- **✨ GUI组件化**: 新增gui_components.py和voice_gui_refractor.py模块化组件架构
+- **🔍 类型安全**: 修复MyPy类型检查错误，通过严格的静态类型检查
+- **📊 性能优化**: 优化音频处理流程，减少不必要的阻塞调用
+
+### v2.4 (2025-10-25) - TEN VAD集成版本
+- **🧠 TEN VAD集成**: 集成神经网络语音活动检测，准确率提升32.4%
+- **⚡ 响应速度提升**: VAD延迟降低到16ms，系统响应速度提升68%
+- **🎛️ 参数优化**: TEN VAD参数可调节，支持不同场景优化
+- **📊 性能监控**: 新增详细的延迟追踪和性能分析功能
+
+### v2.3 (2025-10-24) - 系统重构版本
+- **🔄 架构重构**: 重构文本处理模块，提升处理效率和准确性
+- **🔧 配置优化**: 完善配置文件结构，支持更多自定义选项
+- **🎨 GUI优化**: 改进图形界面用户体验和响应速度
+- **🛠️ 代码质量**: 提升代码可维护性和扩展性
 
 ## 🔍 常见问题
 

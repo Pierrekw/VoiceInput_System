@@ -14,7 +14,7 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.utils import get_column_letter
 import threading
 import logging
-from typing import Any, List, Tuple, Union, Optional, Dict
+from typing import Any, List, Tuple, Union, Optional, Dict, Sequence
 from datetime import datetime
 
 # 使用统一的日志工具类
@@ -174,7 +174,7 @@ class ExcelExporterEnhanced:
 
     def append_with_text(
             self,
-            data: List[Tuple[Union[float, str], str, str]],  # (数值或文本, 原始语音文本, 处理文本)
+            data: Sequence[Tuple[Union[float, str], str, str]],  # (数值或文本, 原始语音文本, 处理文本)
             auto_generate_ids: bool = True
         ) -> List[Tuple[int, Union[float, str], str]]:  # 返回 [(ID, 数值或文本, 原始文本)]
             """
@@ -219,7 +219,7 @@ class ExcelExporterEnhanced:
                     logger.error(f"写入Excel失败: {e}")
                     return []
 
-    def _write_data_direct(self, data: List[Tuple[Union[float, str], str, str]]) -> None:
+    def _write_data_direct(self, data: Sequence[Tuple[Union[float, str], str, str]]) -> None:
         """直接写入数据，避免格式化开销 - 录音阶段写入record ID + record value + 测量标准序号 + 时间戳"""
         workbook = load_workbook(self.filename)
         worksheet = workbook.active
@@ -250,7 +250,7 @@ class ExcelExporterEnhanced:
             worksheet.cell(row=row, column=9, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
             # 更新内存映射
-            self.voice_id_to_row[voice_id] = row
+            self.voice_id_to_row[int(voice_id)] = row
             self.next_insert_row = row + 1
             self.active_record_count += 1
 
@@ -430,7 +430,7 @@ class ExcelExporterEnhanced:
                     continue
 
                 try:
-                    standard_id = int(standard_id_cell.value)
+                    standard_id = int(str(standard_id_cell.value))
                 except (ValueError, TypeError):
                     continue
 
@@ -443,24 +443,108 @@ class ExcelExporterEnhanced:
                 if measured_value_cell.value is None:
                     continue
 
-                try:
-                    measured_value = float(measured_value_cell.value)
-                except (ValueError, TypeError):
-                    continue
-
                 # 写入序号/Excel ID (第5列) - 在stop阶段填充
                 excel_id = row - 4  # 第5行开始，所以excel_id = row - 4
                 worksheet.cell(row=row, column=5, value=excel_id)
 
-                # 写入规范信息
+                # 写入规范信息 - 无论测量值类型如何，都要填写测量标准
                 worksheet.cell(row=row, column=2, value=spec_info['content'])  # 标准内容 (第2列)
                 worksheet.cell(row=row, column=3, value=spec_info['lower_limit'])  # 下限 (第3列)
                 worksheet.cell(row=row, column=4, value=spec_info['upper_limit'])  # 上限 (第4列)
 
-                # 计算判断结果
-                judgment = self._calculate_judgment(spec_info, measured_value)
-                worksheet.cell(row=row, column=7, value=judgment['result'])  # 判断结果 (第7列)
-                worksheet.cell(row=row, column=8, value=judgment['deviation'])  # 偏差 (第8列)
+                # 🎯 增强鲁棒性：处理各种类型的测量值
+                measured_value_raw = measured_value_cell.value
+                measured_value_str = str(measured_value_raw).strip().lower()
+
+                # 尝试转换为数值进行判断
+                is_numeric_measurement = False
+                measured_value = None
+
+                try:
+                    measured_value = float(str(measured_value_raw))
+                    is_numeric_measurement = True
+                    logger.debug(f"数值测量值: {measured_value} (原始: {measured_value_raw})")
+                except (ValueError, TypeError):
+                    logger.debug(f"非数值测量值: {measured_value_raw}")
+
+                # 🎯 智能处理各种类型的测量值和测量标准
+                # 检查测量标准是否为文本类型（OK/NOK）
+                standard_content = str(spec_info['content']).strip().lower() if spec_info['content'] else ""
+                standard_is_text = False
+                standard_is_ok = False
+                standard_is_nok = False
+
+                # 导入配置文件中的特殊文本定义
+                from config_loader import config
+                exportable_texts = config.get_exportable_texts()
+
+                # 提取OK和NOK的变体列表
+                ok_variants = []
+                nok_variants = []
+
+                for text_config in exportable_texts:
+                    base_text = text_config.get('base_text', '').upper()
+                    variants = text_config.get('variants', [])
+
+                    if base_text == 'OK':
+                        ok_variants.extend([variant.lower() for variant in variants])
+                    elif base_text in ['NOK', 'NOT OK']:
+                        nok_variants.extend([variant for variant in variants])
+
+                # 判断测量标准类型
+                if standard_content in ok_variants:
+                    standard_is_text = True
+                    standard_is_ok = True
+                    logger.debug(f"测量标准为OK类型: {standard_content}")
+                elif standard_content in nok_variants:
+                    standard_is_text = True
+                    standard_is_nok = True
+                    logger.debug(f"测量标准为NOK类型: {standard_content}")
+
+                # 根据测量值和测量标准类型进行判断
+                if is_numeric_measurement and not standard_is_text:
+                    # 情况1：数值测量值 + 数值测量标准：正常计算判断和偏差
+                    judgment = self._calculate_judgment(spec_info, measured_value)
+                    worksheet.cell(row=row, column=7, value=judgment['result'])  # 判断结果 (第7列)
+                    worksheet.cell(row=row, column=8, value=judgment['deviation'])  # 偏差 (第8列)
+                    logger.debug(f"数值测量值 {measured_value} vs 数值标准，结果: {judgment['result']}")
+
+                elif standard_is_text:
+                    # 情况2：文本测量标准（OK/NOK）+ 任意测量值：对比判断
+                    if measured_value_str in ok_variants:
+                        if standard_is_ok:
+                            # 测量值OK，标准也是OK → 符合
+                            judgment_result = "OK"
+                            deviation_value = "符合"
+                        else:
+                            # 测量值OK，标准是NOK → 不符合
+                            judgment_result = "NOK"
+                            deviation_value = "不符合"
+                    elif measured_value_str in nok_variants:
+                        if standard_is_nok:
+                            # 测量值NOK，标准也是NOK → 符合
+                            judgment_result = "OK"
+                            deviation_value = "符合"
+                        else:
+                            # 测量值NOK，标准是OK → 不符合
+                            judgment_result = "NOK"
+                            deviation_value = "不符合"
+                    else:
+                        # 测量值不在已知列表中，按异常处理
+                        judgment_result = "异常值"
+                        deviation_value = f"异常值({measured_value_raw})"
+
+                    worksheet.cell(row=row, column=7, value=judgment_result)  # 判断结果 (第7列)
+                    worksheet.cell(row=row, column=8, value=deviation_value)  # 偏差 (第8列)
+                    logger.debug(f"文本标准对比: 标准={standard_content}, 测量={measured_value_str}, 结果={judgment_result}")
+
+                else:
+                    # 情况3：数值测量标准 + 文本测量值：标记为异常但保留标准信息
+                    judgment_result = "异常值"
+                    deviation_value = f"异常值({measured_value_raw})"
+                    worksheet.cell(row=row, column=7, value=judgment_result)  # 判断结果 (第7列)
+                    worksheet.cell(row=row, column=8, value=deviation_value)  # 偏差 (第8列)
+                    logger.debug(f"类型不匹配: 数值标准 + 文本测量值，标记为异常")
 
                 updated_count += 1
 
@@ -485,7 +569,7 @@ class ExcelExporterEnhanced:
                     continue
 
                 try:
-                    standard_id = int(standard_id_cell)
+                    standard_id = int(str(standard_id_cell))
                 except (ValueError, TypeError):
                     continue
 
@@ -495,8 +579,8 @@ class ExcelExporterEnhanced:
 
                 spec_data[standard_id] = {
                     'content': content,
-                    'lower_limit': float(lower_limit) if lower_limit is not None else None,
-                    'upper_limit': float(upper_limit) if upper_limit is not None else None
+                    'lower_limit': float(str(lower_limit)) if lower_limit is not None else None,
+                    'upper_limit': float(str(upper_limit)) if upper_limit is not None else None
                 }
 
             workbook.close()
@@ -645,10 +729,10 @@ if __name__ == "__main__":
 
     # 模拟语音识别数据写入
     test_data = [
-        (100, "半径1", "80.0"),
-        (200, "半径2", "25.0"),
-        (100, "半径1", "90.0"),  # 同一标准序号的重复数据
-        (300, "半径3", "10.0")
+        (100.0, "半径1", "80.0"),
+        (200.0, "半径2", "25.0"),
+        (100.0, "半径1", "90.0"),  # 同一标准序号的重复数据
+        (300.0, "半径3", "10.0")
     ]
 
     print("📝 模拟写入语音识别数据...")

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voice-input"
-version = "0.1.2"
+version = "0.2.5"
 description = "A powerful real-time voice recognition offline system with pause/resume functionality and automatic Excel export capabilities."
 authors = [{name = "Pierre.W", email = "xingw1013@gmail.com"}]
 readme = "README.md"
@@ -34,10 +34,10 @@ dependencies = [
     "openpyxl==3.1.5",
     "pandas==2.3.2",
 
-    # GUI界面
-    "PySide6==6.8.2",
-    "PySide6_Addons==6.8.2",
-    "PySide6_Essentials==6.8.2",
+    # GUI界面 (使用稳定版本，避免弃用警告)
+    "PySide6==6.6.3.1",
+    "PySide6_Addons==6.6.3.1",
+    "PySide6_Essentials==6.6.3.1",
 
     # 网络和HTTP
     "requests==2.32.5",

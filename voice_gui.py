@@ -79,8 +79,8 @@ class WorkingVoiceWorker(QThread):
             #logger.info(f"[🧵 WORKER创建] 🏗️ 创建FunASRVoiceSystem实例")            
 
             self.voice_system = FunASRVoiceSystem(
-                recognition_duration=60,   # 60秒识别时长（与命令行版本一致）
-                continuous_mode=False,     # 批次模式（与命令行版本一致）
+                recognition_duration=-1,  # 不限时识别
+                continuous_mode=True,      # 连续识别模式
                 debug_mode=False           # 调式模式
             )
 
@@ -124,12 +124,30 @@ class WorkingVoiceWorker(QThread):
                 batch_no = self.input_values.get('batch_no', '')
                 inspector = self.input_values.get('inspector', '')
 
+                # 🎯 修复：严格要求所有必填字段都填写才使用模板
                 if part_no and batch_no and inspector:
+                    # 所有必填字段都完整，使用模板
                     success = self.voice_system.setup_excel_from_gui(part_no, batch_no, inspector)
                     if success:
                         self.log_message.emit(f"✅ Excel模板已创建: {part_no}_{batch_no}")
                     else:
                         self.log_message.emit("⚠️ Excel模板创建失败，使用默认方式")
+                else:
+                    # 有字段缺失，不使用模板，明确提醒用户
+                    missing_fields = []
+                    if not part_no:
+                        missing_fields.append("零件号")
+                    if not batch_no:
+                        missing_fields.append("批次号")
+                    if not inspector:
+                        missing_fields.append("检验员")
+
+                    if missing_fields:
+                        self.log_message.emit(f"⚠️ 未填写: {', '.join(missing_fields)}")
+                        self.log_message.emit("ℹ️ 请完整填写所有字段以使用Excel模板功能")
+                        self.log_message.emit("📝 当前使用默认方式创建Excel文件")
+                    else:
+                        self.log_message.emit("ℹ️ 使用默认方式创建Excel文件")
 
             self.status_changed.emit("系统就绪")
             self.system_initialized.emit()
@@ -216,36 +234,12 @@ class WorkingVoiceWorker(QThread):
                     on_partial_result=gui_partial_result_callback
                 )
 
-            self.log_message.emit("🎙️ 开始连续语音识别（60秒自动重启模式）...")
+            self.log_message.emit("🎙️ 开始连续语音识别...")
             self.status_changed.emit("正在识别...")
 
             self.voice_system.start_keyboard_listener()
 
-            # 🔧 修复：实现60秒自动重启的连续识别
-            # 使用与命令行版本相同的参数，但通过循环实现GUI的连续性
-            while self.running:
-                try:
-                    self.log_message.emit("🔄 开始新的60秒识别周期...")
-                    self.voice_system.run_continuous()
-
-                    # 如果到这里说明正常完成了60秒，检查是否需要继续
-                    if self.running:
-                        self.log_message.emit("⏱️ 60秒周期完成，准备重启...")
-                        # 短暂等待后继续下一个周期
-                        import time
-                        time.sleep(1)
-                    else:
-                        break
-
-                except Exception as e:
-                    if self.running:  # 只有在仍在运行时才处理错误
-                        self.log_message.emit(f"❌ 识别周期错误: {e}")
-                        logger.error(f"识别周期错误: {e}")
-                        # 错误后也尝试重启
-                        import time
-                        time.sleep(2)
-                    else:
-                        break
+            self.voice_system.run_continuous()
 
         except Exception as e:
             self.log_message.emit(f"❌ 识别过程错误: {e}")
@@ -977,6 +971,11 @@ class WorkingSimpleMainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
 
+        # 🎯 修复：强制验证所有必填字段
+        self.validate_part_no(self.part_no_input.text() if self.part_no_input else "")
+        self.validate_batch_no(self.batch_no_input.text() if self.batch_no_input else "")
+        self.validate_inspector(self.inspector_input.text() if self.inspector_input else "")
+
         # 验证输入信息
         if not self.are_inputs_valid():
             error_messages = list(self.validation_errors.values())
@@ -985,7 +984,10 @@ class WorkingSimpleMainWindow(QMainWindow):
                 f"请修正以下错误后再开始识别:\n\n" + "\n".join(f"• {msg}" for msg in error_messages),
                 QMessageBox.Ok
             )
-            return
+            self.append_log("❌ 启动失败：请填写所有必填字段")
+            return  # 阻止启动
+        else:
+            self.append_log("✅ 输入验证通过")
 
         # 获取输入值
         input_values = self.get_input_values()

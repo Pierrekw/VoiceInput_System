@@ -25,10 +25,10 @@ sounddevice==0.5.2
 openpyxl==3.1.5
 pandas==2.3.2
 
-# GUI界面
-PySide6==6.8.2
-PySide6_Addons==6.8.2
-PySide6_Essentials==6.8.2
+# GUI界面 (使用稳定版本，避免弃用警告)
+PySide6==6.6.3.1
+PySide6_Addons==6.6.3.1
+PySide6_Essentials==6.6.3.1
 
 # 网络和HTTP
 requests==2.32.5

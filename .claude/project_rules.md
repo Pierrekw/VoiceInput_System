@@ -8,6 +8,16 @@
 - **核心特性**: TEN VAD + FFmpeg预处理 + 组件化GUI架构 + Utils工具包 + 项目规范化
 - **主要修复**: 解决停止阻塞问题、日志系统修复、类型安全优化、文件组织规范化、工具包集成
 
+## 🔄 重要/主要更新记录
+
+### 2025-10-26 - v2.6 最终精简版
+- **项目结构重大重组**: 创建Utils工具包，根目录从29个文件减少到6个文件 (减少79%)
+- **文件命名规范化**: 将`funasr_voice_TENVAD.py`重命名为`funasr_voice_tenvad.py`，符合Python命名规范
+- **工具包集成**: 将6个核心工具模块集中到utils目录，统一import路径
+- **未使用模块归档**: 清理4个未使用的工具模块到archive目录
+- **文档管理严格化**: 严格控制MD文件创建，只保留必要文档
+- **实用化100%**: 所有保留模块都在实际使用中
+
 ## 📁 重要目录结构规则
 
 ### 🧪 测试文件位置 (重要!)
@@ -31,7 +41,7 @@ Voice_Input/
 │   ├── debug_performance_tracker.py  # Debug性能追踪
 │   └── production_latency_logger.py  # 生产延迟日志
 ├── main_f.py                 # 核心系统类
-├── funasr_voice_TENVAD.py    # TEN VAD + FFmpeg集成模块
+├── funasr_voice_tenvad.py    # TEN VAD + FFmpeg集成模块
 ├── voice_gui.py              # 主要GUI界面
 ├── excel_exporter.py         # Excel导出模块
 ├── text_processor_clean.py   # 文本处理模块 (重构优化)

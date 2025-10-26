@@ -206,7 +206,7 @@ excel:
 Voice_Input/
 ├── 📦 核心模块 (6个文件)
 │   ├── main_f.py                   # 主系统类
-│   ├── funasr_voice_TENVAD.py      # TEN VAD + FunASR集成模块
+│   ├── funasr_voice_tenvad.py      # TEN VAD + FunASR集成模块
 │   ├── voice_gui.py                # 主GUI界面
 │   ├── excel_exporter.py           # Excel导出模块
 │   ├── text_processor_clean.py     # 文本处理模块

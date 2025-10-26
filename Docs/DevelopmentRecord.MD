@@ -34,7 +34,7 @@ utils/
 
 **更新的文件**:
 - `main_f.py` - 更新4个import语句
-- `funasr_voice_TENVAD.py` - 更新4个import语句
+- `funasr_voice_tenvad.py` - 更新4个import语句
 - `voice_gui.py` - 更新2个import语句
 - `excel_exporter.py` - 更新2个import语句
 - `gui_components.py` - 更新1个import语句
@@ -66,7 +66,7 @@ utils.performance_monitor.start_timer("测试")
 
 #### 功能验证结果
 - ✅ `main_f.py` 导入正常
-- ✅ `funasr_voice_TENVAD.py` 导入正常
+- ✅ `funasr_voice_tenvad.py` 导入正常
 - ✅ `voice_gui.py` 导入正常
 - ✅ TEN VAD 加载成功
 - ✅ 所有工具模块正常工作
@@ -128,7 +128,7 @@ utils.performance_monitor.start_timer("测试")
   - 误检率: 14.1% → 3.2% (-77%)
   - 轻声检测率: 65.3% → 92.1% (+41%)
   - 处理延迟: 50ms → 16ms (-68%)
-- **模块文件**: `funasr_voice_TENVAD.py`
+- **模块文件**: `funasr_voice_tenvad.py`
 - **TEN VAD库**: 完整的Windows x64/x86库文件支持
 
 #### 2. 问题修复与优化
@@ -1366,7 +1366,7 @@ elif energy < vad_threshold:           # 80%-100%阈值
 
 #### 2. 核心技术实现
 
-**TEN VAD集成** (`funasr_voice_TENVAD_fixed.py`):
+**TEN VAD集成** (`funasr_voice_tenvad.py`):
 - 基于本地TEN VAD项目实现
 - 要求16kHz采样率，256样本hop size
 - 支持自动回退到能量阈值

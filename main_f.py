@@ -152,6 +152,7 @@ class VoiceCommandType(Enum):
     PAUSE = "pause"
     RESUME = "resume"
     STOP = "stop"
+    STANDARD_ID = "standard_id"
     UNKNOWN = "unknown"
 
 class FunASRVoiceSystem:
@@ -188,6 +189,10 @@ class FunASRVoiceSystem:
         self.results_buffer: List[Dict[str, Any]] = []
         self.number_results: List[Tuple[int, Union[float, str], str]] = []  # (ID, number/str, original_text)
 
+        # 当前标准序号状态
+        self.current_standard_id = 100  # 默认标准序号
+        self.standard_id_history: List[int] = [100]  # 标准序号历史记录
+
         # 创建核心组件
         self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
         self.processor = TextProcessor()
@@ -205,7 +210,8 @@ class FunASRVoiceSystem:
         self.voice_commands = {
             VoiceCommandType.PAUSE: config_loader.get_pause_commands(),
             VoiceCommandType.RESUME: config_loader.get_resume_commands(),
-            VoiceCommandType.STOP: config_loader.get_stop_commands()
+            VoiceCommandType.STOP: config_loader.get_stop_commands(),
+            VoiceCommandType.STANDARD_ID: config_loader.get_standard_id_commands()
         }
 
         # 加载语音命令识别配置
@@ -276,7 +282,10 @@ class FunASRVoiceSystem:
             # 使用模板创建Excel文件
             success = self.excel_exporter.create_from_template(part_no, batch_no, inspector)
             if success:
+                # 同步设置Excel导出器的标准序号
+                self.excel_exporter.current_standard_id = self.current_standard_id
                 logger.info(f"Excel模板已创建: {filepath}")
+                logger.debug(f"Excel导出器初始标准序号设置为: {self.current_standard_id}")
                 return True
             else:
                 logger.warning(f"Excel模板创建失败，使用默认方式")
@@ -304,7 +313,7 @@ class FunASRVoiceSystem:
 
     def _setup_logging(self):
         """设置日志记录"""
-        from logging_utils import get_logger
+        from utils.logging_utils import get_logger
         
         # 使用统一的日志工具获取专门的识别日志记录器
         self.recognition_logger = get_logger("voice_recognition", level=logging.INFO)
@@ -317,6 +326,28 @@ class FunASRVoiceSystem:
     def set_vad_callback(self, callback):
         """设置VAD事件回调函数（用于语音能量显示）"""
         self.vad_callback = callback
+
+    def set_standard_id(self, standard_id: int):
+        """设置当前标准序号"""
+        # 支持所有100的倍数作为标准序号
+        if standard_id > 0 and standard_id % 100 == 0:
+            self.current_standard_id = standard_id
+            self.standard_id_history.append(standard_id)
+
+            # 同时更新Excel导出器的标准序号
+            if self.excel_exporter:
+                self.excel_exporter.current_standard_id = standard_id
+                logger.debug(f"Excel导出器标准序号已更新到: {standard_id}")
+
+            logger.info(f"🔢 标准序号已切换到: {standard_id}")
+            if hasattr(self, 'recognition_logger'):
+                self.recognition_logger.info(f"标准序号切换: {standard_id}")
+        else:
+            logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
+
+    def get_current_standard_id(self) -> int:
+        """获取当前标准序号"""
+        return self.current_standard_id
 
     def _notify_state_change(self, state: str, message: str = ""):
         """通知状态变化"""
@@ -398,6 +429,38 @@ class FunASRVoiceSystem:
 
         return VoiceCommandType.UNKNOWN
 
+    def _handle_standard_id_command(self, text: str):
+        """
+        处理标准序号命令（使用模式匹配）
+
+        Args:
+            text: 识别的文本
+        """
+        # 获取标准序号命令前缀
+        command_prefixes = config_loader.get_standard_id_command_prefixes()
+
+        # 使用新的模式匹配方法
+        standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
+
+        if standard_id:
+            self.set_standard_id(standard_id)
+            logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
+        else:
+            # 回退到旧的逻辑（向后兼容）
+            logger.debug(f"模式匹配未成功，尝试回退逻辑")
+            # 提取数字
+            numbers = self.processor.extract_numbers(text)
+            if numbers:
+                standard_id = int(numbers[0])
+                # 检查是否为有效的标准序号（100的倍数）
+                if standard_id > 0 and standard_id % 100 == 0:
+                    self.set_standard_id(standard_id)
+                    logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
+                else:
+                    logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
+            else:
+                logger.warning(f"未能从命令中提取有效的标准序号: '{text}'")
+
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
         计算两个文本之间的相似度 (已弃用，使用TextProcessor.calculate_similarity)
@@ -475,9 +538,19 @@ class FunASRVoiceSystem:
                 log_message += f" -> 提取数字: {numbers[0]}"
             self.recognition_logger.info(log_message)
 
+        # 检查语音命令
+        command_type = self.recognize_voice_command(processed_text)
+        if command_type == VoiceCommandType.STANDARD_ID:
+            # 处理标准序号命令
+            self._handle_standard_id_command(processed_text)
+            return
+        elif command_type != VoiceCommandType.UNKNOWN:
+            # 其他语音命令由现有逻辑处理
+            pass
+
         # 检查是否为特定文本
         special_text_match = self._check_special_text(processed_text)
-        
+
         # 处理纯数字结果或特定文本结果
         if (numbers and self.excel_exporter) or (special_text_match and self.excel_exporter):
             # 添加到结果列表

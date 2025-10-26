@@ -216,7 +216,12 @@ class ExcelExporterEnhanced:
         workbook = load_workbook(self.filename)
         worksheet = workbook.active
 
-        for val, original_text, processed_text in data:
+        # 使用已生成的session_data中的Voice ID，避免重复生成
+        # 获取最新的数据，对应本次写入的数据
+        start_index = max(0, len(self._session_data) - len(data))
+        recent_data = self._session_data[start_index:]
+
+        for i, (voice_id, val, original_text) in enumerate(recent_data):
             # 获取下一个插入位置
             row = self.get_next_insert_position()
 
@@ -224,8 +229,7 @@ class ExcelExporterEnhanced:
             # 写入标准序号 (第1列)
             worksheet.cell(row=row, column=1, value=self.current_standard_id)
 
-            # 写入语音录入编号 (第10列) - record ID
-            voice_id = self.get_next_voice_id()
+            # 写入语音录入编号 (第10列) - 使用已生成的record ID
             worksheet.cell(row=row, column=10, value=voice_id)
 
             # 写入测量值 (第6列)
@@ -333,32 +337,74 @@ class ExcelExporterEnhanced:
     def _apply_measure_spec_logic(self, worksheet: Worksheet) -> None:
         """应用测量规范查询和判断逻辑"""
         try:
+            logger.info(f"🔍 开始应用测量规范逻辑，零件号: {self.part_no}")
+
             # 查找数据开始行
             data_start_row = self._find_data_start_row(worksheet)
             if data_start_row is None:
                 logger.warning("未找到数据开始行")
                 return
 
+            logger.debug(f"数据开始行: {data_start_row}, 工作表最大行: {worksheet.max_row}")
+
             spec_filename = f"{self.part_no}_MeasureSpec.xlsx"
             # 首先在reports/templates目录查找，然后在reports目录查找
-            template_dir = os.path.join(os.path.dirname(os.path.dirname(self.filename)), "templates")
+            reports_dir = os.path.dirname(self.filename)
+            template_dir = os.path.join(reports_dir, "templates")
             spec_path_template = os.path.join(template_dir, spec_filename)
-            spec_path_reports = os.path.join(os.path.dirname(self.filename), spec_filename)
+            spec_path_reports = os.path.join(reports_dir, spec_filename)
+
+            logger.debug(f"查找测量规范文件:")
+            logger.debug(f"  零件号: {self.part_no}")
+            logger.debug(f"  模板目录: {template_dir}")
+            logger.debug(f"  报告目录: {reports_dir}")
+            logger.debug(f"  模板路径: {spec_path_template}")
+            logger.debug(f"  报告路径: {spec_path_reports}")
+            logger.debug(f"  模板文件存在: {os.path.exists(spec_path_template)}")
+            logger.debug(f"  报告文件存在: {os.path.exists(spec_path_reports)}")
 
             # 优先使用templates目录中的文件
             if os.path.exists(spec_path_template):
                 spec_path = spec_path_template
+                logger.debug(f"使用templates目录中的测量规范文件: {spec_path}")
             elif os.path.exists(spec_path_reports):
                 spec_path = spec_path_reports
+                logger.debug(f"使用reports目录中的测量规范文件: {spec_path}")
             else:
+                # 测量规范文件不存在，在Excel中显示警告
+                warning_message = f"⚠️ 警告: 未找到零件号 {self.part_no} 的测量规范文件"
+                expected_filename = spec_filename
                 logger.warning(f"测量规范文件不存在: {spec_path_template} 或 {spec_path_reports}")
-                return
 
-            
+                # 在Excel文件中写入警告信息，但不删除现有数据
+                # 只在第一行显示警告，保留所有历史识别数据
+                worksheet.merge_cells(start_row=data_start_row, start_column=2, end_row=data_start_row, end_column=4)
+                warning_cell = worksheet.cell(row=data_start_row, column=2)
+                warning_cell.value = f"{warning_message}\n期望文件: {expected_filename}\n(历史识别数据已保留)"
+                warning_cell.font = Font(color="FF6600", bold=True, size=10)  # 橙色粗体
+                warning_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+                logger.info(f"已在Excel文件中显示测量规范文件缺失警告")
+                # 不执行测量规范查询，但继续格式化
+                logger.info("跳过测量规范查询，继续执行格式化")
+                return  # 正常返回，让Excel文件继续保存
+
+            # 找到了测量规范文件，执行正常的查询逻辑
             # 加载测量规范数据
+            logger.info(f"📊 正在加载测量规范数据: {spec_path}")
             spec_data = self._load_measure_spec_data(spec_path)
             if not spec_data:
-                return
+                logger.warning("测量规范数据加载失败或为空")
+                # 在Excel中显示加载失败的警告，但不删除现有数据
+                worksheet.merge_cells(start_row=data_start_row, start_column=2, end_row=data_start_row, end_column=4)
+                warning_cell = worksheet.cell(row=data_start_row, column=2)
+                warning_cell.value = f"⚠️ 警告: 测量规范文件加载失败\n文件: {spec_path}\n请检查文件格式是否正确\n(历史识别数据已保留)"
+                warning_cell.font = Font(color="FF6600", bold=True, size=10)  # 橙色粗体
+                warning_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                logger.info("已在Excel文件中显示测量规范加载失败警告")
+                return  # 正常返回，让Excel文件继续保存
+
+            logger.info(f"✅ 成功加载测量规范数据，包含 {len(spec_data)} 个标准序号")
 
             # 为每行数据应用规范查询和判断
             updated_count = 0

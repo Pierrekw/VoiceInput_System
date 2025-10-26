@@ -559,6 +559,67 @@ class VoiceCommandProcessor:
 
         return None
 
+    def match_standard_id_command(self, text: str, command_prefixes: List[str]) -> Optional[int]:
+        """
+        基于模式匹配标准序号命令
+
+        Args:
+            text: 识别的文本
+            command_prefixes: 命令前缀列表，如 ["切换", "设置", "切换到", "设置序号"]
+
+        Returns:
+            如果匹配到标准序号命令，返回标准序号数值；否则返回None
+        """
+        logger.debug(f"尝试匹配标准序号命令: '{text}'")
+        if not text:
+            return None
+
+        text_clean = self.process_command_text(text)
+
+        # 检查是否包含任何命令前缀
+        for prefix in command_prefixes:
+            prefix_clean = self.text_processor.clean_text_for_command_matching(prefix)
+
+            # 检查文本是否以命令前缀开头
+            if text_clean.startswith(prefix_clean) or prefix_clean in text_clean:
+                # 提取前缀后的数字部分
+                remaining_text = text_clean.replace(prefix_clean, '', 1).strip()
+
+                # 如果没有剩余文本，尝试从原始文本中提取数字
+                if not remaining_text:
+                    remaining_text = text_clean.replace(prefix_clean, '', 1).strip()
+
+                logger.debug(f"命令前缀匹配: '{prefix}', 剩余文本: '{remaining_text}'")
+
+                # 从剩余文本中提取数字
+                if remaining_text:
+                    numbers = self.text_processor.extract_numbers(remaining_text)
+                    if numbers:
+                        standard_id = int(numbers[0])
+                        # 验证是否为有效的标准序号（100的倍数）
+                        if standard_id > 0 and standard_id % 100 == 0:
+                            logger.info(f"匹配到标准序号命令: {prefix} -> {standard_id}")
+                            return standard_id
+                        else:
+                            logger.debug(f"提取的数字不是有效的标准序号: {standard_id}")
+
+                # 如果直接提取数字失败，尝试中文数字转换
+                try:
+                    # 使用TextProcessor处理剩余文本
+                    processed_remaining = self.text_processor.process_text(remaining_text)
+                    numbers = self.text_processor.extract_numbers(processed_remaining)
+                    if numbers:
+                        standard_id = int(numbers[0])
+                        if standard_id > 0 and standard_id % 100 == 0:
+                            logger.info(f"通过转换匹配到标准序号命令: {prefix} -> {standard_id}")
+                            return standard_id
+                except Exception as e:
+                    logger.debug(f"中文数字转换失败: {e}")
+                    continue
+
+        logger.debug(f"未匹配到标准序号命令: '{text}'")
+        return None
+
 # 便捷函数
 def process_text(text: str) -> str:
     """便捷的文本处理函数"""

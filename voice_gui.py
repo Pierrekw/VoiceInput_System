@@ -664,13 +664,13 @@ class WorkingSimpleMainWindow(QMainWindow):
 
         # 零件号输入
         self.part_no_input = QLineEdit()
-        self.part_no_input.setPlaceholderText("请输入零件号，如: PART001")
+        self.part_no_input.setPlaceholderText("请输入零件号，如: PART-A001")
         self.part_no_input.textChanged.connect(self.validate_part_no)
         input_layout.addRow("零件号 *:", self.part_no_input)
 
         # 批次号输入
         self.batch_no_input = QLineEdit()
-        self.batch_no_input.setPlaceholderText("请输入批次号，如: B202501")
+        self.batch_no_input.setPlaceholderText("请输入批次号，如: B20250105")
         self.batch_no_input.textChanged.connect(self.validate_batch_no)
         input_layout.addRow("批次号 *:", self.batch_no_input)
 

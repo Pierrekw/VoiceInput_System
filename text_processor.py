@@ -43,6 +43,31 @@ class TextProcessor:
             "度", "元", "块", "米", "公斤", "斤", "个", "只", "年", "月", "日", "时", "分", "秒"
         }
 
+    def _replace_hundred_thirteen(self, text: str) -> str:
+        """处理百十三特殊情况 - 统一的辅助方法"""
+        import re
+        pattern = r'([一二三四五六七八九十])百十三'
+        def replace_hundred_thirteen(match: re.Match[str]) -> str:
+            first_digit = match.group(1)
+            return f'{first_digit}百一十三'
+        return re.sub(pattern, replace_hundred_thirteen, text)
+
+    def _convert_single_chinese_digit(self, text: str, digit: str, value: str) -> str:
+        """转换单个中文数字 - 统一的辅助方法"""
+        return text.replace(digit, value, 1)
+
+    def _process_special_case(self, match: str) -> Optional[str]:
+        """处理特殊情况数字转换 - 统一的辅助方法"""
+        special_cases = {
+            '两': '2',
+            '十': '10',
+            '百': '100',
+            '千': '1000',
+            '万': '10000',
+            '百万': '1000000'
+        }
+        return special_cases.get(match)
+
     def remove_spaces(self, text: str) -> str:
         """去除文本中的空格"""
         return re.sub(r'[\s　]', '', text) if text else text
@@ -135,34 +160,8 @@ class TextProcessor:
         result_text = text
 
         try:
-            # 预处理：修复中文数字语法错误（关键修复）
-            # 处理"一百十三" -> "一百一十三"的情况
-            if '一百十三' in result_text:
-                result_text = result_text.replace('一百十三', '一百一十三')
-            if '二百十三' in result_text:
-                result_text = result_text.replace('二百十三', '二百一十三')
-            if '三百十三' in result_text:
-                result_text = result_text.replace('三百十三', '三百一十三')
-            if '四百十三' in result_text:
-                result_text = result_text.replace('四百十三', '四百一十三')
-            if '五百十三' in result_text:
-                result_text = result_text.replace('五百十三', '五百一十三')
-            if '六百十三' in result_text:
-                result_text = result_text.replace('六百十三', '六百一十三')
-            if '七百十三' in result_text:
-                result_text = result_text.replace('七百十三', '七百一十三')
-            if '八百十三' in result_text:
-                result_text = result_text.replace('八百十三', '八百一十三')
-            if '九百十三' in result_text:
-                result_text = result_text.replace('九百十三', '九百一十三')
-
-            # 通用模式：处理"[X]百十三"的情况
-            import re
-            pattern = r'([一二三四五六七八九十])百十三'
-            def replace_hundred_thirteen(match: re.Match[str]) -> str:
-                first_digit = match.group(1)
-                return f'{first_digit}百一十三'
-            result_text = re.sub(pattern, replace_hundred_thirteen, result_text)
+            # 预处理：修复中文数字语法错误（使用统一方法）
+            result_text = self._replace_hundred_thirteen(result_text)
 
             # 处理特殊格式如"点八四"
             if result_text.startswith("点") and len(result_text) > 1:
@@ -193,22 +192,9 @@ class TextProcessor:
 
                 except Exception:
                     # 如果cn2an转换失败，尝试特殊情况处理
-                    try:
-                        # 处理特殊情况：单个字符
-                        if match == '两':
-                            result_text = result_text.replace(match, '2', 1)
-                        elif match == '十':
-                            result_text = result_text.replace(match, '10', 1)
-                        elif match == '百':
-                            result_text = result_text.replace(match, '100', 1)
-                        elif match == '千':
-                            result_text = result_text.replace(match, '1000', 1)
-                        elif match == '万':
-                            result_text = result_text.replace(match, '10000', 1)
-                        elif match == '百万':
-                            result_text = result_text.replace(match, '1000000', 1)
-                    except Exception:
-                        continue
+                    special_value = self._process_special_case(match)
+                    if special_value:
+                        result_text = self._convert_single_chinese_digit(result_text, match, special_value)
 
         except Exception as e:
             logger.error(f"中文数字转换过程出错: {str(e)}")
@@ -291,34 +277,8 @@ class TextProcessor:
                 # 特殊处理"幺"字符
                 text_to_convert = text_to_convert.replace('幺', '一')
 
-                # 修复中文数字语法错误（关键修复）
-                # 处理"一百十三" -> "一百一十三"的情况
-                if '一百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('一百十三', '一百一十三')
-                if '二百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('二百十三', '二百一十三')
-                if '三百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('三百十三', '三百一十三')
-                if '四百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('四百十三', '四百一十三')
-                if '五百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('五百十三', '五百一十三')
-                if '六百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('六百十三', '六百一十三')
-                if '七百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('七百十三', '七百一十三')
-                if '八百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('八百十三', '八百一十三')
-                if '九百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('九百十三', '九百一十三')
-
-                # 通用模式：处理"[X]百十三"的情况
-                pattern = r'([一二三四五六七八九十])百十三'
-                def replace_hundred_thirteen(match: re.Match[str]) -> str:
-                    first_digit = match.group(1)
-                    return f'{first_digit}百一十三'
-                import re
-                text_to_convert = re.sub(pattern, replace_hundred_thirteen, text_to_convert)
+                # 修复中文数字语法错误（使用统一方法）
+                text_to_convert = self._replace_hundred_thirteen(text_to_convert)
 
                 # 尝试转换预处理后的文本
                 try:
@@ -353,35 +313,9 @@ class TextProcessor:
         result = result.replace('幺', '一')
         logger.debug(f"替换'幺'后: {result[:100]}...")
 
-        # 第三步：修复中文数字语法错误（关键修复）
-        # 处理"一百十三" -> "一百一十三"的情况
-        if '一百十三' in result:
-            result = result.replace('一百十三', '一百一十三')
-            logger.debug(f"修复数字语法后: {result[:100]}...")
-        if '二百十三' in result:
-            result = result.replace('二百十三', '二百一十三')
-        if '三百十三' in result:
-            result = result.replace('三百十三', '三百一十三')
-        if '四百十三' in result:
-            result = result.replace('四百十三', '四百一十三')
-        if '五百十三' in result:
-            result = result.replace('五百十三', '五百一十三')
-        if '六百十三' in result:
-            result = result.replace('六百十三', '六百一十三')
-        if '七百十三' in result:
-            result = result.replace('七百十三', '七百一十三')
-        if '八百十三' in result:
-            result = result.replace('八百十三', '八百一十三')
-        if '九百十三' in result:
-            result = result.replace('九百十三', '九百一十三')
-
-        # 通用模式：处理"[X]百十三"的情况
-        import re
-        pattern = r'([一二三四五六七八九十])百十三'
-        def replace_hundred_thirteen(match: re.Match[str]) -> str:
-            first_digit = match.group(1)
-            return f'{first_digit}百一十三'
-        result = re.sub(pattern, replace_hundred_thirteen, result)
+       # 第三步：修复中文数字语法错误（使用统一方法）
+        result = self._replace_hundred_thirteen(result)
+        logger.debug(f"修复数字语法后: {result[:100]}...")
 
         # 第四步：应用新规则转换数字
         result = self.convert_chinese_numbers_in_text(result)

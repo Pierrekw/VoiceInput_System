@@ -193,6 +193,9 @@ class FunASRVoiceSystem:
         self.current_standard_id = 100  # 默认标准序号
         self.standard_id_history: List[int] = [100]  # 标准序号历史记录
 
+        # 尝试加载历史数据
+        self._load_history_data()
+
         # 创建核心组件
         self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
         self.processor = TextProcessor()
@@ -314,10 +317,58 @@ class FunASRVoiceSystem:
     def _setup_logging(self):
         """设置日志记录"""
         from utils.logging_utils import get_logger
-        
+
         # 使用统一的日志工具获取专门的识别日志记录器
         self.recognition_logger = get_logger("voice_recognition", level=logging.INFO)
         logger.info("识别日志已配置完成")
+
+    def _load_history_data(self):
+        """加载历史识别数据"""
+        import json
+        import os
+
+        history_file = os.path.join(os.getcwd(), "logs", "recognition_history.json")
+
+        try:
+            if os.path.exists(history_file):
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    history_data = json.load(f)
+
+                self.results_buffer = history_data.get('results_buffer', [])
+                self.standard_id_history = history_data.get('standard_id_history', [100])
+                self.current_standard_id = history_data.get('current_standard_id', 100)
+
+                logger.info(f"✅ 加载历史数据: {len(self.results_buffer)}条记录, 当前标准序号: {self.current_standard_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ 加载历史数据失败: {e}")
+            # 使用默认值
+            self.results_buffer = []
+            self.standard_id_history = [100]
+            self.current_standard_id = 100
+
+    def _save_history_data(self):
+        """保存历史识别数据"""
+        import json
+        import os
+
+        history_file = os.path.join(os.getcwd(), "logs", "recognition_history.json")
+
+        try:
+            # 确保logs目录存在
+            os.makedirs(os.path.dirname(history_file), exist_ok=True)
+
+            history_data = {
+                'results_buffer': self.results_buffer,
+                'standard_id_history': self.standard_id_history,
+                'current_standard_id': self.current_standard_id,
+                'last_updated': time.time()
+            }
+
+            with open(history_file, 'w', encoding='utf-8') as f:
+                json.dump(history_data, f, ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            logger.warning(f"⚠️ 保存历史数据失败: {e}")
 
     def set_state_change_callback(self, callback):
         """设置状态变化回调函数（用于GUI同步）"""
@@ -342,6 +393,9 @@ class FunASRVoiceSystem:
             logger.info(f"🔢 标准序号已切换到: {standard_id}")
             if hasattr(self, 'recognition_logger'):
                 self.recognition_logger.info(f"标准序号切换: {standard_id}")
+
+            # 保存历史数据
+            self._save_history_data()
         else:
             logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
 
@@ -524,6 +578,9 @@ class FunASRVoiceSystem:
             'numbers': numbers,
             'timestamp': time.time()
         })
+
+        # 保存历史数据
+        self._save_history_data()
 
         # 终端显示（记录时间戳）- 改为DEBUG级别，避免控制台输出过多
         terminal_start = time.time()

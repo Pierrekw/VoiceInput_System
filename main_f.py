@@ -47,8 +47,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 导入FunASR相关模块
-#from funasr_voice_TENVAD import FunASRVoiceRecognizer
-from funasr_voice_module import FunASRVoiceRecognizer
+from funasr_voice_TENVAD import FunASRVoiceRecognizer
+#from funasr_voice_module import FunASRVoiceRecognizer
 from text_processor_clean import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
@@ -751,6 +751,11 @@ class FunASRVoiceSystem:
         start_latency_session()
 
         try:
+            # 🔥 修复：检查系统是否已经被停止
+            if self.system_should_stop:
+                logger.info("🛑 系统已收到停止信号，退出识别循环")
+                return
+
             # 直接开始识别
             logger.info(f"\n🎯 开始语音识别")
             logger.debug("请说话...")
@@ -758,12 +763,17 @@ class FunASRVoiceSystem:
 
             self.run_recognition_cycle()
 
+            # 🔥 修复：在识别循环后再次检查停止信号
+            if self.system_should_stop:
+                logger.info("🛑 识别循环结束后收到停止信号，不显示汇总")
+                return
+
             # 显示汇总（只显示一次）
             if not self.system_should_stop:  # 只有当系统没有被命令停止时才显示汇总
                 logger.debug("\n" + "=" * 50)
                 logger.debug("识别汇总")
                 logger.debug("=" * 50)
-                
+
                 self.show_results_summary()
 
         except KeyboardInterrupt:

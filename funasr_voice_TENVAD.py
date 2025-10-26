@@ -850,6 +850,16 @@ class FunASRVoiceRecognizer:
 
             audio_array = np.array(list(self._speech_buffer))
 
+            # 🔥 架构修复：在语音段结束时进行FFmpeg批量预处理
+            if self._ffmpeg_enabled and len(audio_array) > 0:
+                logger.debug("对完整语音段进行FFmpeg预处理")
+                with PerformanceStep("FFmpeg批量预处理", {
+                    'audio_length': len(audio_array),
+                    'duration_seconds': len(audio_array) / self.sample_rate
+                }):
+                    # 使用完整的语音段进行预处理，而不是每个chunk
+                    audio_array = self._apply_ffmpeg_preprocessing(audio_array, "final_segment")
+
             result = self._model.generate(
                 input=audio_array,
                 cache=self._funasr_cache,
@@ -963,18 +973,9 @@ class FunASRVoiceRecognizer:
                         }):
                             audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
 
-                        # 应用FFmpeg预处理（如果启用）
-                        if self._ffmpeg_enabled:
-                            # 🔥 关键修复：在FFmpeg预处理前检查停止信号
-                            if self._stop_event.is_set():
-                                logger.info("检测到停止信号，跳过FFmpeg预处理")
-                                break
-
-                            with PerformanceStep("FFmpeg预处理", {
-                                'data_length': len(audio_data),
-                                'current_time': current_time
-                            }):
-                                audio_data = self._apply_ffmpeg_preprocessing(audio_data, f"cont_chunk_{current_time:.0f}")
+                        # 🔥 架构修复：移除实时循环中的FFmpeg预处理
+                        # FFmpeg预处理将在语音段结束时批量进行，而不是在每个音频chunk时处理
+                        # 这样保持了实时音频处理的连续性，避免了stream.read()阻塞问题
 
                         # 处理音频
                         self._process_audio_chunk(audio_data, current_time)
@@ -1131,11 +1132,6 @@ class FunASRVoiceRecognizer:
 
     def stop_recognition(self):
         """停止识别"""
-        # 🔥 防重复调用保护
-        if not self._is_running:
-            logger.debug("ℹ️ 识别器已经停止，跳过重复调用")
-            return
-
         logger.info("⏹️ 停止识别")
         self._stop_event.set()
         self._is_running = False
@@ -1144,6 +1140,7 @@ class FunASRVoiceRecognizer:
         if self._speech_buffer:
             self._perform_final_recognition()
 
+        
     def __del__(self):
         """析构函数"""
         try:

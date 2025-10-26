@@ -44,7 +44,7 @@ Voice_Input/
 ├── funasr_voice_tenvad.py    # TEN VAD + FFmpeg集成模块
 ├── voice_gui.py              # 主要GUI界面
 ├── excel_exporter.py         # Excel导出模块
-├── text_processor_clean.py   # 文本处理模块 (重构优化)
+├── text_processor.py         # 文本处理模块 (重构优化)
 ├── config.yaml               # 配置文件
 ├── archive/                  # 归档文件目录
 ├── reports/                  # Excel输出目录

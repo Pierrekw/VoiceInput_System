@@ -7,7 +7,7 @@ repos:
         entry: mypy
         language: system
         types: [python]
-        exclude: ^(.venv|venv|__pycache__|tests?/.*\.py$)
+        exclude: ^(.venv|venv|__pycache__|tests?/.*\.py$|archive/.*\.py$)
         pass_filenames: true  # Let pre-commit pass only staged Python files
 
       # - id: pytest

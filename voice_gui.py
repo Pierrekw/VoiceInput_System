@@ -166,11 +166,19 @@ class WorkingVoiceWorker(QThread):
                             if is_matching_record:
                                 has_new_record = True
 
-                                # 构建完整的显示文本，包含ID、数字和文本内容
-                                if record_text and record_text.strip():
-                                    display_text = f"[{record_id}] {record_number} {record_text}"
+                                # 确保record_id被正确添加到显示文本中
+                                if record_id and record_id.strip():
+                                    # 如果有record_text（如OK/NOK信息），也一并显示
+                                    if record_text and record_text.strip():
+                                        display_text = f"[{record_id}] {record_number} {record_text}"
+                                    else:
+                                        display_text = f"[{record_id}] {record_number}"
                                 else:
-                                    display_text = f"[{record_id}] {record_number}"
+                                    # 如果没有record_id，生成一个默认的ID格式
+                                    if record_text and record_text.strip():
+                                        display_text = f"[ID] {record_number} {record_text}"
+                                    else:
+                                        display_text = f"[ID] {record_number}"
 
                                 self.recognition_result.emit(display_text)
                                 self.log_message.emit(f"🎤 识别结果: {display_text}")
@@ -1356,7 +1364,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 if history_records:
                     self.append_log(f"📚 加载历史记录: {len(history_records)}条")
 
-                    # 显示历史记录，模拟Worker发送的格式
+                    # 显示历史记录
                     for record in reversed(history_records):  # 最新的在前面
                         original = record.get('original', '')
                         processed = record.get('processed', '')
@@ -1367,20 +1375,16 @@ class WorkingSimpleMainWindow(QMainWindow):
                         from datetime import datetime
                         time_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
 
-                        # 模拟Worker格式：[{record_id}] {record_number} {record_text}
-                        if numbers and len(numbers) > 0:
-                            # 模拟record格式，符合display_result的is_record要求
-                            mock_record_id = len(history_records) - history_records.index(record)  # 倒序ID
-                            mock_record_number = numbers[0]
-                            mock_record_text = processed if processed else original
+                        # 构建历史记录条目，符合display_result的is_record要求
+                        mock_record_id = len(history_records) - history_records.index(record)  # 倒序ID
 
-                            # 构建符合[xxx]格式的历史记录条目
-                            history_entry = f"🕒 {time_str} [{mock_record_id}] {mock_record_number} {mock_record_text}"
+                        if numbers and len(numbers) > 0:
+                            # 数字记录：[ID] 数字格式（符合Worker当前发送格式）
+                            history_entry = f"[{mock_record_id}] {numbers[0]}"
                         else:
-                            # 非数字记录，也添加时间戳和模拟格式
-                            mock_record_id = len(history_records) - history_records.index(record)
-                            mock_record_text = processed if processed else original
-                            history_entry = f"🕒 {time_str} [{mock_record_id}] 文本 {mock_record_text}"
+                            # 文本记录：[ID] 文本格式
+                            text_content = processed if processed else original
+                            history_entry = f"[{mock_record_id}] {text_content}"
 
                         self.history_text.append(history_entry)
                         self.recognition_count += 1

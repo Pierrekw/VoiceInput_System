@@ -47,8 +47,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 导入FunASR相关模块
-from funasr_voice_tenvad import FunASRVoiceRecognizer
-#from funasr_voice_module import FunASRVoiceRecognizer
+from funasr_voice_combined import FunASRVoiceRecognizer
 from text_processor import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块

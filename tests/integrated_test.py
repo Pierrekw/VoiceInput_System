@@ -16,7 +16,7 @@ from unittest.mock import patch, MagicMock, mock_open
 import tempfile
 from datetime import datetime
 import json
-from config_loader import config
+from utils.config_loader import config
 
 # 设置编码
 if os.name == 'nt':

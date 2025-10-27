@@ -6,14 +6,13 @@ audio:
   # FFmpeg音频预处理 (默认关闭)
   # 启用后可显著提升语音质量，增强VAD和ASR识别准确性
   ffmpeg_preprocessing:
-    enabled: true  # 测试阶段启用
-
+    enabled: false  # 暂时禁用，确保基本功能正常
     # FFmpeg滤镜链参数 (可自定义)
     # highpass=f=80: 移除低频噪音(如空调声、手柄噪音)
     # afftdn=nf=-25: 基于FFT的降噪，减少稳定背景噪音
     # loudnorm: 音量标准化，提升语音清晰度
     # volume=2.0: 音量增强，提高信噪比
-    filter_chain: "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0"
+    filter_chain: highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0
 
     # 预处理选项
     options:
@@ -60,9 +59,14 @@ recognition:
   decimal_optimization:
     enabled: true
     # 延长音频采集时间，确保完整的小数被识别
+    # 注意: 这个值会被funasr_voice_combined.py读取用于流式识别触发
     extended_capture_time: 2.0
     # 提高数字识别的置信度阈值
     confidence_threshold: 0.7
+
+  # 扩展采集时间 - 为了兼容现有代码结构，同时提供这个配置
+  # 这个值与decimal_optimization.extended_capture_time保持一致
+  extended_time: 2.0
 special_texts:
   enabled: true
   exportable_texts:
@@ -94,6 +98,12 @@ system:
 # 🔑 min_silence_duration 是影响延迟的关键参数！
 
 vad:
+  # VAD类型选择 - 用于funasr_voice_combined.py整合模块
+  # energy: 使用传统能量阈值VAD (兼容所有模块)
+  # ten: 使用TEN神经网络VAD (需要TEN VAD支持)
+  # 注意: 当ten不可用时，会自动回退到energy模式
+  vad_type: "energy"  # 默认使用能量阈值VAD，确保兼容性
+
   # VAD模式选择 - 可选值: "fast", "balanced", "accuracy", "customized"
   # fast: 快速响应模式 - 减少延迟但可能误检测 (推荐日常使用)
   # balanced: 平衡模式 - 默认设置
@@ -126,6 +136,13 @@ vad:
   # 语音填充 - 在语音前后添加额外的音频时间
   # 优化：调整为更平衡的值，保持识别完整性同时提高响应速度
   speech_padding: 0.3
+
+  # TEN VAD特定配置 (仅在vad_type="ten"时生效)
+  ten_vad:
+    # TEN VAD阈值 - 控制语音检测敏感度
+    threshold: 0.5
+    # TEN VAD跳大小 - 固定为256
+    hop_size: 256
 
   # ===== VAD预设配置定义 (系统内部使用，请勿修改) =====
   presets:

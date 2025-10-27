@@ -28,6 +28,7 @@ class ConfigLoader:
         default_config = {
             "model": {
                 "default_path": "model/cn",
+                "funasr_model_path": "./model/fun",
                 "available_models": [
                     {"name": "中文标准模型（高精度）", "path": "model/cn", "description": "完整的中文语音识别模型，准确率高"},
                     {"name": "中文小模型（快速加载）", "path": "model/cns", "description": "精简版中文语音识别模型，启动速度快，占用内存少"},
@@ -36,7 +37,7 @@ class ConfigLoader:
                 ],
                 "device": "cpu",
                 "funasr": {
-                    "path": "f:/04_AI/01_Workplace/Voice_Input/model/fun",
+                    "path": "./model/fun",
                     "chunk_size": [0, 10, 5],
                     "encoder_chunk_look_back": 4,
                     "decoder_chunk_look_back": 1,
@@ -47,7 +48,13 @@ class ConfigLoader:
             "recognition": {
                 "timeout_seconds": 60,
                 "buffer_size": 10000,
-                "pause_timeout_multiplier": 3
+                "pause_timeout_multiplier": 3,
+                "decimal_optimization": {
+                    "enabled": True,
+                    "extended_capture_time": 2.0,
+                    "confidence_threshold": 0.7
+                },
+                "extended_time": 2.0
             },
             "system": {
                 "log_level": "INFO",
@@ -57,7 +64,7 @@ class ConfigLoader:
             },
             "audio": {
                 "sample_rate": 16000,
-                "chunk_size": 8000,
+                "chunk_size": 200,
                 "ffmpeg_preprocessing": {
                     "enabled": False,
                     "filter_chain": "highpass=f=80, afftdn=nf=-25, loudnorm, volume=2.0",
@@ -106,10 +113,16 @@ class ConfigLoader:
                 ]
             },
             "vad": {
+                "vad_type": "energy",
                 "energy_threshold": 0.015,
                 "min_speech_duration": 0.3,
                 "min_silence_duration": 0.6,
                 "speech_padding": 0.3,
+                "gui_display_threshold": 0.00001,
+                "ten_vad": {
+                    "threshold": 0.5,
+                    "hop_size": 256
+                },
                 "description": {
                     "energy_threshold": "检测语音的最小能量阈值，较小值更敏感但可能误检测",
                     "min_speech_duration": "有效语音的最小持续时间（秒）",
@@ -284,7 +297,7 @@ class ConfigLoader:
     
     def get_chunk_size(self) -> int:
         """获取音频块大小"""
-        return self.get("audio.chunk_size", 8000)
+        return self.get("audio.chunk_size", 200)
 
     def is_ffmpeg_preprocessing_enabled(self) -> bool:
         """获取FFmpeg音频预处理是否启用"""
@@ -400,6 +413,34 @@ class ConfigLoader:
     def get_vad_description(self) -> dict:
         """获取VAD参数说明"""
         return self.get("vad.description", {})
+
+    # 新增方法 - 支持funasr_voice_combined.py整合模块
+    def get_vad_type(self) -> str:
+        """获取VAD类型选择 (energy/ten)"""
+        return self.get("vad.vad_type", "energy")
+
+    def get_decimal_optimization_config(self) -> dict:
+        """获取数字识别优化配置"""
+        return self.get("recognition.decimal_optimization", {
+            "enabled": True,
+            "extended_capture_time": 2.0,
+            "confidence_threshold": 0.7
+        })
+
+    def get_extended_capture_time(self) -> float:
+        """获取扩展采集时间"""
+        return self.get("recognition.extended_time", 2.0)
+
+    def get_funasr_model_path(self) -> str:
+        """获取统一的FunASR模型路径"""
+        return self.get("model.funasr_model_path", "./model/fun")
+
+    def get_ten_vad_config(self) -> dict:
+        """获取TEN VAD特定配置"""
+        return self.get("vad.ten_vad", {
+            "threshold": 0.5,
+            "hop_size": 256
+        })
 
 # 全局配置实例
 config = ConfigLoader()

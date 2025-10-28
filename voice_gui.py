@@ -1637,11 +1637,11 @@ class WorkingSimpleMainWindow(QMainWindow):
                 cursor.insertText('\n')
 
                 # 添加带下划线的链接文本（普通格式）
-                cursor.insertText('📂 点击打开Excel文件: ')
+                #cursor.insertText('📂 点击打开Excel文件: ')
 
                 # 只显示文件名，但存储完整路径用于点击打开
-                file_name = os.path.basename(file_path)
-
+                #file_name = os.path.basename(file_path)
+                
                 # 为文件名设置下划线和蓝色样式
                 try:
                     # 保存当前格式
@@ -1655,15 +1655,21 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                     # 设置格式并插入文件名
                     cursor.setCharFormat(char_format)
-                    cursor.insertText(file_name)
-
+                    cursor.insertText('📂 点击打开Excel文件: ')
+                    
                     # 立即重置为默认格式，确保不影响后续任何文本
                     cursor.setCharFormat(current_format)  # 恢复之前的格式
+                    #file_name = os.path.basename(file_path)
+                    #cursor.insertText(file_name)
+                    cursor.insertText('\n')
+                    cursor.insertText("---------------------------------------------------")
+
+                    
                 except Exception as e:
                     # 如果格式设置失败，使用普通文本
                     logger.warning(f"设置Excel链接样式失败，使用普通文本: {e}")
                     cursor.insertText(file_name)
-
+                
                 if was_at_bottom:
                     scrollbar.setValue(scrollbar.maximum())
 

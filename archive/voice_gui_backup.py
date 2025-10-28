@@ -13,7 +13,7 @@ import math
 import subprocess
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 logger = LoggingManager.get_logger(
     name='voice_gui',
@@ -26,7 +26,8 @@ logger = LoggingManager.get_logger(
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QTextBrowser, QLabel, QPushButton, QGroupBox, QStatusBar,
-    QMessageBox, QSplitter, QTabWidget, QComboBox, QFormLayout, QProgressBar
+    QMessageBox, QSplitter, QTabWidget, QComboBox, QFormLayout, QProgressBar,
+    QLineEdit, QFrame, QScrollArea
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QTextCursor, QPalette, QColor, QTextCharFormat
@@ -45,6 +46,7 @@ class WorkingVoiceWorker(QThread):
     status_changed = Signal(str)
     voice_command_state_changed = Signal(str)  # 语音命令状态变化信号
     voice_activity = Signal(int)  # 语音活动级别信号 (0-100)
+    command_result = Signal(str)  # 命令结果信号
     finished = Signal()
     system_initialized = Signal()
 
@@ -54,6 +56,11 @@ class WorkingVoiceWorker(QThread):
         self._is_paused = False
         self.voice_system = None
         self.mode = mode
+        self.input_values = {}  # 存储GUI输入的值
+
+    def set_input_values(self, values: Dict[str, str]):
+        """设置GUI输入的值"""
+        self.input_values = values.copy()
 
     def run(self):
         """运行语音识别"""
@@ -75,12 +82,15 @@ class WorkingVoiceWorker(QThread):
             self.voice_system = FunASRVoiceSystem(
                 recognition_duration=-1,  # 不限时识别
                 continuous_mode=True,      # 连续识别模式
-                debug_mode=False           # 生产模式
+                debug_mode=False           # 调式模式
             )
 
             logger.info(f"[🧵 WORKER创建] ✅ FunASRVoiceSystem创建完成")            
 
-            self._configure_recognizer(mode_config)
+            # 🔥 关键修复：传递mode参数到语音系统
+            mode_config_with_mode = mode_config.copy()
+            mode_config_with_mode['mode'] = self.mode
+            self._configure_recognizer(mode_config_with_mode)
 
             if not self.voice_system.initialize():
                 self.log_message.emit("❌ 语音系统初始化失败")
@@ -89,16 +99,11 @@ class WorkingVoiceWorker(QThread):
             #logger.debug(f"[🔗 WORKER设置] 🔧 开始设置状态变化回调")
             
             self.voice_system.set_state_change_callback(self._handle_voice_command_state_change)
-            #logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")            
+            #logger.debug(f"[🔗 WORKER设置] ✅ 状态变化回调设置成功")
 
-            #logger.debug(f"[🔗 WORKER设置] 📡 准备设置VAD回调: voice_system.set_vad_callback(_handle_vad_event)")            
-
-            #logger.info(f"[🔗 WORKER检查] voice_system类型: {type(self.voice_system)}")
-            #logger.debug(f"[🔗 WORKER检查] voice_system方法: {[method for method in dir(self.voice_system) if 'vad' in method.lower() or 'callback' in method.lower()]}")
-           
+            # 🔥 关键修复：设置VAD回调以解决GUI无响应问题
             if hasattr(self.voice_system, 'set_vad_callback'):
-                #logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")               
-
+                #logger.info(f"[🔗 WORKER设置] ✅ voice_system有set_vad_callback方法，开始设置")
                 try:
                     self.voice_system.set_vad_callback(self._handle_vad_event)
                     #logger.info(f"[🔗 WORKER设置] ✅ VAD回调设置成功")
@@ -113,6 +118,38 @@ class WorkingVoiceWorker(QThread):
                 logger.error(f"[🔗 WORKER错误] ❌ voice_system没有set_vad_callback方法！")                
 
             self.log_message.emit("✅ 语音系统初始化成功")
+
+            # 设置Excel模板
+            if self.input_values:
+                part_no = self.input_values.get('part_no', '')
+                batch_no = self.input_values.get('batch_no', '')
+                inspector = self.input_values.get('inspector', '')
+
+                # 🎯 修复：严格要求所有必填字段都填写才使用模板
+                if part_no and batch_no and inspector:
+                    # 所有必填字段都完整，使用模板
+                    success = self.voice_system.setup_excel_from_gui(part_no, batch_no, inspector)
+                    if success:
+                        self.log_message.emit(f"✅ Excel模板已创建: {part_no}_{batch_no}")
+                    else:
+                        self.log_message.emit("⚠️ Excel模板创建失败，使用默认方式")
+                else:
+                    # 有字段缺失，不使用模板，明确提醒用户
+                    missing_fields = []
+                    if not part_no:
+                        missing_fields.append("零件号")
+                    if not batch_no:
+                        missing_fields.append("批次号")
+                    if not inspector:
+                        missing_fields.append("检验员")
+
+                    if missing_fields:
+                        self.log_message.emit(f"⚠️ 未填写: {', '.join(missing_fields)}")
+                        self.log_message.emit("ℹ️ 请完整填写所有字段以使用Excel模板功能")
+                        self.log_message.emit("📝 当前使用默认方式创建Excel文件")
+                    else:
+                        self.log_message.emit("ℹ️ 使用默认方式创建Excel文件")
+
             self.status_changed.emit("系统就绪")
             self.system_initialized.emit()
 
@@ -132,7 +169,17 @@ class WorkingVoiceWorker(QThread):
 
                             is_matching_record = False
                             if record_text:
-                                if record_text == processed_text or record_text == original_text:
+                                # 🎯 修复：检查命令结果格式 [CMD]
+                                if record_text.startswith("[CMD]"):
+                                    # 命令结果直接匹配
+                                    if numbers and len(numbers) > 0:
+                                        if isinstance(record_number, (int, float)):
+                                            try:
+                                                if float(record_number) == numbers[0]:
+                                                    is_matching_record = True
+                                            except:
+                                                pass
+                                elif record_text == processed_text or record_text == original_text:
                                     is_matching_record = True
                                 elif numbers and len(numbers) > 0:
                                     if isinstance(record_number, (int, float)):
@@ -147,7 +194,11 @@ class WorkingVoiceWorker(QThread):
                             if is_matching_record:
                                 has_new_record = True
 
-                                if isinstance(record_number, str) and record_text and record_text.strip():
+                                # 🎯 修复：优化显示逻辑，特别是命令结果
+                                if record_text and record_text.startswith("[CMD]"):
+                                    # 命令结果：直接显示命令文本
+                                    display_text = record_text
+                                elif isinstance(record_number, str) and record_text and record_text.strip():
                                     display_text = f"[{record_id}] {record_number}"
                                 else:
                                     display_text = f"[{record_id}] {record_number}"
@@ -260,7 +311,23 @@ class WorkingVoiceWorker(QThread):
             self.status_changed.emit("已停止")
             self.log_message.emit(f"🎤 {message}")
             self.voice_command_state_changed.emit("stopped")
+        elif state == "command":
+            # 🎯 通过信号确保在主线程中添加到history_text
+            try:
+                # 直接使用接收到的格式化命令，不再添加时间戳
+                formatted_command = message
 
+                # 通过命令结果信号发送到主线程
+                self.command_result.emit(formatted_command)
+
+                # 记录到日志
+                self.log_message.emit(f"🎤 命令识别: {message}")
+                #self.append_log(f"🎤 命令识别: {message}") 在worker中会报错，是在GUI的命令
+
+            except Exception as e:
+                logger.error(f"发送命令到历史记录失败: {e}")
+
+    
     def _handle_vad_event(self, event_type: str, event_data: Dict):
         """处理VAD事件，更新语音能量显示"""
         energy = event_data.get('energy', 0)
@@ -396,7 +463,7 @@ class WorkingVoiceWorker(QThread):
                 'chunk_size': [0, 10, 5],
                 'encoder_chunk_look_back': 4,
                 'decoder_chunk_look_back': 1,
-                'description': '自定义模式 - 使用config.yaml中的VAD设置，支持小数识别优化'
+                'description': '自定义模式 - 自定义VAD设置和优化小数'
             }
         }
         
@@ -556,13 +623,20 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.current_mode = 'customized'  # 设置默认模式，必须在init_ui之前
         self.voice_energy_bar = None  # 语音能量条
         self._excel_info_shown = False  # 防止重复显示Excel信息
+
+        # 输入验证相关属性
+        self.part_no_input = None
+        self.batch_no_input = None
+        self.inspector_input = None
+        self.validation_errors = {}
+
         self.init_ui()
         self.setup_timer()
 
     def init_ui(self):
         """初始化界面"""
-        self.setWindowTitle("FunASR语音识别系统 v2.3")
-        self.setMinimumSize(900, 600)
+        self.setWindowTitle("FunASR语音识别系统 v2.4")
+        self.setMinimumSize(700, 890)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -624,7 +698,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.mode_combo.setCurrentText("customized")  # 默认使用自定义模式以支持小数识别优化
         self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         
-        self.mode_description = QLabel("自定义模式 - 使用config.yaml中的VAD设置，支持小数识别优化（推荐）")
+        self.mode_description = QLabel("自定义模式 - config自定义VAD，小数优化")
         self.mode_description.setWordWrap(True)
         self.mode_description.setStyleSheet("color: #555; font-size: 12px;")
         
@@ -632,6 +706,45 @@ class WorkingSimpleMainWindow(QMainWindow):
         mode_layout.addRow("", self.mode_description)
         
         layout.addWidget(mode_group)
+
+        # 添加输入信息组
+        input_group = QGroupBox("报告信息")
+        input_layout = QFormLayout(input_group)
+
+        # 零件号输入
+        self.part_no_input = QLineEdit()
+        self.part_no_input.setMinimumHeight(30)
+        self.part_no_input.setPlaceholderText("请输入零件号，如: PART-A001")
+        self.part_no_input.textChanged.connect(self.validate_part_no)
+        input_layout.addRow("零件号 *:", self.part_no_input)
+
+        # 批次号输入
+        self.batch_no_input = QLineEdit()
+        self.batch_no_input.setMinimumHeight(30)
+        self.batch_no_input.setPlaceholderText("请输入批次号，如: B20250105")
+        self.batch_no_input.textChanged.connect(self.validate_batch_no)
+        input_layout.addRow("批次号 *:", self.batch_no_input)
+
+        # 检验员输入
+        self.inspector_input = QLineEdit()
+        self.inspector_input.setMinimumHeight(30)
+        self.inspector_input.setPlaceholderText("请输入检验员姓名，如: 张三")
+        self.inspector_input.textChanged.connect(self.validate_inspector)
+        input_layout.addRow("检验员 *:", self.inspector_input)
+
+        # 添加分隔线
+        separator_line = QFrame()
+        separator_line.setFrameShape(QFrame.HLine)
+        separator_line.setFrameShadow(QFrame.Sunken)
+        input_layout.addRow(separator_line)
+
+        # 添加说明文字
+        info_label = QLabel("⚠️ 带星号(*)的字段为必填项，\n请在开始识别前填写完整")
+        info_label.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
+        info_label.setWordWrap(True)
+        input_layout.addRow(info_label)
+
+        layout.addWidget(input_group)
 
         control_group = QGroupBox("控制")
         control_layout = QVBoxLayout(control_group)
@@ -660,7 +773,7 @@ class WorkingSimpleMainWindow(QMainWindow):
         info_layout = QVBoxLayout(info_group)
 
         info_text = QLabel(
-            "📖 使用说明:\n\n"
+            "📖 使用说明:\n"
             "1. 点击'开始连续识别'启动系统\n"
             "2. 对着麦克风清晰说话\n"
             "3. 系统会连续识别语音内容\n"
@@ -678,9 +791,17 @@ class WorkingSimpleMainWindow(QMainWindow):
             "• ESC键 - 停止识别"
         )
         info_text.setWordWrap(True)
+        info_text.setTextInteractionFlags(Qt.TextSelectableByMouse)  # 可选中文本（可选）
         info_text.setStyleSheet("color: #555; padding: 5px;")
-        info_layout.addWidget(info_text)
+        #info_layout.addWidget(info_text)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)  # 关键：让 QLabel 自适应宽度
+        scroll_area.setWidget(info_text)
 
+        # 将滚动区域加入布局
+        info_layout.addWidget(scroll_area)
         layout.addWidget(info_group)
 
         system_group = QGroupBox("系统信息")
@@ -892,10 +1013,42 @@ class WorkingSimpleMainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
 
+        # 🎯 修复：强制验证所有必填字段
+        self.validate_part_no(self.part_no_input.text() if self.part_no_input else "")
+        self.validate_batch_no(self.batch_no_input.text() if self.batch_no_input else "")
+        self.validate_inspector(self.inspector_input.text() if self.inspector_input else "")
+
+        # 验证输入信息
+        if not self.are_inputs_valid():
+            error_messages = list(self.validation_errors.values())
+            QMessageBox.warning(
+                self, '输入验证失败',
+                f"请修正以下错误后再开始识别:\n\n" + "\n".join(f"• {msg}" for msg in error_messages),
+                QMessageBox.Ok
+            )
+            self.append_log("❌ 启动失败：请填写所有必填字段")
+            return  # 阻止启动
+        else:
+            self.append_log("✅ 输入验证通过")
+
+        # 获取输入值
+        input_values = self.get_input_values()
+        part_no = input_values['part_no']
+        batch_no = input_values['batch_no']
+        inspector = input_values['inspector']
+
+        self.append_log(f"📋 报告信息: 零件号={part_no}, 批次号={batch_no}, 检验员={inspector}")
+
         self.start_button.setEnabled(False)
         self.pause_button.setEnabled(True)
         self.stop_button.setEnabled(True)
         self.mode_combo.setEnabled(False)  # 运行时禁用模式更改
+
+        # 禁用输入框，防止运行时修改
+        self.part_no_input.setEnabled(False)
+        self.batch_no_input.setEnabled(False)
+        self.inspector_input.setEnabled(False)
+
         self.status_label.setText("🟢 正在启动...")
         self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50; padding: 10px;")
 
@@ -928,9 +1081,13 @@ class WorkingSimpleMainWindow(QMainWindow):
             
         self.worker = WorkingVoiceWorker(mode=self.current_mode)
         self.worker.voice_activity.connect(self.update_voice_energy)
-        
+
+        # 传递输入信息到worker
+        self.worker.set_input_values(input_values)
+
         self.worker.log_message.connect(self.append_log)
         self.worker.recognition_result.connect(self.display_result)
+        self.worker.command_result.connect(self.handle_command_result)
         self.worker.partial_result.connect(self.update_partial_result)
         self.worker.status_changed.connect(self.update_status)
         self.worker.voice_command_state_changed.connect(self.handle_voice_command_state_change)
@@ -990,6 +1147,12 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         self.mode_combo.setEnabled(True)  # 重新启用模式更改
         self.pause_button.setText("⏸️ 暂停")
+
+        # 重新启用输入框
+        self.part_no_input.setEnabled(True)
+        self.batch_no_input.setEnabled(True)
+        self.inspector_input.setEnabled(True)
+
         self.timer.stop()
 
         self.status_label.setText("🔴 已停止")
@@ -1028,7 +1191,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                         file_mtime = os.path.getmtime(file_path)
                         mtime_str = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
-                        record_count = len(excel_exporter._session_data) if hasattr(excel_exporter, '_session_data') else 0
+                        record_count = len(excel_exporter.get_session_data())
 
                         if record_count == 0:
                             try:
@@ -1192,6 +1355,53 @@ class WorkingSimpleMainWindow(QMainWindow):
             #self.status_bar.showMessage("已停止 - 语音命令控制")
             self.append_log("🎤 语音命令：系统已停止，点击'🎤 开始识别'按钮重新开始")
 
+    def add_command_to_history(self, command_message: str):
+        """将命令添加到历史记录"""
+        try:
+            def update_ui():
+                # 获取当前时间戳
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H:%M:%S")
+
+                # 创建命令记录格式，类似于数字记录但标记为命令
+                formatted_command = f"[CMD] {timestamp} {command_message}"
+
+                # 添加到历史文本框
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                cursor.insertText(f"{formatted_command}\n")
+
+                # 滚动到底部
+                self.history_text.ensureCursorVisible()
+
+                # 同时添加到历史记录列表（如果存在）
+                if hasattr(self, 'history_data'):
+                    self.history_data.append({
+                        'type': 'command',
+                        'content': command_message,
+                        'timestamp': timestamp,
+                        'formatted': formatted_command
+                    })
+
+            # 在主线程中更新UI
+            if hasattr(self, 'history_text'):
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, update_ui)
+
+        except Exception as e:
+            self.append_log(f"❌ 添加命令到历史记录失败: {e}")
+
+    def _add_to_history_text(self, text: str):
+        """直接添加文本到历史文本框"""
+        try:
+            if hasattr(self, 'history_text'):
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                cursor.insertText(f"{text}\n")
+                self.history_text.ensureCursorVisible()
+        except Exception as e:
+            logger.error(f"添加文本到历史记录失败: {e}")
+
     def display_result(self, result):
         """显示识别结果 - 只显示record类型的信息"""
         if not result or not result.strip():
@@ -1207,9 +1417,31 @@ class WorkingSimpleMainWindow(QMainWindow):
             return
 
         def update_ui():
-            self.current_text_label.setText(f"识别结果: {result}")
+            # 获取当前标准序号（如果可用）
+            standard_id = ""
+            try:
+                if hasattr(self, 'worker') and self.worker and hasattr(self.worker, 'voice_system') and self.worker.voice_system:
+                    if hasattr(self.worker.voice_system, 'excel_exporter') and self.worker.voice_system.excel_exporter:
+                        standard_id = self.worker.voice_system.excel_exporter.current_standard_id
+            except Exception as e:
+                logger.debug(f"获取标准序号失败: {e}")
 
-            history_entry = f"🔢 {result}"
+            # 构建显示文本
+            if standard_id:
+                display_text = f"标准序号{standard_id}: {result}"
+            else:
+                display_text = f"识别结果: {result}"
+
+            self.current_text_label.setText(display_text)
+
+            # 构建历史记录条目
+            if result.startswith("[CMD]"):
+                # 命令记录格式
+                history_entry = f"🎤 {result}"
+            elif standard_id:
+                history_entry = f"🔢 [标准序号{standard_id}] {result}"
+            else:
+                history_entry = f"🔢 {result}"
 
             if hasattr(self, 'history_text') and self.history_text:
                 self.history_text.append(history_entry)
@@ -1220,13 +1452,15 @@ class WorkingSimpleMainWindow(QMainWindow):
                 self.history_text.setTextCursor(cursor)
 
             if hasattr(self, 'append_log'):
-                self.append_log(f"语音识别(record): {result}")
+                if standard_id:
+                    self.append_log(f"语音识别(record) [标准序号{standard_id}]: {result}")
+                else:
+                    self.append_log(f"语音识别(record): {result}")
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, update_ui)
 
-
-        # 替换为logger.info，这样可以受日志级别控制
+        # 记录日志
         logger.info(f"🎤 识别(record): {result}")
         
     def update_partial_result(self, text):
@@ -1273,10 +1507,10 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.current_mode = mode
         
         mode_descriptions = {
-            'fast': '快速模式 - 低延迟，识别速度快，适合实时交互',
-            'balanced': '平衡模式 - 识别准确度和速度的良好平衡，默认推荐',
-            'accuracy': '精确模式 - 高准确度，更注重识别质量，但延迟较高',
-            'customized': '自定义模式 - 使用config.yaml中的VAD设置，支持小数识别优化（推荐）'
+            'fast': '快速模式 - 低延迟，识别速度快，实时交互',
+            'balanced': '平衡模式 - 识别准确度和速度平衡，默认',
+            'accuracy': '精确模式 - 高准确度，注重识别质量，但延迟较高',
+            'customized': '自定义模式 - 自定义VAD和优化小数识别'
         }
         
         self.mode_description.setText(mode_descriptions.get(mode, '平衡模式'))
@@ -1311,8 +1545,15 @@ class WorkingSimpleMainWindow(QMainWindow):
             self._excel_file_paths = []
             
         if event.button() == Qt.LeftButton:
-            # 获取点击位置
-            cursor = self.history_text.cursorForPosition(event.pos())
+            # 获取点击位置 (兼容PySide6 6.6+)
+            # pos() 在新版本中已弃用，使用 position() 替代
+            try:
+                # 优先使用新方法
+                position = event.position()
+                cursor = self.history_text.cursorForPosition(position.toPoint())
+            except AttributeError:
+                # 回退到旧方法 (向后兼容)
+                cursor = self.history_text.cursorForPosition(event.pos())
             cursor.select(QTextCursor.LineUnderCursor)
             line_text = cursor.selectedText().strip()
 
@@ -1470,6 +1711,131 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.append_log(f"✅ 系统初始化完成，准备开始识别... (当前模式: {self.current_mode})")
         self.current_text_label.setText("系统就绪，可以开始说话了...")
 
+    def validate_part_no(self, text):
+        """验证零件号输入"""
+        text = text.strip()
+        if not text:
+            self.validation_errors['part_no'] = "零件号不能为空"
+            self.part_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        elif len(text) < 3:
+            self.validation_errors['part_no'] = "零件号至少需要3个字符"
+            self.part_no_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
+        elif len(text) > 20:
+            self.validation_errors['part_no'] = "零件号不能超过20个字符"
+            self.part_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        else:
+            self.validation_errors.pop('part_no', None)
+            self.part_no_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
+
+        self.update_start_button_state()
+
+    def validate_batch_no(self, text):
+        """验证批次号输入"""
+        text = text.strip()
+        if not text:
+            self.validation_errors['batch_no'] = "批次号不能为空"
+            self.batch_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        elif len(text) < 3:
+            self.validation_errors['batch_no'] = "批次号至少需要3个字符"
+            self.batch_no_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
+        elif len(text) > 15:
+            self.validation_errors['batch_no'] = "批次号不能超过15个字符"
+            self.batch_no_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        else:
+            self.validation_errors.pop('batch_no', None)
+            self.batch_no_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
+
+        self.update_start_button_state()
+
+    def validate_inspector(self, text):
+        """验证检验员输入"""
+        text = text.strip()
+        if not text:
+            self.validation_errors['inspector'] = "检验员姓名不能为空"
+            self.inspector_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        elif len(text) < 2:
+            self.validation_errors['inspector'] = "检验员姓名至少需要2个字符"
+            self.inspector_input.setStyleSheet("border: 2px solid #ff9800; background-color: #fff3e0;")
+        elif len(text) > 10:
+            self.validation_errors['inspector'] = "检验员姓名不能超过10个字符"
+            self.inspector_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        elif not all(char.isalpha() or char in '·' for char in text):
+            self.validation_errors['inspector'] = "检验员姓名只能包含中文字符"
+            self.inspector_input.setStyleSheet("border: 2px solid #f44336; background-color: #ffebee;")
+        else:
+            self.validation_errors.pop('inspector', None)
+            self.inspector_input.setStyleSheet("border: 2px solid #4caf50; background-color: #e8f5e8;")
+
+        self.update_start_button_state()
+
+    def update_start_button_state(self):
+        """根据验证状态更新开始按钮"""
+        has_errors = len(self.validation_errors) > 0
+
+        if hasattr(self, 'start_button') and self.start_button:
+            if has_errors:
+                self.start_button.setEnabled(False)
+                error_messages = list(self.validation_errors.values())
+                self.start_button.setToolTip(f"请修正以下错误后再开始:\n" + "\n".join(f"• {msg}" for msg in error_messages))
+                self.start_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ccc;
+                        color: #666;
+                        font-size: 12px;
+                        font-weight: bold;
+                        border: none;
+                        border-radius: 6px;
+                        padding: 8px;
+                    }
+                """)
+            else:
+                self.start_button.setEnabled(True)
+                self.start_button.setToolTip("所有必填项已填写完整，可以开始识别")
+                self.start_button.setStyleSheet("""
+                    QPushButton {
+                        font-size: 12px;
+                        font-weight: bold;
+                        border: none;
+                        border-radius: 6px;
+                        padding: 8px;
+                        background-color: #2196f3;
+                        color: white;
+                    }
+                    QPushButton:hover {
+                        background-color: #1976d2;
+                    }
+                    QPushButton:pressed {
+                        background-color: #0d47a1;
+                    }
+                """)
+
+    def get_input_values(self):
+        """获取输入框的值"""
+        return {
+            'part_no': self.part_no_input.text().strip() if self.part_no_input else "",
+            'batch_no': self.batch_no_input.text().strip() if self.batch_no_input else "",
+            'inspector': self.inspector_input.text().strip() if self.inspector_input else ""
+        }
+
+    def clear_input_fields(self):
+        """清空输入框"""
+        if self.part_no_input:
+            self.part_no_input.clear()
+            self.part_no_input.setStyleSheet("")
+        if self.batch_no_input:
+            self.batch_no_input.clear()
+            self.batch_no_input.setStyleSheet("")
+        if self.inspector_input:
+            self.inspector_input.clear()
+            self.inspector_input.setStyleSheet("")
+
+        self.validation_errors.clear()
+        self.update_start_button_state()
+
+    def are_inputs_valid(self):
+        """检查所有输入是否有效"""
+        return len(self.validation_errors) == 0
+
     def keyPressEvent(self, event):
         """处理按键事件"""
         if event.key() == Qt.Key_Escape:
@@ -1499,6 +1865,22 @@ class WorkingSimpleMainWindow(QMainWindow):
                 event.ignore()
         else:
             event.accept()
+
+    def handle_command_result(self, command_text: str):
+        """处理命令结果，添加到历史记录"""
+        try:
+            # 直接添加到历史文本框
+            if hasattr(self, 'history_text'):
+                self.history_text.append(command_text)
+                self.recognition_count += 1
+
+                # 滚动到底部
+                cursor = self.history_text.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                self.history_text.setTextCursor(cursor)
+
+        except Exception as e:
+            logger.error(f"处理命令结果失败: {e}")
 
 
 def main():

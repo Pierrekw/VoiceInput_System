@@ -31,10 +31,17 @@ import logging
 from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
+<<<<<<< HEAD:funasr_voice_TENVAD.py
 try:
     from debug.debug_performance_tracker import debug_tracker
 except ImportError:
     debug_tracker = None
+=======
+#try:
+    #from debug.debug_performance_tracker import debug_tracker
+#except ImportError:
+    #debug_tracker = None
+>>>>>>> origin/feature/integrated-voice-recognition:New20251027/funasr_voice_tenvad.py
 
 # TEN VAD相关
 TEN_VAD_AVAILABLE = False
@@ -166,6 +173,18 @@ except ImportError as e:
     logger.error(f"❌ FunASR 不可用: {e}")
     AutoModel = None
 
+# 导入配置加载模块
+config_loader: Any = None
+CONFIG_AVAILABLE = False
+
+try:
+    from config_loader import config
+    config_loader = config
+    CONFIG_AVAILABLE = True
+except ImportError:
+    logger.error("配置加载模块不可用，使用默认配置")
+    CONFIG_AVAILABLE = False
+
 @dataclass
 class RecognitionResult:
     """语音识别结果数据类"""
@@ -187,7 +206,8 @@ class VADConfig:
 @dataclass
 class FunASRConfig:
     """FunASR配置"""
-    model_path: str = "f:/04_AI/01_Workplace/Voice_Input/model/fun"
+    model_path: str = "C:/Users/wangp2/VoiceInput_f1.0/model/fun" #model/cn
+    
     device: str = "cpu"
     chunk_size: Optional[List[int]] = None
     encoder_chunk_look_back: int = 4
@@ -786,13 +806,13 @@ class FunASRVoiceRecognizer:
         # 如果检测到语音，添加到语音缓冲区
         if is_speech:
             # 记录语音输入开始（如果是新的语音段）
-            if vad_event == "speech_start" and debug_tracker:
-                debug_tracker.record_voice_input_start(audio_energy)
+            #if vad_event == "speech_start":and debug_tracker:
+                #debug_tracker.record_voice_input_start(audio_energy)
 
             self._speech_buffer.extend(audio_data)
 
             # 定期进行流式识别
-            if len(self._speech_buffer) >= self.sample_rate * 1:  # 1秒音频
+            if len(self._speech_buffer) >= self.sample_rate * 1:  # 0.5-1秒音频
                 self._perform_streaming_recognition()
         else:
             # 如果静音时间足够长且有语音缓冲区，进行最终识别
@@ -802,9 +822,9 @@ class FunASRVoiceRecognizer:
 
                 if len(self._speech_buffer) >= self.sample_rate * self.vad_config.min_speech_duration:
                     # 记录语音输入结束和ASR开始
-                    if debug_tracker:
-                        debug_tracker.record_voice_input_end(len(self._speech_buffer) / self.sample_rate)
-                        debug_tracker.record_asr_start(len(self._speech_buffer))
+                    #if debug_tracker:
+                    #    debug_tracker.record_voice_input_end(len(self._speech_buffer) / self.sample_rate)
+                    #    debug_tracker.record_asr_start(len(self._speech_buffer))
 
                     self._perform_final_recognition()
 

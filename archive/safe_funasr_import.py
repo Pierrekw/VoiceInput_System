@@ -30,7 +30,7 @@ def safe_import_funasr():
     try:
         # 步骤1: 设置FFmpeg环境
         print("📦 步骤1: 设置FFmpeg环境...")
-        from setup_ffmpeg_env import setup_ffmpeg
+        from .setup_ffmpeg_env import setup_ffmpeg
         if not setup_ffmpeg():
             print("❌ FFmpeg环境设置失败，但继续尝试导入FunASR")
         else:
@@ -77,7 +77,7 @@ def safe_import_funasr():
 print("🔄 执行预导入检查...")
 
 # 立即设置FFmpeg环境
-from setup_ffmpeg_env import setup_ffmpeg
+from .setup_ffmpeg_env import setup_ffmpeg
 setup_ffmpeg()
 
 # 尝试预导入FunASR

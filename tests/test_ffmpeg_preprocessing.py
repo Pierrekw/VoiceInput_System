@@ -16,7 +16,7 @@ def test_ffmpeg_preprocessing():
 
     # 检查配置
     try:
-        from config_loader import config
+        from utils.config_loader import config
         ffmpeg_enabled = config.is_ffmpeg_preprocessing_enabled()
         filter_chain = config.get_ffmpeg_filter_chain()
         ffmpeg_options = config.get_ffmpeg_options()

@@ -12,7 +12,7 @@ import math
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from logging_utils import LoggingManager
+from utils.logging_utils import LoggingManager
 
 logger = LoggingManager.get_logger(
     name='gui_components',

@@ -1558,8 +1558,10 @@ class WorkingSimpleMainWindow(QMainWindow):
             except AttributeError:
                 # 回退到旧方法 (向后兼容)
                 cursor = self.history_text.cursorForPosition(event.pos())
-            cursor.select(QTextCursor.LineUnderCursor)
-            line_text = cursor.selectedText().strip()
+            # 使用更可靠的block.text()方法获取当前行内容
+            # 避免LineUnderCursor在边界情况下的意外行为
+            block = cursor.block()
+            line_text = block.text().strip()
 
             # 检查是否点击了Excel文件相关内容
             # 精确逻辑：包含.xlsx但不包含"文件名"，且不是空行

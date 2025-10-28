@@ -148,12 +148,27 @@ class ExcelExporterEnhanced:
         """创建新Excel文件"""
         try:
             # 创建报告模板数据
-            headers = ["测量报告", "", "", "", "", "", "", "", ""]
-            info_row = ["零件号: " + self.part_no, "", "批次号: " + self.batch_no, "", "检验员: " + self.inspector, "", "", "", ""]
+            # 第1行：合并单元格的标题行
+            title_row = ["测量报告", "", "", "", "", "", "", "", ""]
+
+            # 第2行：基本信息行，合理分布各列
+            info_row = [
+                "零件号: " + self.part_no,           # 第1列
+                "",                                 # 第2列
+                "",                                 # 第3列
+                "",                                 # 第4列
+                "批次号: " + self.batch_no,           # 第5列
+                "",                                 # 第6列
+                "",                                 # 第7列
+                "检验员: " + self.inspector,         # 第8列
+                ""                                  # 第9列
+            ]
+
+            # 第3行：数据表头
             data_headers = ["标准序号", "标准内容", "下限", "上限", "测量值", "判断结果", "偏差", "time", "语音录入编号"]
 
             # 创建DataFrame
-            data = [headers, info_row, data_headers]
+            data = [title_row, info_row, data_headers]
             df = pd.DataFrame(data)
 
             # 保存Excel

@@ -53,7 +53,7 @@ class ExcelExporterEnhanced:
         self.voice_id_counter: int = 0
         self.deleted_voice_ids: set = set()
         self.voice_id_to_row: Dict[int, int] = {}
-        self.next_insert_row: int = 2
+        self.next_insert_row: int = 4  # 跳过3行表头
         self.active_record_count: int = 0
         self.current_standard_id: int = 100
         self.template_path: str = config.get("excel.template_path", "reports/templates/enhanced_measure_template.xlsx")
@@ -165,7 +165,7 @@ class ExcelExporterEnhanced:
             ]
 
             # 第3行：数据表头
-            data_headers = ["标准序号", "标准内容", "下限", "上限", "测量值", "判断结果", "偏差", "time", "语音录入编号"]
+            data_headers = ["标准序号", "标准内容", "下限", "上限", "测量序号", "测量值", "判断结果", "偏差", "time", "语音录入编号"]
 
             # 创建DataFrame
             data = [title_row, info_row, data_headers]
@@ -244,18 +244,18 @@ class ExcelExporterEnhanced:
             if worksheet:
                 worksheet.cell(row=row, column=1, value=self.current_standard_id)
 
-            # 写入测量值 (第5列) - 对应"测量值"
-            if isinstance(val, str):
-                worksheet.cell(row=row, column=5, value=val)
-            else:
-                worksheet.cell(row=row, column=5, value=self._float_cell(val))
-
-            # 写入时间戳 (第8列) - 对应"time"
-            worksheet.cell(row=row, column=8, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-            # 写入语音录入编号 (第9列) - 使用已生成的record ID
+            # 写入测量序号 (第5列) - Excel ID
             if worksheet:
-                worksheet.cell(row=row, column=9, value=voice_id)
+                worksheet.cell(row=row, column=5, value=voice_id)
+
+            # 写入测量值 (第6列) - 对应"测量值"
+            if isinstance(val, str):
+                worksheet.cell(row=row, column=6, value=val)
+            else:
+                worksheet.cell(row=row, column=6, value=self._float_cell(val))
+
+            # 写入时间戳 (第9列) - 对应"time"
+            worksheet.cell(row=row, column=9, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
             # 更新内存映射
             self.voice_id_to_row[voice_id] = row

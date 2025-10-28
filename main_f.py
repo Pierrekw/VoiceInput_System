@@ -504,7 +504,7 @@ class FunASRVoiceSystem:
             if not hasattr(self, 'number_results'):
                 self.number_results = []
 
-            self.number_results.append((command_id, standard_id, display_text))
+            self.number_results.append((standard_id, command_id, display_text))
 
             logger.debug(f"语音命令已添加到结果列表: {display_text}")
 

@@ -53,7 +53,7 @@ class ExcelExporterEnhanced:
         self.voice_id_counter: int = 0
         self.deleted_voice_ids: set = set()
         self.voice_id_to_row: Dict[int, int] = {}
-        self.next_insert_row: int = 4  # 跳过3行表头
+        self.next_insert_row: int = 5  # 跳过4行表头(包括空行)
         self.active_record_count: int = 0
         self.current_standard_id: int = 100
         self.template_path: str = config.get("excel.template_path", "reports/templates/enhanced_measure_template.xlsx")
@@ -118,7 +118,7 @@ class ExcelExporterEnhanced:
             workbook = load_workbook(self.filename)
             worksheet = workbook.active
 
-            # 从第5行开始查找（因为模板第4行是表头，第5行开始是数据）
+            # 从第5行开始查找（统一从第5行开始输入数据）
             data_start_row = 5
 
             # 查找第一个完全为空的行
@@ -144,6 +144,82 @@ class ExcelExporterEnhanced:
             logger.error(f"查找下一个可用行失败: {e}")
             self.next_insert_row = 5  # 回退到默认值
 
+    def set_column_widths(self) -> None:
+        """设置Excel列宽"""
+        try:
+            from openpyxl import load_workbook
+            workbook = load_workbook(self.filename)
+            worksheet = workbook.active
+
+            # 设置列宽（基于内容合理设置）
+            column_widths = {
+                'A': 12,   # 标准序号
+                'B': 20,   # 标准内容
+                'C': 10,   # 下限
+                'D': 10,   # 上限
+                'E': 10,   # 测量序号
+                'F': 12,   # 测量值
+                'G': 10,   # 判断结果
+                'H': 10,   # 偏差
+                'I': 22,   # time
+                'J': 12    # 语音录入编号
+            }
+
+            for col, width in column_widths.items():
+                worksheet.column_dimensions[col].width = width
+
+            workbook.save(self.filename)
+            workbook.close()
+            logger.debug("Excel列宽设置完成")
+
+        except Exception as e:
+            logger.warning(f"设置列宽失败: {e}")
+
+    def apply_table_borders(self, worksheet=None) -> None:
+        """为整个表格添加网格边框"""
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.styles import Border, Side, Font
+
+            # 如果没有传入worksheet，则从文件加载
+            if worksheet is None:
+                workbook = load_workbook(self.filename)
+                worksheet = workbook.active
+                should_save = True
+            else:
+                should_save = False
+
+            # 定义边框样式（细线）
+            thin_border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+
+            # 找到数据区域
+            max_row = worksheet.max_row
+            if max_row < 2:
+                logger.warning("Excel文件没有足够的行，跳过边框设置")
+                return
+
+            # 为第2行到最后一行的第1列到第10列添加边框
+            for row in range(2, max_row + 1):
+                for col in range(1, 11):  # 第1列到第10列
+                    cell = worksheet.cell(row=row, column=col)
+                    # 无论是否有内容都添加边框，形成完整的表格网格
+                    cell.border = thin_border
+
+            # 如果是从文件加载的，需要保存
+            if should_save:
+                workbook.save(self.filename)
+                workbook.close()
+
+            logger.info("Excel表格边框设置完成")
+
+        except Exception as e:
+            logger.warning(f"设置表格边框失败: {e}")
+
     def create_new_file(self) -> None:
         """创建新Excel文件"""
         try:
@@ -155,24 +231,30 @@ class ExcelExporterEnhanced:
             info_row = [
                 "零件号: " + self.part_no,           # 第1列
                 "",                                 # 第2列
-                "",                                 # 第3列
+                "批次号: " + self.batch_no,          # 第3列 (C2)
                 "",                                 # 第4列
-                "批次号: " + self.batch_no,           # 第5列
+                "检验员: " + self.inspector,         # 第5列 (E2)
                 "",                                 # 第6列
                 "",                                 # 第7列
-                "检验员: " + self.inspector,         # 第8列
+                "",                                 # 第8列
                 ""                                  # 第9列
             ]
 
-            # 第3行：数据表头
-            data_headers = ["标准序号", "标准内容", "下限", "上限", "测量序号", "测量值", "判断结果", "偏差", "time", "语音录入编号"]
+            # 第3行：空行
+            empty_row = ["", "", "", "", "", "", "", "", "", ""]
+
+            # 第4行：数据表头
+            data_headers = ["标准序号", "标准内容", "下限", "上限", "测量序号", "测量值", "判断结果", "偏差", "时间戳", "语音录入编号"]
 
             # 创建DataFrame
-            data = [title_row, info_row, data_headers]
+            data = [title_row, info_row, empty_row, data_headers]
             df = pd.DataFrame(data)
 
             # 保存Excel
             df.to_excel(self.filename, index=False, header=False)
+
+            # 设置列宽
+            self.set_column_widths()
 
             logger.info(f"创建新Excel文件: {self.filename}")
 
@@ -244,18 +326,18 @@ class ExcelExporterEnhanced:
             if worksheet:
                 worksheet.cell(row=row, column=1, value=self.current_standard_id)
 
-            # 写入测量序号 (第5列) - Excel ID
-            if worksheet:
-                worksheet.cell(row=row, column=5, value=voice_id)
-
             # 写入测量值 (第6列) - 对应"测量值"
             if isinstance(val, str):
                 worksheet.cell(row=row, column=6, value=val)
             else:
                 worksheet.cell(row=row, column=6, value=self._float_cell(val))
 
-            # 写入时间戳 (第9列) - 对应"time"
+            # 写入时间戳 (第9列) - 对应"时间戳"
             worksheet.cell(row=row, column=9, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+            # 写入语音录入编号 (第10列) - voice_id
+            if worksheet:
+                worksheet.cell(row=row, column=10, value=voice_id)
 
             # 更新内存映射
             self.voice_id_to_row[voice_id] = row
@@ -303,6 +385,9 @@ class ExcelExporterEnhanced:
 
             # 4. 添加条件格式
             self._apply_conditional_formatting(worksheet)
+
+            # 5. 添加表格边框
+            self.apply_table_borders(worksheet)
 
             workbook.save(self.filename)
             workbook.close()
@@ -401,6 +486,10 @@ class ExcelExporterEnhanced:
                 warning_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
                 logger.info(f"已在Excel文件中显示测量规范文件缺失警告")
+
+                # 即使没有测量规范文件，也要填写测量序号
+                self._fill_measure_sequence_only(worksheet, data_start_row)
+
                 # 不执行测量规范查询，但继续格式化
                 logger.info("跳过测量规范查询，继续执行格式化")
                 return  # 正常返回，让Excel文件继续保存
@@ -430,7 +519,7 @@ class ExcelExporterEnhanced:
                     continue
 
                 try:
-                    standard_id = int(standard_id_cell.value)
+                    standard_id = int(standard_id_cell.value or 0)
                 except (ValueError, TypeError):
                     continue
 
@@ -444,7 +533,7 @@ class ExcelExporterEnhanced:
                     continue
 
                 try:
-                    measured_value = float(measured_value_cell.value)
+                    measured_value = float(measured_value_cell.value or 0)
                 except (ValueError, TypeError):
                     continue
 
@@ -468,6 +557,38 @@ class ExcelExporterEnhanced:
 
         except Exception as e:
             logger.error(f"应用测量规范逻辑失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _fill_measure_sequence_only(self, worksheet: Worksheet, data_start_row: int) -> None:
+        """仅填写测量序号，不应用测量规范"""
+        try:
+            logger.info("🔢 开始填写测量序号")
+            updated_count = 0
+
+            for row in range(data_start_row, worksheet.max_row + 1):
+                # 检查该行是否有数据（检查第1列标准序号或第6列测量值）
+                standard_id_cell = worksheet.cell(row=row, column=1)
+                measured_value_cell = worksheet.cell(row=row, column=6)
+
+                # 如果既有标准序号又有测量值，则填写测量序号
+                if (standard_id_cell.value is not None and
+                    measured_value_cell.value is not None):
+
+                    try:
+                        standard_id = int(standard_id_cell.value or 0)
+                        # 写入序号/Excel ID (第5列) - 在stop阶段填充
+                        excel_id = row - 4  # 第5行开始，所以excel_id = row - 4
+                        worksheet.cell(row=row, column=5, value=excel_id)
+                        updated_count += 1
+                        logger.debug(f"第{row}行：标准序号={standard_id}, 测量序号={excel_id}")
+                    except (ValueError, TypeError):
+                        continue
+
+            logger.info(f"✅ 测量序号填写完成：更新了{updated_count}行数据")
+
+        except Exception as e:
+            logger.error(f"填写测量序号失败: {e}")
             import traceback
             traceback.print_exc()
 

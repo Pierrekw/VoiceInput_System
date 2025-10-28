@@ -1679,7 +1679,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                     # 创建一个新的文本块来设置文件名样式，避免影响其他文本
                     char_format = QTextCharFormat()
                     char_format.setForeground(QColor("#2196F3"))  # 蓝色
-                    char_format.setUnderlineStyle(QTextCharFormat.SingleUnderline)  # 下划线
+                    #char_format.setUnderlineStyle(QTextCharFormat.SingleUnderline)  # 下划线
                     char_format.setFontItalic(True)  # 斜体
 
                     # 设置格式并插入文件名

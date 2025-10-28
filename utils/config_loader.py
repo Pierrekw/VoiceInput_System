@@ -89,6 +89,9 @@ class ConfigLoader:
                 "pause_commands": ["暂停", "暂停录音", "暂停识别", "pause", "暂停一下"],
                 "resume_commands": ["继续", "继续录音", "恢复", "恢复识别", "resume", "继续识别"],
                 "stop_commands": ["停止", "停止录音", "结束", "exit", "stop", "停止识别", "结束识别"],
+                "standard_id_commands": {
+                    "prefixes": ["切换", "设置", "切换到", "设置序号", "设置标准序号", "切换序号", "序号"]
+                },
                 "config": {
                     "match_mode": "fuzzy",
                     "min_match_length": 2,
@@ -358,6 +361,48 @@ class ConfigLoader:
     def get_stop_commands(self) -> list:
         """获取停止命令列表"""
         return self.get("voice_commands.stop_commands", [])
+    
+    def get_standard_id_commands(self) -> list:
+        """获取标准序号命令列表（向后兼容）"""
+        commands = self.get("voice_commands.standard_id_commands", [])
+
+        # 如果是新格式（包含prefixes），返回prefixes列表
+        if isinstance(commands, dict) and "prefixes" in commands:
+            return commands["prefixes"]
+        # 如果是旧格式（直接是命令列表），返回原列表
+        elif isinstance(commands, list):
+            return commands
+        # 其他情况返回空列表
+        return []
+
+    def get_standard_id_command_prefixes(self) -> list:
+        """获取标准序号命令前缀列表"""
+        commands = self.get("voice_commands.standard_id_commands", {})
+
+        # 如果是新格式（包含prefixes），返回prefixes列表
+        if isinstance(commands, dict) and "prefixes" in commands:
+            return commands["prefixes"]
+        # 如果是旧格式，尝试从命令列表中提取前缀
+        elif isinstance(commands, list) and commands:
+            # 从第一个命令提取数字前部分作为前缀
+            prefixes = set()
+            for command in commands:
+                # 使用正则表达式匹配数字前的中文部分
+                import re
+                match = re.match(r'^([^\d]+)', command)
+                if match:
+                    prefix = match.group(1)
+                    if prefix and len(prefix) > 0:
+                        prefixes.add(prefix)
+
+            # 如果没有找到有效前缀，使用默认前缀
+            if not prefixes:
+                return ["切换", "设置", "切换到", "设置序号"]
+
+            return sorted(list(prefixes), key=len, reverse=True)  # 按长度倒序，优先匹配长的前缀
+
+        # 默认前缀
+        return ["切换", "设置", "切换到", "设置序号"]
 
     def get_voice_command_config(self) -> dict:
         """获取语音命令识别配置"""

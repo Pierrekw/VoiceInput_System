@@ -2,7 +2,7 @@ import soundfile
 from funasr_onnx.paraformer_online_bin import Paraformer
 from pathlib import Path
 
-model_dir = "./model/fun_zh16k_onnx""
+model_dir = "./model/fun_zh16k_onnx"
 wav_path = tbd
 
 chunk_size = [5, 10, 5]

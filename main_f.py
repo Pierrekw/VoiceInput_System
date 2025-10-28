@@ -22,7 +22,6 @@ from datetime import datetime
 from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type, Sequence
 
 # 类型别名
-ExcelExporterType = Union[Type['ExcelExporter'], None]
 from enum import Enum
 
 # 配置基础设置
@@ -47,15 +46,15 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # 导入FunASR相关模块
-from funasr_voice_tenvad import FunASRVoiceRecognizer
-#from funasr_voice_module import FunASRVoiceRecognizer
+from funasr_voice_combined import FunASRVoiceRecognizer
+#from funasr_voice_module import FunASRVoiceRecognizer #能量阈值VAD
 from text_processor import TextProcessor, VoiceCommandProcessor
 
 # 导入性能监控模块
 from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
-from utils.debug_performance_tracker import debug_tracker
+#from debug.debug_performance_tracker import debug_tracker
 
 # 导入生产环境延迟记录器
 try:
@@ -73,11 +72,13 @@ except ImportError:
 
 # 导入Excel导出模块
 try:
-    from excel_exporter import ExcelExporter
+    from excel_utils import ExcelExporterEnhanced
     EXCEL_AVAILABLE = True
+    ExcelExporterType = ExcelExporterEnhanced
 except ImportError:
     EXCEL_AVAILABLE = False
-    ExcelExporter = None  # type: ignore
+    ExcelExporterEnhanced = None  # type: ignore
+    ExcelExporterType = None  # type: ignore
 
 # 使用统一的日志工具类
 import logging
@@ -152,6 +153,7 @@ class VoiceCommandType(Enum):
     PAUSE = "pause"
     RESUME = "resume"
     STOP = "stop"
+    STANDARD_ID = "standard_id"
     UNKNOWN = "unknown"
 
 class FunASRVoiceSystem:
@@ -188,13 +190,26 @@ class FunASRVoiceSystem:
         self.results_buffer: List[Dict[str, Any]] = []
         self.number_results: List[Tuple[int, Union[float, str], str]] = []  # (ID, number/str, original_text)
 
-        # 创建核心组件
-        self.recognizer = FunASRVoiceRecognizer(silent_mode=True)
+        # 当前标准序号状态
+        self.current_standard_id = 100  # 默认标准序号
+        self.standard_id_history: List[int] = [100]  # 标准序号历史记录
+
+        # 创建核心组件        
+        # 从配置加载 FunASR 模型路径
+        funasr_model_path = config_loader.get_funasr_path()
+        if not funasr_model_path:
+            logger.warning("未在配置中找到 FunASR 模型路径，使用默认路径 './model/fun'")
+            funasr_model_path = "./model/fun"
+
+        self.recognizer = FunASRVoiceRecognizer(
+            model_path=funasr_model_path,
+            silent_mode=True
+        )
         self.processor = TextProcessor()
         self.command_processor = VoiceCommandProcessor()
 
         # Excel导出器
-        self.excel_exporter: Optional[ExcelExporter] = None
+        self.excel_exporter: Optional[ExcelExporterEnhanced] = None
         self._setup_excel_exporter()
 
         # 日志设置
@@ -205,7 +220,8 @@ class FunASRVoiceSystem:
         self.voice_commands = {
             VoiceCommandType.PAUSE: config_loader.get_pause_commands(),
             VoiceCommandType.RESUME: config_loader.get_resume_commands(),
-            VoiceCommandType.STOP: config_loader.get_stop_commands()
+            VoiceCommandType.STOP: config_loader.get_stop_commands(),
+            VoiceCommandType.STANDARD_ID: config_loader.get_standard_id_commands()
         }
 
         # 加载语音命令识别配置
@@ -247,17 +263,48 @@ class FunASRVoiceSystem:
             reports_dir = os.path.join(os.getcwd(), "reports")
             os.makedirs(reports_dir, exist_ok=True)
 
-            # 生成文件名: report_yyyymmdd_hhmmss.xlsx
+            # 🎯 修复：使用正确的文件命名格式 (大写R)
+            # 暂时使用默认文件名，稍后在GUI中创建时使用模板
             now = datetime.now()
-            filename = f"report_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+            filename = f"Report_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
             filepath = os.path.join(reports_dir, filename)
 
-            self.excel_exporter = ExcelExporter(filename=filepath)
-            # 预先创建Excel文件，避免在首次识别后才创建
-            self.excel_exporter.create_new_file()
+            self.excel_exporter = ExcelExporterEnhanced(filename=filepath)
             logger.info(f"Excel导出器已设置: {filepath}")
         except Exception as e:
             logger.error(f"设置Excel导出器失败: {e}")
+
+    def setup_excel_from_gui(self, part_no: str, batch_no: str, inspector: str):
+        """从GUI设置Excel模板"""
+        if not EXCEL_AVAILABLE or not self.excel_exporter:
+            logger.warning("Excel导出模块不可用")
+            return False
+
+        try:
+            # 生成新的文件名: Report_零件号_批次号_timestamp.xlsx
+            now = datetime.now()
+            filename = f"Report_{part_no}_{batch_no}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+            # 更新Excel导出器的文件名
+            reports_dir = os.path.join(os.getcwd(), "reports")
+            filepath = os.path.join(reports_dir, filename)
+            self.excel_exporter.filename = filepath
+
+            # 使用模板创建Excel文件
+            success = self.excel_exporter.create_from_template(part_no, batch_no, inspector)
+            if success:
+                # 同步设置Excel导出器的标准序号
+                self.excel_exporter.current_standard_id = self.current_standard_id
+                logger.info(f"Excel模板已创建: {filepath}")
+                logger.debug(f"Excel导出器初始标准序号设置为: {self.current_standard_id}")
+                return True
+            else:
+                logger.warning(f"Excel模板创建失败，使用默认方式")
+                self.excel_exporter.create_new_file()
+                return False
+        except Exception as e:
+            logger.error(f"设置Excel模板失败: {e}")
+            return False
 
     def _log_voice_commands_config(self):
         """记录语音命令配置信息"""
@@ -290,6 +337,28 @@ class FunASRVoiceSystem:
     def set_vad_callback(self, callback):
         """设置VAD事件回调函数（用于语音能量显示）"""
         self.vad_callback = callback
+
+    def set_standard_id(self, standard_id: int):
+        """设置当前标准序号"""
+        # 支持所有100的倍数作为标准序号
+        if standard_id > 0 and standard_id % 100 == 0:
+            self.current_standard_id = standard_id
+            self.standard_id_history.append(standard_id)
+
+            # 同时更新Excel导出器的标准序号
+            if self.excel_exporter:
+                self.excel_exporter.current_standard_id = standard_id
+                logger.debug(f"Excel导出器标准序号已更新到: {standard_id}")
+
+            logger.info(f"🔢 标准序号已切换到: {standard_id}")
+            if hasattr(self, 'recognition_logger'):
+                self.recognition_logger.info(f"标准序号切换: {standard_id}")
+        else:
+            logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
+
+    def get_current_standard_id(self) -> int:
+        """获取当前标准序号"""
+        return self.current_standard_id
 
     def _notify_state_change(self, state: str, message: str = ""):
         """通知状态变化"""
@@ -354,6 +423,12 @@ class FunASRVoiceSystem:
         Returns:
             语音命令类型
         """
+        # 🔥 修复：优先检查标准序号命令
+        command_prefixes = config_loader.get_standard_id_command_prefixes()
+        standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
+        if standard_id:
+            return VoiceCommandType.STANDARD_ID
+
         # 转换命令字典格式以适配新的处理器
         command_dict = {
             command_type.value: keywords
@@ -370,6 +445,82 @@ class FunASRVoiceSystem:
                     return command_type
 
         return VoiceCommandType.UNKNOWN
+
+    def _handle_standard_id_command(self, text: str):
+        """
+        处理标准序号命令（使用模式匹配）
+
+        Args:
+            text: 识别的文本
+        """
+        # 获取标准序号命令前缀
+        command_prefixes = config_loader.get_standard_id_command_prefixes()
+
+        # 使用新的模式匹配方法
+        standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
+
+        if standard_id:
+            self.set_standard_id(standard_id)
+            logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
+
+            # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
+            command_display_text = f"[命令] 切换到标准序号 {standard_id}"
+            self._add_command_to_results(command_display_text, text, standard_id)
+        else:
+            # 回退到旧的逻辑（向后兼容）
+            logger.debug(f"模式匹配未成功，尝试回退逻辑")
+            # 提取数字
+            numbers = self.processor.extract_numbers(text)
+            if numbers:
+                standard_id = int(numbers[0])
+                # 检查是否为有效的标准序号（100的倍数）
+                if standard_id > 0 and standard_id % 100 == 0:
+                    self.set_standard_id(standard_id)
+                    logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
+
+                    # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
+                    command_display_text = f"[命令] 切换到标准序号 {standard_id}"
+                    self._add_command_to_results(command_display_text, text, standard_id)
+                else:
+                    logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
+            else:
+                logger.warning(f"未能从命令中提取有效的标准序号: '{text}'")
+
+    def _add_command_to_results(self, display_text: str, original_text: str, standard_id: int):
+        """
+        将语音命令添加到结果列表，以便GUI显示
+
+        Args:
+            display_text: 显示的文本
+            original_text: 原始识别的文本
+            standard_id: 标准序号
+        """
+        try:
+            # 生成唯一的命令ID
+            import time
+            command_id = f"CMD_{int(time.time() * 1000) % 100000}"
+
+            # 添加到number_results列表，格式与正常识别结果一致
+            if not hasattr(self, 'number_results'):
+                self.number_results = []
+
+            self.number_results.append((standard_id, command_id, display_text))
+
+            logger.debug(f"语音命令已添加到结果列表: {display_text}")
+
+            # 🎯 触发状态变化回调，通知GUI显示命令
+            if self.state_change_callback:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                formatted_command = f"🎤 [CMD] {timestamp} 🎤 语音命令: {display_text}"
+                self.state_change_callback("command", formatted_command)
+
+            # 添加到识别日志，确保命令被记录
+            if hasattr(self, 'recognition_logger'):
+                self.recognition_logger.info(f"语音命令识别: '{original_text}' -> {display_text}")
+
+        except Exception as e:
+            logger.error(f"添加命令到结果列表失败: {e}")
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
@@ -435,7 +586,7 @@ class FunASRVoiceSystem:
         terminal_time = time.time() - terminal_start
 
         # 记录终端显示时间
-        debug_tracker.record_terminal_display(processed_text)
+        #debug_tracker.record_terminal_display(processed_text)
 
         # 记录生产环境终端显示
         log_terminal_display(processed_text, float(terminal_time))
@@ -448,10 +599,21 @@ class FunASRVoiceSystem:
                 log_message += f" -> 提取数字: {numbers[0]}"
             self.recognition_logger.info(log_message)
 
+        # 检查语音命令
+        command_type = self.recognize_voice_command(processed_text)
+        if command_type == VoiceCommandType.STANDARD_ID:
+            # 处理标准序号命令
+            self._handle_standard_id_command(processed_text)
+            return
+        elif command_type != VoiceCommandType.UNKNOWN:
+            # 其他语音命令由现有逻辑处理
+            pass
+
         # 检查是否为特定文本
         special_text_match = self._check_special_text(processed_text)
-        
+
         # 处理纯数字结果或特定文本结果
+        logger.debug(f"处理结果检查: numbers={bool(numbers)}, excel_exporter={bool(self.excel_exporter)}, special_text_match={bool(special_text_match)}")
         if (numbers and self.excel_exporter) or (special_text_match and self.excel_exporter):
             # 添加到结果列表
             try:
@@ -459,10 +621,11 @@ class FunASRVoiceSystem:
                 excel_data: List[Tuple[Union[float, str], str, str]] = []
                 
                 if numbers:
-                    # 数字结果
-                    excel_data.append((numbers[0], original_text, processed_text))
+                    # 数字结果 - 处理所有识别到的数字
+                    for num in numbers:
+                        excel_data.append((num, original_text, processed_text))
                     result_type = "数字"
-                    result_value: Union[float, str] = numbers[0]
+                    result_value: Union[float, str] = f"{len(numbers)}个数字: {', '.join(map(str, numbers))}"
                 else:
                     # 特定文本结果
                     # 将特定文本直接写入Excel，而不是数值
@@ -484,7 +647,7 @@ class FunASRVoiceSystem:
 
                 # Excel写入结束
                 excel_time = time.time() - excel_start
-                debug_tracker.record_excel_write(processed_text, excel_time)
+                #debug_tracker.record_excel_write(processed_text, excel_time)
 
                 if excel_result:
                     record_id, record_number, record_text = excel_result[0]
@@ -530,13 +693,13 @@ class FunASRVoiceSystem:
 
         if result.text.strip():
             # 记录ASR结果完成
-            debug_tracker.record_asr_result(result.text, getattr(result, 'confidence', 0.0))
+            #debug_tracker.record_asr_result(result.text, getattr(result, 'confidence', 0.0))
 
             # 记录生产环境ASR完成
             log_asr_complete(result.text, 0.0)  # 这里可以传入实际的ASR处理时间
 
             # 文本处理开始
-            debug_tracker.record_text_processing_start(result.text)
+            #debug_tracker.record_text_processing_start(result.text)
             text_processing_start = time.time()
 
             processed = self.processor.process_text(result.text)
@@ -544,7 +707,7 @@ class FunASRVoiceSystem:
 
             # 文本处理结束
             text_processing_time = time.time() - text_processing_start
-            debug_tracker.record_text_processing_end(processed, len(numbers) > 0)
+            #debug_tracker.record_text_processing_end(processed, len(numbers) > 0)
 
             # 记录详细处理时间到日志
             logger.debug(f"[LATENCY] ASR结果: '{result.text}' | 文本处理: {text_processing_time*1000:.2f}ms")
@@ -552,7 +715,11 @@ class FunASRVoiceSystem:
             # 检查是否为语音命令
             command_type = self.recognize_voice_command(processed)
 
-            if command_type != VoiceCommandType.UNKNOWN:
+            if command_type == VoiceCommandType.STANDARD_ID:
+                # 直接处理标准序号命令
+                self._handle_standard_id_command(processed)
+            elif command_type != VoiceCommandType.UNKNOWN:
+                # 处理其他语音命令（暂停、继续、停止）
                 self.handle_voice_command(command_type)
             else:
                 # 处理普通识别结果
@@ -674,6 +841,9 @@ class FunASRVoiceSystem:
         except:
             pass
 
+        # Excel最终处理：重新编号
+        self._finalize_excel()
+
         # 输出性能分析报告
         try:
             performance_report = performance_monitor.export_performance_report()
@@ -692,6 +862,45 @@ class FunASRVoiceSystem:
 
         # 清理性能监控数据
         performance_monitor.clear_records()
+
+    def _finalize_excel(self):
+        """Excel最终处理：格式化、测量规范查询和保存"""
+        if not EXCEL_AVAILABLE or not self.excel_exporter:
+            return
+
+        try:
+            # 执行Excel最终格式化（包括测量规范查询、判断结果、格式化等）
+            logger.info("🔄 正在执行Excel最终格式化...")
+            success = self.excel_exporter.finalize_excel_file()
+
+            if success:
+                logger.info("✅ Excel最终格式化完成")
+
+                # 输出Excel文件信息
+                if os.path.exists(self.excel_exporter.filename):
+                    file_size = os.path.getsize(self.excel_exporter.filename)
+                    logger.info(f"📁 Excel文件已保存: {os.path.basename(self.excel_exporter.filename)}")
+                    logger.info(f"📊 文件大小: {self._format_file_size(file_size)}")
+
+                    # 统计记录数量
+                    record_count = len(self.excel_exporter.get_session_data())
+                    logger.info(f"📈 记录数量: {record_count} 条")
+            else:
+                logger.error("❌ Excel最终格式化失败")
+
+        except Exception as e:
+            logger.error(f"Excel最终处理失败: {e}")
+
+    def _format_file_size(self, size_bytes):
+        """格式化文件大小显示"""
+        if size_bytes == 0:
+            return "0 B"
+        size_names = ["B", "KB", "MB", "GB"]
+        i = 0
+        while size_bytes >= 1024 and i < len(size_names) - 1:
+            size_bytes /= 1024.0
+            i += 1
+        return f"{size_bytes:.1f} {size_names[i]}"
 
     def run_recognition_cycle(self):
         """运行识别循环"""
@@ -745,7 +954,7 @@ class FunASRVoiceSystem:
         self.start_keyboard_listener()
 
         # 启动debug性能追踪
-        debug_tracker.start_debug_session(f"funasr_session_{int(time.time())}")
+        #debug_tracker.start_debug_session(f"funasr_session_{int(time.time())}")
 
         # 启动生产环境延迟记录
         start_latency_session()
@@ -785,7 +994,7 @@ class FunASRVoiceSystem:
             self.stop_keyboard_listener()
 
             # 停止debug追踪并生成报告
-            debug_tracker.stop_debug_session()
+            #debug_tracker.stop_debug_session()
 
             # 停止生产环境延迟记录
             end_latency_session()

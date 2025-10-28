@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FunASR + TEN VAD 语音识别模块
-基于FunASR ASR + TEN VAD的语音录入和识别功能，可作为模块导入使用
-结合神经网络VAD、流式识别和多种优化策略
-
-TEN VAD优势：
-- 神经网络VAD，比传统能量阈值更准确
-- 抗噪音能力强，误检率低
-- 能够检测轻声语音
-- 无需手动调参，开箱即用
-- 流式支持，低延迟 (RTF约0.01-0.02)
-- 轻量级 (约508KB vs Silero VAD的2.16MB)
+FunASR语音识别模块（整合版）
+基于FunASR的语音录入和识别功能，可作为模块导入使用
+结合VAD、流式识别和多种优化策略
+支持通过配置选择使用能量阈值VAD或TEN神经网络VAD
 
 使用示例:
-    from funasr_voice_TENVAD import FunASRVoiceRecognizer
+    from funasr_voice_combined import FunASRVoiceRecognizer
 
     recognizer = FunASRVoiceRecognizer()
     recognizer.initialize()
@@ -32,13 +25,17 @@ from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
 try:
-    from utils.debug_performance_tracker import debug_tracker
+    from debug.debug_performance_tracker import debug_tracker
 except ImportError:
     debug_tracker = None
 
 # TEN VAD相关
 TEN_VAD_AVAILABLE = False
 ten_vad_model = None
+
+# 为了解决Pyright静态分析问题，我们添加类型注释
+# 在运行时动态导入TenVad类
+TenVad = None  # type: ignore
 
 try:
     # 导入本地TEN VAD
@@ -47,12 +44,17 @@ try:
         sys.path.insert(0, os.path.join(ten_vad_path, "include"))
 
         # 导入TEN VAD (基于真实的API)
-        from ten_vad import TenVad
-        ten_vad_model = TenVad(hop_size=256, threshold=0.5)
-        TEN_VAD_AVAILABLE = True
-        print("✅ TEN VAD 加载成功 (hop_size=256, threshold=0.5)")
+        try:
+            from ten_vad import TenVad  # type: ignore
+            ten_vad_model = TenVad(hop_size=256, threshold=0.5)
+            TEN_VAD_AVAILABLE = True
+            print("✅ TEN VAD 加载成功 (hop_size=256, threshold=0.5)")
+        except ImportError as e:
+            print(f"❌ TEN VAD导入失败，将使用能量阈值VAD: {e}")
+            TEN_VAD_AVAILABLE = False
     else:
         print("❌ TEN VAD路径不存在，将使用能量阈值VAD")
+        TEN_VAD_AVAILABLE = False
 
 except Exception as e:
     print(f"❌ TEN VAD导入失败，将使用能量阈值VAD: {e}")
@@ -67,13 +69,13 @@ def setup_ffmpeg_environment():
     # 如果已经设置过FFmpeg路径，直接跳过
     if os.environ.get('FFMPEG_PATH_SET') == '1':
         return True
-
+    
     try:
         # 方法2：配置固定路径（推荐用于快速启动）
         # 这里设置一个固定的FFmpeg路径，避免多次检查
         # 用户可以根据实际情况修改这个路径
         FIXED_FFMPEG_PATH = "./onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin"
-
+        
         if FIXED_FFMPEG_PATH and os.path.exists(FIXED_FFMPEG_PATH):
             current_path = os.environ.get('PATH', '')
             if FIXED_FFMPEG_PATH not in current_path:
@@ -81,7 +83,7 @@ def setup_ffmpeg_environment():
             # 标记FFmpeg路径已设置
             os.environ['FFMPEG_PATH_SET'] = '1'
             return True
-
+        
         # 方法3：快速检查（仅检查最可能的位置）
         script_dir = os.path.dirname(os.path.abspath(__file__))
         fast_check_paths = [
@@ -89,7 +91,7 @@ def setup_ffmpeg_environment():
             os.path.join(script_dir, "FunASR_Deployment", "dependencies",
                         "ffmpeg-master-latest-win64-gpl-shared", "bin"),
         ]
-
+        
         for ffmpeg_path in fast_check_paths:
             if os.path.exists(ffmpeg_path):
                 current_path = os.environ.get('PATH', '')
@@ -97,14 +99,14 @@ def setup_ffmpeg_environment():
                     os.environ['PATH'] = ffmpeg_path + os.pathsep + current_path
                 os.environ['FFMPEG_PATH_SET'] = '1'
                 return True
-
+        
         # 注意：系统PATH检查已移除，因为它较慢
         # 建议：将FFmpeg添加到系统环境变量PATH中
         print("⚠️ 未找到FFmpeg快速路径")
         print("💡 性能优化建议：")
         print("  1. 将FFmpeg安装到系统PATH环境变量中")
         print(f"  2. 或修改代码中的FIXED_FFMPEG_PATH为您的FFmpeg路径")
-
+        
         return False
 
     except Exception:
@@ -132,7 +134,7 @@ from utils.logging_utils import LoggingManager
 
 # 获取配置好的日志记录器（参考voice_gui.py的配置风格）
 logger = LoggingManager.get_logger(
-    name='funasr_voice_TENVAD',
+    name='funasr_voice_combined',
     level=logging.DEBUG,  # 文件记录详细日志
     console_level=logging.INFO,  # 控制台显示INFO及以上信息
     log_to_console=True,
@@ -201,15 +203,16 @@ class FunASRConfig:
 
 class FunASRVoiceRecognizer:
     """
-    FunASR + TEN VAD 语音识别器主类
-    结合TEN VAD的语音录入、识别和VAD功能
+    FunASR语音识别器主类
+    提供语音录入、识别和VAD功能
+    支持通过配置选择使用能量阈值VAD或TEN神经网络VAD
     """
 
     def __init__(self,
                  model_path: Optional[str] = None,
                  device: str = "cpu",
-                 sample_rate: int = 16000,
-                 chunk_size: int = 400,
+                 sample_rate: Optional[int] = None,
+                 chunk_size: Optional[int] = None,
                  silent_mode: bool = True):
         """
         初始化语音识别器
@@ -217,10 +220,26 @@ class FunASRVoiceRecognizer:
         Args:
             model_path: FunASR模型路径
             device: 设备类型 ("cpu" 或 "cuda")
-            sample_rate: 音频采样率
-            chunk_size: 音频块大小
+            sample_rate: 音频采样率 (None时从配置读取)
+            chunk_size: 音频块大小 (None时从配置读取)
             silent_mode: 静默模式，隐藏中间过程信息
         """
+        # 从配置加载音频参数（如果未指定）
+        if sample_rate is None or chunk_size is None:
+            try:
+                from utils.config_loader import config
+                if sample_rate is None:
+                    sample_rate = config.get_sample_rate()
+                if chunk_size is None:
+                    chunk_size = config.get_chunk_size()
+                logger.info(f"📊 从配置加载音频参数: sample_rate={sample_rate}, chunk_size={chunk_size}")
+            except Exception as e:
+                logger.warning(f"从配置加载音频参数失败: {e}，使用默认值")
+                if sample_rate is None:
+                    sample_rate = 16000
+                if chunk_size is None:
+                    chunk_size = 400
+        
         # 基础配置
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
@@ -238,8 +257,15 @@ class FunASRVoiceRecognizer:
         self._ten_vad_available = TEN_VAD_AVAILABLE
         self._ten_vad_threshold = 0.5
 
-        # 回退VAD配置 - 支持从配置文件加载
+        # FFmpeg预处理配置
+        self._ffmpeg_enabled = False
+        self._ffmpeg_filter_chain = ""
+        self._ffmpeg_options: Dict[str, Any] = {}
+        self._ffmpeg_path = "ffmpeg"  # 默认FFmpeg路径
+
+        # VAD配置 - 支持从配置文件加载
         self.vad_config = self._load_vad_config()
+        self._vad_type = self._load_vad_type()  # 加载VAD类型配置
 
         # 模型相关
         self._model: Optional[Any] = None
@@ -251,12 +277,6 @@ class FunASRVoiceRecognizer:
         self._is_running = False
         self._stop_event = threading.Event()
         self._speech_detected = False
-
-        # FFmpeg预处理配置
-        self._ffmpeg_enabled = False
-        self._ffmpeg_filter_chain = ""
-        self._ffmpeg_options: Dict[str, Any] = {}
-        self._ffmpeg_path = "ffmpeg"  # 默认FFmpeg路径
 
         # 音频处理
         self._audio_buffer: deque[np.ndarray] = deque(maxlen=sample_rate * 5)  # 5秒缓冲
@@ -286,11 +306,11 @@ class FunASRVoiceRecognizer:
         self.__post_init__()
 
     def __post_init__(self):
-        """后初始化，设置TEN VAD"""
-        if self._ten_vad_available and ten_vad_model:
-            logger.info("🎯 TEN VAD已启用 (hop_size=256, threshold=0.5)")
-        else:
-            logger.info("⚠️ TEN VAD不可用，将使用能量阈值VAD")
+        """后初始化，设置VAD类型"""
+        logger.info(f"🎯 VAD类型设置为: {self._vad_type}")
+        if self._vad_type == "ten" and not TEN_VAD_AVAILABLE:
+            logger.warning("⚠️ TEN VAD不可用，将回退到能量阈值VAD")
+            self._vad_type = "energy"
 
     def _load_vad_config(self):
         """从配置加载器加载VAD设置"""
@@ -301,6 +321,10 @@ class FunASRVoiceRecognizer:
             self._ffmpeg_enabled = config.is_ffmpeg_preprocessing_enabled()
             self._ffmpeg_filter_chain = config.get_ffmpeg_filter_chain()
             self._ffmpeg_options = config.get_ffmpeg_options()
+            
+            # 加载数字识别优化配置
+            self._decimal_optimization_config = config.get_decimal_optimization_config()
+            self._extended_capture_time = config.get_extended_capture_time()
 
             logger.info(f"🔧 FFmpeg预处理: {'启用' if self._ffmpeg_enabled else '禁用'}")
             if self._ffmpeg_enabled:
@@ -324,119 +348,27 @@ class FunASRVoiceRecognizer:
                 "save_processed": False,
                 "processed_prefix": "processed_"
             }
+            # 设置默认的数字识别优化配置
+            self._decimal_optimization_config = {
+                "enabled": False,
+                "extended_capture_time": 1.0,
+                "confidence_threshold": 0.5
+            }
+            self._extended_capture_time = 1.0
             return VADConfig()
 
-    def _apply_ffmpeg_preprocessing(self, audio_data: np.ndarray, temp_file_prefix: str = "ffmpeg_temp_") -> np.ndarray:
-        """
-        应用FFmpeg预处理到音频数据
-
-        Args:
-            audio_data: 输入音频数据 (numpy数组)
-            temp_file_prefix: 临时文件前缀
-
-        Returns:
-            预处理后的音频数据
-        """
-        if not self._ffmpeg_enabled or not self._ffmpeg_options.get('process_input', True):
-            return audio_data  # 如果未启用或配置不处理输入，直接返回原数据
-
-        # 🔥 关键修复：在FFmpeg处理开始前检查停止信号
-        if self._stop_event.is_set():
-            logger.info("检测到停止信号，跳过FFmpeg预处理")
-            return audio_data
-
+    def _load_vad_type(self) -> str:
+        """从配置加载VAD类型"""
         try:
-            import subprocess
-            import tempfile
-            import os
-
-            # 将音频数据保存为临时WAV文件
-            with tempfile.NamedTemporaryFile(suffix='.wav', prefix=temp_file_prefix, delete=False) as temp_input_file:
-                temp_input_path = temp_input_file.name
-
-                # 确保数据格式正确 (16位PCM)
-                audio_int16 = (audio_data * 32767).astype(np.int16)
-
-                # 写入WAV文件
-                import wave
-                with wave.open(temp_input_path, 'wb') as wav_file:
-                    wav_file.setnchannels(1)  # 单声道
-                    wav_file.setsampwidth(2)  # 16位
-                    wav_file.setframerate(self.sample_rate)
-                    wav_file.writeframes(audio_int16.tobytes())
-
-            # 生成输出文件路径
-            with tempfile.NamedTemporaryFile(suffix='.wav', prefix="processed_", delete=False) as temp_output_file:
-                temp_output_path = temp_output_file.name
-
-            # 构建FFmpeg命令
-            ffmpeg_cmd = [
-                self._ffmpeg_path,  # 从setup_environment设置
-                '-i', temp_input_path,
-                '-af', self._ffmpeg_filter_chain,
-                '-y',  # 覆盖输出文件
-                temp_output_path
-            ]
-
-            # 执行FFmpeg预处理
-            logger.debug(f"执行FFmpeg命令: {' '.join(ffmpeg_cmd)}")
-
-            try:
-                # 🔥 修复：大幅减少超时时间，避免长时间阻塞
-                result = subprocess.run(
-                    ffmpeg_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=2  # 减少到2秒超时，避免阻塞停止功能
-                )
-
-                if result.returncode != 0:
-                    logger.warning(f"FFmpeg预处理失败: {result.stderr}")
-                    return audio_data  # 失败时返回原数据
-                else:
-                    logger.debug(f"FFmpeg预处理成功: {result.stdout}")
-
-            except subprocess.TimeoutExpired:
-                logger.warning("FFmpeg预处理超时，跳过此音频块的预处理")
-                return audio_data
-            except Exception as e:
-                logger.warning(f"FFmpeg预处理异常: {e}")
-                return audio_data
-
-            # 读取预处理后的音频数据
-            processed_data = None
-            try:
-                with wave.open(temp_output_path, 'rb') as wav_file:
-                    with wave.open(temp_output_path, 'rb') as wav_file:
-                        frames = wav_file.readframes(-1)
-                        sample_width = wav_file.getsampwidth()
-                        channels = wav_file.getnchannels()
-                        processed_data = np.frombuffer(frames, dtype=np.int16)
-
-                        # 确保是单声道
-                        if channels == 1 and sample_width == 2:
-                            processed_float_data = processed_data.astype(np.float32) / 32768.0
-                            return processed_float_data
-                        else:
-                            logger.warning("FFmpeg输出格式异常，使用原始数据")
-                            return audio_data
-
-            except Exception as e:
-                logger.error(f"读取预处理后音频失败: {e}")
-                processed_data = audio_data
-
-            # 清理临时文件
-            try:
-                os.unlink(temp_input_path)
-                os.unlink(temp_output_path)
-            except Exception as e:
-                logger.warning(f"清理临时文件失败: {e}")
-
-            return processed_data if processed_data is not None else audio_data
-
+            from utils.config_loader import config
+            vad_type = config.get_vad_type().lower()
+            if vad_type not in ["energy", "ten"]:
+                logger.warning(f"未知的VAD类型: {vad_type}，使用默认值'energy'")
+                return "energy"
+            return vad_type
         except Exception as e:
-            logger.error(f"FFmpeg预处理模块异常: {e}")
-            return audio_data
+            logger.warning(f"加载VAD类型配置失败: {e}，使用默认值'energy'")
+            return "energy"
 
     def _get_gui_display_threshold(self) -> float:
         """获取GUI能量显示阈值（独立于VAD检测）"""
@@ -507,7 +439,7 @@ class FunASRVoiceRecognizer:
             logger.info("✅ 识别器已初始化")
             return True
 
-        logger.info("🚀 初始化FunASR + TEN VAD语音识别器...")
+        logger.info("🚀 初始化FunASR语音识别器...")
         init_start_time = time.time()
 
         # 检查依赖 - 前置检查，避免后续失败
@@ -523,7 +455,7 @@ class FunASRVoiceRecognizer:
 
         self._is_initialized = True
         total_init_time = time.time() - init_start_time
-        logger.info(f"✅ FunASR + TEN VAD语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
+        logger.info(f"✅ FunASR语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
         return True
 
     def _load_model(self) -> bool:
@@ -545,6 +477,10 @@ class FunASRVoiceRecognizer:
                 return False
 
             # 加载模型
+            if AutoModel is None:
+                logger.error("❌ FunASR AutoModel不可用")
+                return False
+            
             self._model = AutoModel(
                 model=self.funasr_config.model_path,
                 device=self.funasr_config.device,
@@ -556,7 +492,7 @@ class FunASRVoiceRecognizer:
             self._model_load_time = time.time() - start_time
 
             logger.info(f"✅ 模型加载成功 (耗时: {self._model_load_time:.2f}秒)")
-
+            
             # 优化：预预热模型，减少第一次识别延迟
             try:
                 logger.info("🔄 预预热模型以减少首次识别延迟...")
@@ -566,7 +502,7 @@ class FunASRVoiceRecognizer:
                     pass
             except Exception as e:
                 logger.debug(f"模型预热过程出错 (可忽略): {e}")
-
+                
             return True
 
         except Exception as e:
@@ -584,16 +520,15 @@ class FunASRVoiceRecognizer:
 
         # 从配置加载全局卸载设置
         try:
-            from utils.config_loader import get_config
-            config = get_config()
-            global_unload = config.get('system', {}).get('global_unload', False)
+            from utils.config_loader import config
+            global_unload = config.get_global_unload()
         except ImportError:
-            logger.debug("无法导入get_config，使用默认设置")
+            logger.debug("无法导入config，使用默认设置")
             global_unload = False
         except Exception as e:
             logger.debug(f"获取配置时出错，默认启用卸载: {e}")
             global_unload = True
-
+        
         # 只有在明确配置需要卸载或者模型已加载时才执行卸载
         if self._model and global_unload:
             logger.info(f"🧹 卸载模型 (全局卸载设置: {global_unload})")
@@ -637,7 +572,7 @@ class FunASRVoiceRecognizer:
                     channels=1,
                     rate=self.sample_rate,
                     input=True,
-                    input_device_index=default_device['index'],
+                    input_device_index=int(default_device['index']),  # 修复类型问题，确保传递int类型
                     frames_per_buffer=self.chunk_size,
                     start=True
                 )
@@ -679,7 +614,7 @@ class FunASRVoiceRecognizer:
 
     def _detect_vad(self, audio_data: np.ndarray, current_time: float) -> Tuple[bool, Optional[str]]:
         """
-        VAD语音活动检测 - 使用TEN VAD或回退到能量阈值
+        VAD语音活动检测 - 根据配置选择使用TEN VAD或能量阈值VAD
 
         Args:
             audio_data: 音频数据
@@ -692,34 +627,46 @@ class FunASRVoiceRecognizer:
         vad_confidence = 0.0
         event_type = None
 
-        # 尝试使用TEN VAD进行检测
-        if self._ten_vad_available and ten_vad_model:
-            try:
-                # TEN VAD要求256个采样点
-                vad_chunk_size = 256
-                if len(audio_data) >= vad_chunk_size:
-                    vad_chunk = audio_data[:vad_chunk_size]
-                    # 转换为int16格式
-                    vad_int16 = (vad_chunk * 32767).astype(np.int16)
+        # 根据配置选择VAD类型
+        if self._vad_type == "ten":
+            # 尝试使用TEN VAD进行检测
+            if self._ten_vad_available and ten_vad_model:
+                try:
+                    # TEN VAD要求256个采样点
+                    vad_chunk_size = 256
+                    if len(audio_data) >= vad_chunk_size:
+                        vad_chunk = audio_data[:vad_chunk_size]
+                        # 转换为int16格式
+                        vad_int16 = (vad_chunk * 32767).astype(np.int16)
 
-                    # 使用TEN VAD进行检测
-                    vad_confidence, vad_flag = ten_vad_model.process(vad_int16)
-                    is_speech = (vad_flag == 1)
+                        # 使用TEN VAD进行检测
+                        vad_confidence, vad_flag = ten_vad_model.process(vad_int16)
+                        is_speech = (vad_flag == 1)
 
-                    logger.debug(f"TEN VAD: 置信度={vad_confidence:.3f}, 标志={vad_flag}, 结果={is_speech}")
-                else:
-                    logger.debug("音频数据不足256个采样点，跳过TEN VAD检测")
+                        logger.debug(f"TEN VAD: 置信度={vad_confidence:.3f}, 标志={vad_flag}, 结果={is_speech}")
+                    else:
+                        logger.debug("音频数据不足256个采样点，跳过TEN VAD检测")
 
-            except Exception as ten_vad_error:
-                logger.warning(f"TEN VAD处理错误，回退到能量阈值: {ten_vad_error}")
-                self._ten_vad_available = False  # 标记TEN VAD不可用
-
-        # 回退到传统能量阈值VAD
-        if not self._ten_vad_available or not ten_vad_model:
+                except Exception as ten_vad_error:
+                    logger.warning(f"TEN VAD处理错误，回退到能量阈值: {ten_vad_error}")
+                    self._ten_vad_available = False  # 标记TEN VAD不可用
+                    # 回退到传统能量阈值VAD
+                    energy = np.sqrt(np.mean(audio_data ** 2))
+                    is_speech = energy > self.vad_config.energy_threshold
+                    vad_confidence = float(energy)
+                    logger.debug(f"回退到能量阈值VAD: 能量={energy:.6f}, 阈值={self.vad_config.energy_threshold}, 结果={is_speech}")
+            else:
+                # 如果TEN VAD不可用，回退到传统能量阈值VAD
+                energy = np.sqrt(np.mean(audio_data ** 2))
+                is_speech = energy > self.vad_config.energy_threshold
+                vad_confidence = float(energy)
+                logger.debug(f"回退到能量阈值VAD: 能量={energy:.6f}, 阈值={self.vad_config.energy_threshold}, 结果={is_speech}")
+        else:
+            # 使用传统的能量阈值VAD
             energy = np.sqrt(np.mean(audio_data ** 2))
             is_speech = energy > self.vad_config.energy_threshold
             vad_confidence = float(energy)
-            logger.debug(f"回退到能量阈值VAD: 能量={energy:.6f}, 阈值={self.vad_config.energy_threshold}, 结果={is_speech}")
+            logger.debug(f"能量阈值VAD: 能量={energy:.6f}, 阈值={self.vad_config.energy_threshold}, 结果={is_speech}")
 
         # 检测语音开始和结束
         if is_speech:
@@ -727,7 +674,7 @@ class FunASRVoiceRecognizer:
                 event_type = "speech_start"
                 self._speech_detected = True
                 self._speech_start_time = current_time
-                logger.info(f"🎤 语音开始 ({'TEN VAD' if self._ten_vad_available else '能量阈值'}: 置信度={vad_confidence:.3f}, 标志={is_speech})")
+                logger.debug(f"🎤 语音开始 ({'TEN VAD' if self._vad_type == 'ten' and self._ten_vad_available else '能量阈值'}: 置信度={vad_confidence:.3f}, 标志={is_speech})")
         else:
             if hasattr(self, '_speech_detected') and self._speech_detected:
                 silence_duration = current_time - getattr(self, '_last_speech_time', current_time)
@@ -740,6 +687,122 @@ class FunASRVoiceRecognizer:
 
         return is_speech, event_type
 
+    def _apply_ffmpeg_preprocessing(self, audio_data: np.ndarray, temp_file_prefix: str = "ffmpeg_temp_") -> np.ndarray:
+        """
+        应用FFmpeg预处理到音频数据
+
+        Args:
+            audio_data: 输入音频数据 (numpy数组)
+            temp_file_prefix: 临时文件前缀
+
+        Returns:
+            预处理后的音频数据
+        """
+        if not self._ffmpeg_enabled or not self._ffmpeg_options.get('process_input', True):
+            return audio_data  # 如果未启用或配置不处理输入，直接返回原数据
+
+        # 🔥 关键修复：在FFmpeg处理开始前检查停止信号
+        if self._stop_event.is_set():
+            logger.info("检测到停止信号，跳过FFmpeg预处理")
+            return audio_data
+
+        try:
+            import subprocess
+            import tempfile
+            import os
+
+            # 将音频数据保存为临时WAV文件
+            with tempfile.NamedTemporaryFile(suffix='.wav', prefix=temp_file_prefix, delete=False) as temp_input_file:
+                temp_input_path = temp_input_file.name
+
+                # 确保数据格式正确 (16位PCM)
+                audio_int16 = (audio_data * 32767).astype(np.int16)
+
+                # 写入WAV文件
+                import wave
+                with wave.open(temp_input_path, 'wb') as wav_file:
+                    wav_file.setnchannels(1)  # 单声道
+                    wav_file.setsampwidth(2)  # 16位
+                    wav_file.setframerate(self.sample_rate)
+                    wav_file.writeframes(audio_int16.tobytes())
+
+            # 生成输出文件路径
+            with tempfile.NamedTemporaryFile(suffix='.wav', prefix="processed_", delete=False) as temp_output_file:
+                temp_output_path = temp_output_file.name
+
+            # 构建FFmpeg命令
+            # 🔥 Root Cause修复：强制使用标准PCM WAV格式，避免WAVE_FORMAT_EXTENSIBLE (65534)错误
+            ffmpeg_cmd = [
+                self._ffmpeg_path,  # 从setup_environment设置
+                '-i', temp_input_path,
+                '-af', self._ffmpeg_filter_chain,
+                '-acodec', 'pcm_s16le',  # 强制使用PCM 16-bit LE
+                '-ar', str(self.sample_rate),  # 明确指定采样率
+                '-ac', '1',  # 明确指定单声道
+                '-f', 'wav',  # 明确指定WAV格式
+                '-y',  # 覆盖输出文件
+                temp_output_path
+            ]
+
+            # 执行FFmpeg预处理
+            logger.debug(f"执行FFmpeg命令: {' '.join(ffmpeg_cmd)}")
+
+            try:
+                # 🔥 修复：大幅减少超时时间，避免长时间阻塞
+                result = subprocess.run(
+                    ffmpeg_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=2  # 减少到2秒超时，避免阻塞停止功能
+                )
+
+                if result.returncode != 0:
+                    logger.warning(f"FFmpeg预处理失败: {result.stderr}")
+                    return audio_data  # 失败时返回原数据
+                else:
+                    logger.debug(f"FFmpeg预处理成功: {result.stdout}")
+
+            except subprocess.TimeoutExpired:
+                logger.warning("FFmpeg预处理超时，跳过此音频块的预处理")
+                return audio_data
+            except Exception as e:
+                logger.warning(f"FFmpeg预处理异常: {e}")
+                return audio_data
+
+            # 读取预处理后的音频数据
+            processed_data = None
+            try:
+                with wave.open(temp_output_path, 'rb') as wav_file:
+                    frames = wav_file.readframes(-1)
+                    sample_width = wav_file.getsampwidth()
+                    channels = wav_file.getnchannels()
+                    processed_data = np.frombuffer(frames, dtype=np.int16)
+
+                    # 确保是单声道
+                    if channels == 1 and sample_width == 2:
+                        processed_float_data = processed_data.astype(np.float32) / 32768.0
+                        return processed_float_data
+                    else:
+                        logger.warning("FFmpeg输出格式异常，使用原始数据")
+                        return audio_data
+
+            except Exception as e:
+                logger.error(f"读取预处理后音频失败: {e}")
+                processed_data = audio_data
+
+            # 清理临时文件
+            try:
+                os.unlink(temp_input_path)
+                os.unlink(temp_output_path)
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {e}")
+
+            return processed_data if processed_data is not None else audio_data
+
+        except Exception as e:
+            logger.error(f"FFmpeg预处理模块异常: {e}")
+            return audio_data
+
     def _process_audio_chunk(self, audio_data: np.ndarray, current_time: float):
         """
         处理音频块
@@ -749,12 +812,13 @@ class FunASRVoiceRecognizer:
             current_time: 当前时间
         """
         # 应用FFmpeg预处理（如果启用）
-        if self._ffmpeg_enabled:
-            with PerformanceStep("FFmpeg预处理", {
-                'data_length': len(audio_data),
-                'current_time': current_time
-            }):
-                audio_data = self._apply_ffmpeg_preprocessing(audio_data, f"chunk_{current_time:.0f}")
+        # 🔥 优化：禁用chunk级预处理，只在最终识别时处理，避免阻塞
+        # if self._ffmpeg_enabled:
+        #     with PerformanceStep("FFmpeg预处理", {
+        #         'data_length': len(audio_data),
+        #         'current_time': current_time
+        #     }):
+        #         audio_data = self._apply_ffmpeg_preprocessing(audio_data, f"chunk_{current_time:.0f}")
 
         # 添加到音频缓冲区
         self._audio_buffer.extend(audio_data)
@@ -792,7 +856,7 @@ class FunASRVoiceRecognizer:
             self._speech_buffer.extend(audio_data)
 
             # 定期进行流式识别
-            if len(self._speech_buffer) >= self.sample_rate * 1:  # 1秒音频
+            if len(self._speech_buffer) >= self.sample_rate * self._extended_capture_time:  # 使用配置的extended_capture_time
                 self._perform_streaming_recognition()
         else:
             # 如果静音时间足够长且有语音缓冲区，进行最终识别
@@ -912,7 +976,7 @@ class FunASRVoiceRecognizer:
             'model_loaded': self._model_loaded,
             'model_path': self.model_path,
             'device': self.funasr_config.device,
-            'vad_method': 'TEN VAD' if self._ten_vad_enabled else 'Energy Threshold',
+            'vad_method': 'TEN VAD' if self._vad_type == 'ten' else 'Energy Threshold',
             'ten_vad_available': TEN_VAD_AVAILABLE,
             'stats': self.stats.copy(),
             'model_load_time': self._model_load_time,
@@ -974,10 +1038,6 @@ class FunASRVoiceRecognizer:
                             'current_time': current_time
                         }):
                             audio_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
-
-                        # 🔥 架构修复：移除实时循环中的FFmpeg预处理
-                        # FFmpeg预处理将在语音段结束时批量进行，而不是在每个音频chunk时处理
-                        # 这样保持了实时音频处理的连续性，避免了stream.read()阻塞问题
 
                         # 处理音频
                         self._process_audio_chunk(audio_data, current_time)
@@ -1087,11 +1147,6 @@ class FunASRVoiceRecognizer:
                 with self._audio_stream() as stream:
                     while self._is_running and not self._stop_event.is_set():
                         try:
-                            # 🔥 关键修复：在音频读取前检查停止信号
-                            if self._stop_event.is_set():
-                                logger.info("连续识别检测到停止信号，退出循环")
-                                break
-
                             data = stream.read(self.chunk_size, exception_on_overflow=False)
                             current_time = time.time()
 
@@ -1142,7 +1197,24 @@ class FunASRVoiceRecognizer:
         if self._speech_buffer:
             self._perform_final_recognition()
 
-        
+    def configure_vad(self, **kwargs):
+        """配置VAD参数"""
+        for key, value in kwargs.items():
+            if hasattr(self.vad_config, key):
+                setattr(self.vad_config, key, value)
+                logger.info(f"🔧 VAD配置更新: {key} = {value}")
+            else:
+                logger.warning(f"⚠️ 未知的VAD参数: {key}")
+
+    def configure_funasr(self, **kwargs):
+        """配置FunASR参数"""
+        for key, value in kwargs.items():
+            if hasattr(self.funasr_config, key):
+                setattr(self.funasr_config, key, value)
+                logger.info(f"🔧 FunASR配置更新: {key} = {value}")
+            else:
+                logger.warning(f"⚠️ 未知的FunASR参数: {key}")
+
     def __del__(self):
         """析构函数"""
         try:
@@ -1187,18 +1259,20 @@ def quick_recognize(duration: int = 10,
 
 if __name__ == "__main__":
     # 示例用法
-    print("🎯 FunASR + TEN VAD 语音识别模块测试")
+    print("🎯 FunASR语音识别模块测试")
     print("=" * 50)
 
     # 创建识别器
     recognizer = FunASRVoiceRecognizer()
 
-    # 显示状态
-    status = recognizer.get_status()
-    print(f"📊 识别器状态: {status}")
+    # 设置回调
+    def on_partial(text):
+        print(f"🗣️ 实时: {text}")
 
-    if recognizer.initialize():
-        print("✅ 识别器初始化成功")
-        print("🎤 TEN VAD集成完成，可以进行语音识别测试")
-    else:
-        print("❌ 识别器初始化失败")
+    def on_final(result):
+        print(f"✅ 最终: {result.text}")
+
+    def on_vad(event, data):
+        print(f"🎯 VAD: {event}")
+
+    recognizer.set_callbacks(on_partial, on_final, on_vad)

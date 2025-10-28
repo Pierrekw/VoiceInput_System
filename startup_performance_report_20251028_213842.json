@@ -1,0 +1,21 @@
+{
+  "timestamp": "20251028_213842",
+  "test_results": {
+    "original": {
+      "success_count": 0,
+      "total_tests": 3,
+      "error": "所有测试都失败了"
+    },
+    "optimized": {
+      "success_count": 0,
+      "total_tests": 3,
+      "error": "所有测试都失败了"
+    }
+  },
+  "system_info": {
+    "python_version": "3.11.11 (main, Mar 17 2025, 21:01:29) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "win32",
+    "processor": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",
+    "memory_total": 31.814407348632812
+  }
+}

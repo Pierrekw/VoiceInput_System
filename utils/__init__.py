@@ -6,7 +6,7 @@ Utils工具包
 """
 
 # 导入主要工具模块，提供便捷访问
-from .debug_performance_tracker import debug_tracker
+#from ..debug.debug_performance_tracker import debug_tracker
 from .production_latency_logger import (
     start_latency_session, end_latency_session,
     log_voice_input_end, log_asr_complete, log_terminal_display

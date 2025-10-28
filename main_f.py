@@ -621,10 +621,11 @@ class FunASRVoiceSystem:
                 excel_data: List[Tuple[Union[float, str], str, str]] = []
                 
                 if numbers:
-                    # 数字结果
-                    excel_data.append((numbers[0], original_text, processed_text))
+                    # 数字结果 - 处理所有识别到的数字
+                    for num in numbers:
+                        excel_data.append((num, original_text, processed_text))
                     result_type = "数字"
-                    result_value: Union[float, str] = numbers[0]
+                    result_value: Union[float, str] = f"{len(numbers)}个数字: {', '.join(map(str, numbers))}"
                 else:
                     # 特定文本结果
                     # 将特定文本直接写入Excel，而不是数值

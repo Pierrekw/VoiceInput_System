@@ -183,13 +183,7 @@ class ExcelExporterEnhanced:
                     if not os.path.exists(self.filename):
                         self.create_new_file()
 
-                    # 使用openpyxl直接写入数据，避免pandas的格式化开销
-                    self._write_data_direct(data)
-
-                    # 标记需要格式化
-                    self._pending_formatting = True
-
-                    # 返回写入的记录列表
+                    # 先生成voice_id并记录到session_data
                     result = []
                     for val, original_text, processed_text in data:
                         if auto_generate_ids:
@@ -204,6 +198,12 @@ class ExcelExporterEnhanced:
 
                         result.append((voice_id, record_val, original_text))
 
+                    # 使用openpyxl直接写入数据，避免pandas的格式化开销
+                    self._write_data_direct(data)
+
+                    # 标记需要格式化
+                    self._pending_formatting = True
+
                     logger.debug(f"成功写入 {len(result)} 条数据到 {self.filename}")
                     return result
 
@@ -216,8 +216,7 @@ class ExcelExporterEnhanced:
         workbook = load_workbook(self.filename)
         worksheet = workbook.active
 
-        # 使用已生成的session_data中的Voice ID，避免重复生成
-        # 获取最新的数据，对应本次写入的数据
+        # 从session_data中获取最新添加的数据（对应本次写入的数据）
         start_index = max(0, len(self._session_data) - len(data))
         recent_data = self._session_data[start_index:]
 

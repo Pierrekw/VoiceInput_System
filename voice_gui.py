@@ -1691,7 +1691,9 @@ class WorkingSimpleMainWindow(QMainWindow):
                     #file_name = os.path.basename(file_path)
                     #cursor.insertText(file_name)
                     cursor.insertText('\n')
-                    cursor.insertText("---------------------------------------------------")
+                    # 生成长度和Excel按钮行一样长的分隔线
+                    excel_button_text = "📂 点击打开Excel文件: "
+                    cursor.insertText("─" * len(excel_button_text))
 
                     
                 except Exception as e:

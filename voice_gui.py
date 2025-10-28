@@ -1561,37 +1561,67 @@ class WorkingSimpleMainWindow(QMainWindow):
             cursor.select(QTextCursor.LineUnderCursor)
             line_text = cursor.selectedText().strip()
 
-            # 检查是否点击了Excel文件行
+            # 检查是否点击了Excel文件相关内容
+            excel_clicked = False
+            file_path_to_open = None
+
+            # 方法1: 检查是否点击了"打开Excel文件"按钮行
             if "📂 点击打开Excel文件:" in line_text:
-                # 从存储的路径列表中获取最新的文件路径
-                try:
-                    if self._excel_file_paths:  # 已经初始化，直接检查是否有内容
-                        file_path = self._excel_file_paths[-1]  # 获取最新的Excel文件路径
+                excel_clicked = True
+                if self._excel_file_paths:
+                    file_path_to_open = self._excel_file_paths[-1]
 
-                        if os.path.exists(file_path):
-                            # 直接打开文件，不改变UI
-                            if sys.platform == 'win32':
-                                os.startfile(file_path)
-                            elif sys.platform == 'darwin':
-                                subprocess.run(['open', file_path], check=True)
-                            else:
-                                subprocess.run(['xdg-open', file_path], check=True)
+            # 方法2: 检查是否点击了Excel文件名（以.xlsx结尾或包含Excel文件名）
+            elif (line_text.lower().endswith('.xlsx') or
+                  line_text.lower().endswith('.xls') or
+                  any(ext in line_text.lower() for ext in ['.xlsx', '.xls'])):
+                excel_clicked = True
+                # 在路径列表中查找匹配的文件
+                if self._excel_file_paths:
+                    # 提取可能的文件名
+                    words = line_text.split()
+                    file_name_to_find = None
 
-                            logger.info(f"用户点击打开Excel文件: {file_path}")
-                           
-                        else:
-                            logger.warning(f"Excel文件不存在: {file_path}")                           
-                            # 向用户显示更友好的消息
-                            self.status_bar.showMessage("⚠️ Excel文件不存在或已被移动", 3000)
+                    for word in words:
+                        if word.lower().endswith('.xlsx') or word.lower().endswith('.xls'):
+                            file_name_to_find = word
+                            break
+
+                    if file_name_to_find:
+                        for path in reversed(self._excel_file_paths):  # 从最新的开始查找
+                            if os.path.basename(path) == file_name_to_find:
+                                file_path_to_open = path
+                                break
                     else:
-                        # 只记录一次警告，避免重复输出
-                        logger.warning("未找到Excel文件路径信息")
-                        # 向用户显示更友好的消息
-                        self.status_bar.showMessage("ℹ️ 暂无可用的Excel文件", 3000)
+                        # 如果没找到文件名，使用最新的Excel文件
+                        file_path_to_open = self._excel_file_paths[-1]
 
+            # 如果检测到点击了Excel相关内容，尝试打开文件
+            if excel_clicked and file_path_to_open:
+                try:
+                    if os.path.exists(file_path_to_open):
+                        # 直接打开文件，不改变UI
+                        if sys.platform == 'win32':
+                            os.startfile(file_path_to_open)
+                        elif sys.platform == 'darwin':
+                            subprocess.run(['open', file_path_to_open], check=True)
+                        else:
+                            subprocess.run(['xdg-open', file_path_to_open], check=True)
+
+                        logger.info(f"用户点击打开Excel文件: {file_path_to_open}")
+
+                    else:
+                        logger.warning(f"Excel文件不存在: {file_path_to_open}")
+                        # 向用户显示更友好的消息
+                        self.status_bar.showMessage("⚠️ Excel文件不存在或已被移动", 3000)
                 except Exception as e:
                     logger.error(f"打开Excel文件失败: {e}")
-                    
+                    self.status_bar.showMessage("❌ 打开Excel文件失败", 3000)
+
+            elif excel_clicked:
+                # 检测到点击但没有找到文件路径
+                logger.warning("未找到Excel文件路径信息")
+                self.status_bar.showMessage("⚠️ 未找到Excel文件路径", 3000)
 
                 # 不调用原始事件处理，避免任何UI变化
                 return

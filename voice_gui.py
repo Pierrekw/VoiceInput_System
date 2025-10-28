@@ -1562,43 +1562,12 @@ class WorkingSimpleMainWindow(QMainWindow):
             line_text = cursor.selectedText().strip()
 
             # 检查是否点击了Excel文件相关内容
-            excel_clicked = False
-            file_path_to_open = None
-
-            # 方法1: 检查是否点击了"打开Excel文件"按钮行
-            if "📂 点击打开Excel文件:" in line_text:
-                excel_clicked = True
-                if self._excel_file_paths:
+            # 精确逻辑：包含.xlsx但不包含"文件名"，且不是空行
+            if ('.xlsx' in line_text.lower() or '.xls' in line_text.lower()) and '文件名' not in line_text and len(line_text.strip()) > 0 and self._excel_file_paths:
+                try:
+                    # 直接使用最新的Excel文件路径
                     file_path_to_open = self._excel_file_paths[-1]
 
-            # 方法2: 检查是否点击了Excel文件名（以.xlsx结尾或包含Excel文件名）
-            elif (line_text.lower().endswith('.xlsx') or
-                  line_text.lower().endswith('.xls') or
-                  any(ext in line_text.lower() for ext in ['.xlsx', '.xls'])):
-                excel_clicked = True
-                # 在路径列表中查找匹配的文件
-                if self._excel_file_paths:
-                    # 提取可能的文件名
-                    words = line_text.split()
-                    file_name_to_find = None
-
-                    for word in words:
-                        if word.lower().endswith('.xlsx') or word.lower().endswith('.xls'):
-                            file_name_to_find = word
-                            break
-
-                    if file_name_to_find:
-                        for path in reversed(self._excel_file_paths):  # 从最新的开始查找
-                            if os.path.basename(path) == file_name_to_find:
-                                file_path_to_open = path
-                                break
-                    else:
-                        # 如果没找到文件名，使用最新的Excel文件
-                        file_path_to_open = self._excel_file_paths[-1]
-
-            # 如果检测到点击了Excel相关内容，尝试打开文件
-            if excel_clicked and file_path_to_open:
-                try:
                     if os.path.exists(file_path_to_open):
                         # 直接打开文件，不改变UI
                         if sys.platform == 'win32':
@@ -1617,11 +1586,6 @@ class WorkingSimpleMainWindow(QMainWindow):
                 except Exception as e:
                     logger.error(f"打开Excel文件失败: {e}")
                     self.status_bar.showMessage("❌ 打开Excel文件失败", 3000)
-
-            elif excel_clicked:
-                # 检测到点击但没有找到文件路径
-                logger.warning("未找到Excel文件路径信息")
-                self.status_bar.showMessage("⚠️ 未找到Excel文件路径", 3000)
 
                 # 不调用原始事件处理，避免任何UI变化
                 return

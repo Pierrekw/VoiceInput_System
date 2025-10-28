@@ -229,18 +229,18 @@ class ExcelExporterEnhanced:
             if worksheet:
                 worksheet.cell(row=row, column=1, value=self.current_standard_id)
 
-            # 写入语音录入编号 (第10列) - 使用已生成的record ID
-            if worksheet:
-                worksheet.cell(row=row, column=10, value=voice_id)
-
-            # 写入测量值 (第6列)
+            # 写入测量值 (第5列) - 对应"测量值"
             if isinstance(val, str):
-                worksheet.cell(row=row, column=6, value=val)
+                worksheet.cell(row=row, column=5, value=val)
             else:
-                worksheet.cell(row=row, column=6, value=self._float_cell(val))
+                worksheet.cell(row=row, column=5, value=self._float_cell(val))
 
-            # 写入时间戳 (第9列)
-            worksheet.cell(row=row, column=9, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            # 写入时间戳 (第8列) - 对应"time"
+            worksheet.cell(row=row, column=8, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+            # 写入语音录入编号 (第9列) - 使用已生成的record ID
+            if worksheet:
+                worksheet.cell(row=row, column=9, value=voice_id)
 
             # 更新内存映射
             self.voice_id_to_row[voice_id] = row

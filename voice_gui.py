@@ -662,7 +662,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
     def init_ui(self):
         """初始化界面"""
-        title = "FunASR语音识别系统 v2.4"
+        title = "FunASR语音识别系统 v2.7"
         if self.debug_mode:
             title += " (调试模式)"
         self.setWindowTitle(title)

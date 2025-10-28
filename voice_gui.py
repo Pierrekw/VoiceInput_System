@@ -1563,9 +1563,21 @@ class WorkingSimpleMainWindow(QMainWindow):
             block = cursor.block()
             line_text = block.text().strip()
 
+            # 调试信息：输出点击详情
+            print(f"[DEBUG] 点击位置: ({position.x():.1f}, {position.y():.1f})")
+            print(f"[DEBUG] 块文本: '{block.text()}'")
+            print(f"[DEBUG] 清理后文本: '{line_text}'")
+            print(f"[DEBUG] 文本长度: {len(line_text)}")
+            print(f"[DEBUG] 包含.xlsx: {'.xlsx' in line_text.lower()}")
+            print(f"[DEBUG] 不包含'文件名': {'文件名' not in line_text}")
+            print(f"[DEBUG] 有Excel文件路径: {len(self._excel_file_paths) > 0}")
+
             # 检查是否点击了Excel文件相关内容
             # 精确逻辑：包含.xlsx但不包含"文件名"，且不是空行
-            if ('.xlsx' in line_text.lower() or '.xls' in line_text.lower()) and '文件名' not in line_text and len(line_text.strip()) > 0 and self._excel_file_paths:
+            will_trigger = ('.xlsx' in line_text.lower() or '.xls' in line_text.lower()) and '文件名' not in line_text and len(line_text.strip()) > 0 and self._excel_file_paths
+            print(f"[DEBUG] 会触发Excel打开: {will_trigger}")
+
+            if will_trigger:
                 try:
                     # 直接使用最新的Excel文件路径
                     file_path_to_open = self._excel_file_paths[-1]
@@ -1591,6 +1603,8 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 不调用原始事件处理，避免任何UI变化
                 return
+            else:
+                print(f"[DEBUG] 不会触发Excel打开")
 
         # 对于其他点击，调用原始处理
         super(QTextBrowser, self.history_text).mousePressEvent(event)

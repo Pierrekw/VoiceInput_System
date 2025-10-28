@@ -22,7 +22,6 @@ from datetime import datetime
 from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type, Sequence
 
 # 类型别名
-ExcelExporterType = Union[Type['ExcelExporter'], None]
 from enum import Enum
 
 # 配置基础设置
@@ -75,9 +74,11 @@ except ImportError:
 try:
     from excel_utils import ExcelExporterEnhanced
     EXCEL_AVAILABLE = True
+    ExcelExporterType = ExcelExporterEnhanced
 except ImportError:
     EXCEL_AVAILABLE = False
     ExcelExporterEnhanced = None  # type: ignore
+    ExcelExporterType = None  # type: ignore
 
 # 使用统一的日志工具类
 import logging

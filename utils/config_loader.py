@@ -77,6 +77,8 @@ class ConfigLoader:
             },
             "excel": {
                 "file_name": "report",
+                "template_path": "reports/templates/enhanced_measure_template.xlsx",
+                "output_directory": "reports",
                 "auto_export": True,
                 "formatting": {
                     "auto_numbering": True,

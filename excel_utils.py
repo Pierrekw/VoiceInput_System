@@ -31,7 +31,7 @@ logger = LoggingManager.get_logger(
 )
 
 # 新增：导入配置系统
-from config_loader import config
+from utils.config_loader import config
 
 class ExcelExporterEnhanced:
     """增强的Excel导出器 - 支持测量规范格式化"""
@@ -56,7 +56,7 @@ class ExcelExporterEnhanced:
         self.next_insert_row: int = 2
         self.active_record_count: int = 0
         self.current_standard_id: int = 100
-        self.template_path: str = config.get("excel.template_path", "reports/enhanced_measure_template.xlsx")
+        self.template_path: str = config.get("excel.template_path", "reports/templates/enhanced_measure_template.xlsx")
 
         # 会话数据存储
         self._session_data: List[Tuple[Union[int, str, float], Any, str]] = []
@@ -227,10 +227,12 @@ class ExcelExporterEnhanced:
 
             # 录音阶段：写入 record ID + record value + 测量标准序号 + 时间戳
             # 写入标准序号 (第1列)
-            worksheet.cell(row=row, column=1, value=self.current_standard_id)
+            if worksheet:
+                worksheet.cell(row=row, column=1, value=self.current_standard_id)
 
             # 写入语音录入编号 (第10列) - 使用已生成的record ID
-            worksheet.cell(row=row, column=10, value=voice_id)
+            if worksheet:
+                worksheet.cell(row=row, column=10, value=voice_id)
 
             # 写入测量值 (第6列)
             if isinstance(val, str):

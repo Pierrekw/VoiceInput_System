@@ -31,17 +31,10 @@ import logging
 from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
-<<<<<<< HEAD:funasr_voice_TENVAD.py
 try:
     from debug.debug_performance_tracker import debug_tracker
 except ImportError:
     debug_tracker = None
-=======
-#try:
-    #from debug.debug_performance_tracker import debug_tracker
-#except ImportError:
-    #debug_tracker = None
->>>>>>> origin/feature/integrated-voice-recognition:New20251027/funasr_voice_tenvad.py
 
 # TEN VAD相关
 TEN_VAD_AVAILABLE = False

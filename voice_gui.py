@@ -1369,7 +1369,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 添加到历史文本框
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
                 cursor.insertText(f"{formatted_command}\n")
 
                 # 滚动到底部
@@ -1397,21 +1397,23 @@ class WorkingSimpleMainWindow(QMainWindow):
         try:
             if hasattr(self, 'history_text'):
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
                 cursor.insertText(f"{text}\n")
                 self.history_text.ensureCursorVisible()
         except Exception as e:
             logger.error(f"添加文本到历史记录失败: {e}")
 
     def display_result(self, result):
-        """显示识别结果 - 只显示record类型的信息"""
+        """显示识别结果 - 显示所有[xxx]格式的信息"""
         if not result or not result.strip():
             return
 
         result = result.strip()
 
-        is_record = result.startswith('[') and ']' in result and ('] ' in result or ']' in result and len(result) > 3)
-        logger.debug(f"识别结果: {is_record}")
+        # 简化逻辑：所有以[开头且包含]的内容都认为是record
+        # 包括：[id] 数字, [id] 特殊文本, [CMD] 命令
+        is_record = result.startswith('[') and ']' in result
+        logger.debug(f"识别结果: '{result}', is_record: {is_record}")
 
         if not is_record:
             if hasattr(self, 'append_log'):
@@ -1450,7 +1452,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 self.recognition_count += 1
 
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
                 self.history_text.setTextCursor(cursor)
 
             if hasattr(self, 'append_log'):
@@ -1529,7 +1531,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 self.log_text.append(log_entry)
 
                 cursor = self.log_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
                 self.log_text.setTextCursor(cursor)
 
         from PySide6.QtCore import QTimer
@@ -1631,7 +1633,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 添加可点击的文件链接 - 使用富文本添加下划线但避免HTML链接
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
 
                 # 添加换行
                 cursor.insertText('\n')
@@ -1684,7 +1686,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 was_at_bottom = scrollbar.value() == scrollbar.maximum()
 
                 cursor = self.log_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
                 cursor.insertHtml(f"<br>{html_message}")
 
                 if was_at_bottom:
@@ -1878,7 +1880,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 滚动到底部
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.End)
+                cursor.movePosition(QTextCursor.MoveOperation.End)
                 self.history_text.setTextCursor(cursor)
 
         except Exception as e:

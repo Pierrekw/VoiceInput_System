@@ -1568,13 +1568,35 @@ class WorkingSimpleMainWindow(QMainWindow):
             print(f"[DEBUG] 块文本: '{block.text()}'")
             print(f"[DEBUG] 清理后文本: '{line_text}'")
             print(f"[DEBUG] 文本长度: {len(line_text)}")
+
+            # 额外检查：验证点击位置是否真的在文本内容上
+            cursor_rect = self.history_text.cursorRect(cursor)
+            block_rect = self.history_text.blockBoundingRect(block)
+            print(f"[DEBUG] 光标矩形: x={cursor_rect.x()}, y={cursor_rect.y()}, width={cursor_rect.width()}, height={cursor_rect.height()}")
+            print(f"[DEBUG] 块矩形: x={block_rect.x()}, y={block_rect.y()}, width={block_rect.width()}, height={block_rect.height()}")
+
+            # 检查点击位置是否在块的有效文本区域内
+            is_in_text_area = (
+                position.y() >= block_rect.top() and
+                position.y() <= block_rect.bottom() and
+                position.x() >= block_rect.left() and
+                len(line_text.strip()) > 0  # 确保有文本内容
+            )
+            print(f"[DEBUG] 点击位置在文本区域内: {is_in_text_area}")
+
             print(f"[DEBUG] 包含.xlsx: {'.xlsx' in line_text.lower()}")
             print(f"[DEBUG] 不包含'文件名': {'文件名' not in line_text}")
             print(f"[DEBUG] 有Excel文件路径: {len(self._excel_file_paths) > 0}")
 
             # 检查是否点击了Excel文件相关内容
-            # 精确逻辑：包含.xlsx但不包含"文件名"，且不是空行
-            will_trigger = ('.xlsx' in line_text.lower() or '.xls' in line_text.lower()) and '文件名' not in line_text and len(line_text.strip()) > 0 and self._excel_file_paths
+            # 精确逻辑：包含.xlsx但不包含"文件名"，且不是空行，且点击位置在文本区域内
+            will_trigger = (
+                ('.xlsx' in line_text.lower() or '.xls' in line_text.lower()) and
+                '文件名' not in line_text and
+                len(line_text.strip()) > 0 and
+                self._excel_file_paths and
+                is_in_text_area  # 关键：必须点击在实际文本区域
+            )
             print(f"[DEBUG] 会触发Excel打开: {will_trigger}")
 
             if will_trigger:

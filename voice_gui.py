@@ -1369,7 +1369,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 添加到历史文本框
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
                 cursor.insertText(f"{formatted_command}\n")
 
                 # 滚动到底部
@@ -1397,23 +1397,21 @@ class WorkingSimpleMainWindow(QMainWindow):
         try:
             if hasattr(self, 'history_text'):
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
                 cursor.insertText(f"{text}\n")
                 self.history_text.ensureCursorVisible()
         except Exception as e:
             logger.error(f"添加文本到历史记录失败: {e}")
 
     def display_result(self, result):
-        """显示识别结果 - 显示所有[xxx]格式的信息"""
+        """显示识别结果 - 只显示record类型的信息"""
         if not result or not result.strip():
             return
 
         result = result.strip()
 
-        # 简化逻辑：所有以[开头且包含]的内容都认为是record
-        # 包括：[id] 数字, [id] 特殊文本, [CMD] 命令
-        is_record = result.startswith('[') and ']' in result
-        logger.debug(f"识别结果: '{result}', is_record: {is_record}")
+        is_record = result.startswith('[') and ']' in result and ('] ' in result or ']' in result and len(result) > 3)
+        logger.debug(f"识别结果: {is_record}")
 
         if not is_record:
             if hasattr(self, 'append_log'):
@@ -1452,7 +1450,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 self.recognition_count += 1
 
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
                 self.history_text.setTextCursor(cursor)
 
             if hasattr(self, 'append_log'):
@@ -1531,7 +1529,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 self.log_text.append(log_entry)
 
                 cursor = self.log_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
                 self.log_text.setTextCursor(cursor)
 
         from PySide6.QtCore import QTimer
@@ -1558,36 +1556,40 @@ class WorkingSimpleMainWindow(QMainWindow):
             except AttributeError:
                 # 回退到旧方法 (向后兼容)
                 cursor = self.history_text.cursorForPosition(event.pos())
-            # 使用更可靠的block.text()方法获取当前行内容
-            # 避免LineUnderCursor在边界情况下的意外行为
-            block = cursor.block()
-            line_text = block.text().strip()
+            cursor.select(QTextCursor.LineUnderCursor)
+            line_text = cursor.selectedText().strip()
 
-            # 检查是否点击了Excel文件相关内容
-            # 精确逻辑：包含.xlsx但不包含"文件名"，且不是空行
-            if ('.xlsx' in line_text.lower() or '.xls' in line_text.lower()) and '文件名' not in line_text and len(line_text.strip()) > 0 and self._excel_file_paths:
+            # 检查是否点击了Excel文件行
+            if "📂 点击打开Excel文件:" in line_text:
+                # 从存储的路径列表中获取最新的文件路径
                 try:
-                    # 直接使用最新的Excel文件路径
-                    file_path_to_open = self._excel_file_paths[-1]
+                    if self._excel_file_paths:  # 已经初始化，直接检查是否有内容
+                        file_path = self._excel_file_paths[-1]  # 获取最新的Excel文件路径
 
-                    if os.path.exists(file_path_to_open):
-                        # 直接打开文件，不改变UI
-                        if sys.platform == 'win32':
-                            os.startfile(file_path_to_open)
-                        elif sys.platform == 'darwin':
-                            subprocess.run(['open', file_path_to_open], check=True)
+                        if os.path.exists(file_path):
+                            # 直接打开文件，不改变UI
+                            if sys.platform == 'win32':
+                                os.startfile(file_path)
+                            elif sys.platform == 'darwin':
+                                subprocess.run(['open', file_path], check=True)
+                            else:
+                                subprocess.run(['xdg-open', file_path], check=True)
+
+                            logger.info(f"用户点击打开Excel文件: {file_path}")
+                           
                         else:
-                            subprocess.run(['xdg-open', file_path_to_open], check=True)
-
-                        logger.info(f"用户点击打开Excel文件: {file_path_to_open}")
-
+                            logger.warning(f"Excel文件不存在: {file_path}")                           
+                            # 向用户显示更友好的消息
+                            self.status_bar.showMessage("⚠️ Excel文件不存在或已被移动", 3000)
                     else:
-                        logger.warning(f"Excel文件不存在: {file_path_to_open}")
+                        # 只记录一次警告，避免重复输出
+                        logger.warning("未找到Excel文件路径信息")
                         # 向用户显示更友好的消息
-                        self.status_bar.showMessage("⚠️ Excel文件不存在或已被移动", 3000)
+                        self.status_bar.showMessage("ℹ️ 暂无可用的Excel文件", 3000)
+
                 except Exception as e:
                     logger.error(f"打开Excel文件失败: {e}")
-                    self.status_bar.showMessage("❌ 打开Excel文件失败", 3000)
+                    
 
                 # 不调用原始事件处理，避免任何UI变化
                 return
@@ -1629,7 +1631,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 添加可点击的文件链接 - 使用富文本添加下划线但避免HTML链接
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
 
                 # 添加换行
                 cursor.insertText('\n')
@@ -1682,7 +1684,7 @@ class WorkingSimpleMainWindow(QMainWindow):
                 was_at_bottom = scrollbar.value() == scrollbar.maximum()
 
                 cursor = self.log_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
                 cursor.insertHtml(f"<br>{html_message}")
 
                 if was_at_bottom:
@@ -1876,7 +1878,7 @@ class WorkingSimpleMainWindow(QMainWindow):
 
                 # 滚动到底部
                 cursor = self.history_text.textCursor()
-                cursor.movePosition(QTextCursor.MoveOperation.End)
+                cursor.movePosition(QTextCursor.End)
                 self.history_text.setTextCursor(cursor)
 
         except Exception as e:

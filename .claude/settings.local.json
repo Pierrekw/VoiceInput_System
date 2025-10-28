@@ -42,7 +42,8 @@
       "Bash(.venv/Scripts/pip.exe install:*)",
       "Bash(cp:*)",
       "Read(//f/04_AI/01_Workplace/ten-vad/**)",
-      "Read(//f/04_AI/01_Workplace/silero-vad/**)"
+      "Read(//f/04_AI/01_Workplace/silero-vad/**)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }

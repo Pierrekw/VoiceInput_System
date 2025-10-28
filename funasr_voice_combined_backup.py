@@ -19,21 +19,6 @@ import os
 import sys
 import warnings
 import logging
-import time
-import json
-
-# ============================================================================
-# 📦 导入其他依赖（先导入typing，避免NameError）
-# ============================================================================
-import io
-import time
-import numpy as np
-import pyaudio
-import threading
-from contextlib import contextmanager
-from typing import List, Dict, Optional, Callable, Union, Tuple, Any
-from dataclasses import dataclass
-from collections import deque
 
 # 导入性能监控
 from utils.performance_monitor import performance_monitor, PerformanceStep
@@ -76,117 +61,73 @@ except Exception as e:
     TEN_VAD_AVAILABLE = False
 
 # ============================================================================
-# 🔧 优化：FFmpeg环境缓存机制
+# 🔧 关键：FFmpeg环境必须在FunASR导入前设置
 # ============================================================================
-
-class FFmpegCache:
-    """FFmpeg路径缓存管理器"""
-
-    _cache_file = ".ffmpeg_cache.json"
-    _cache = None
-
-    @classmethod
-    def load_cache(cls) -> dict:
-        """加载缓存"""
-        if cls._cache is not None:
-            return cls._cache
-
-        try:
-            if os.path.exists(cls._cache_file):
-                with open(cls._cache_file, 'r', encoding='utf-8') as f:
-                    cls._cache = json.load(f)
-                    # 检查缓存是否过期（24小时）
-                    cache_time = cls._cache.get('timestamp', 0)
-                    if time.time() - cache_time < 86400:  # 24小时
-                        return cls._cache
-        except Exception:
-            pass
-
-        cls._cache = {'timestamp': time.time(), 'ffmpeg_path': None, 'path_set': False}
-        return cls._cache
-
-    @classmethod
-    def save_cache(cls, cache_data: dict):
-        """保存缓存"""
-        try:
-            cls._cache = cache_data
-            cls._cache['timestamp'] = time.time()
-            with open(cls._cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cls._cache, f, indent=2)
-        except Exception:
-            pass
-
-    @classmethod
-    def get_cached_path(cls) -> Optional[str]:
-        """获取缓存的FFmpeg路径"""
-        cache = cls.load_cache()
-        return cache.get('ffmpeg_path')
-
-    @classmethod
-    def set_cached_path(cls, path: str):
-        """设置缓存的FFmpeg路径"""
-        cache = cls.load_cache()
-        cache['ffmpeg_path'] = path
-        cache['path_set'] = True
-        cls.save_cache(cache)
-
-    @classmethod
-    def is_path_set(cls) -> bool:
-        """检查路径是否已设置"""
-        cache = cls.load_cache()
-        return cache.get('path_set', False)
-
 def setup_ffmpeg_environment():
-    """优化的FFmpeg环境设置"""
-    # 检查环境变量是否已设置
+    """设置FFmpeg环境（必须在导入FunASR之前调用）"""
+    # 方法1：使用环境变量永久设置（最快）
+    # 如果已经设置过FFmpeg路径，直接跳过
     if os.environ.get('FFMPEG_PATH_SET') == '1':
         return True
-
-    # 检查缓存
-    if FFmpegCache.is_path_set():
-        cached_path = FFmpegCache.get_cached_path()
-        if cached_path and os.path.exists(cached_path):
+    
+    try:
+        # 方法2：配置固定路径（推荐用于快速启动）
+        # 这里设置一个固定的FFmpeg路径，避免多次检查
+        # 用户可以根据实际情况修改这个路径
+        FIXED_FFMPEG_PATH = "./onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin"
+        
+        if FIXED_FFMPEG_PATH and os.path.exists(FIXED_FFMPEG_PATH):
             current_path = os.environ.get('PATH', '')
-            if cached_path not in current_path:
-                os.environ['PATH'] = cached_path + os.pathsep + current_path
+            if FIXED_FFMPEG_PATH not in current_path:
+                os.environ['PATH'] = FIXED_FFMPEG_PATH + os.pathsep + current_path
+            # 标记FFmpeg路径已设置
             os.environ['FFMPEG_PATH_SET'] = '1'
             return True
+        
+        # 方法3：快速检查（仅检查最可能的位置）
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        fast_check_paths = [
+            # 主要检查FunASR_Deployment目录
+            os.path.join(script_dir, "FunASR_Deployment", "dependencies",
+                        "ffmpeg-master-latest-win64-gpl-shared", "bin"),
+        ]
+        
+        for ffmpeg_path in fast_check_paths:
+            if os.path.exists(ffmpeg_path):
+                current_path = os.environ.get('PATH', '')
+                if ffmpeg_path not in current_path:
+                    os.environ['PATH'] = ffmpeg_path + os.pathsep + current_path
+                os.environ['FFMPEG_PATH_SET'] = '1'
+                return True
+        
+        # 注意：系统PATH检查已移除，因为它较慢
+        # 建议：将FFmpeg添加到系统环境变量PATH中
+        print("⚠️ 未找到FFmpeg快速路径")
+        print("💡 性能优化建议：")
+        print("  1. 将FFmpeg安装到系统PATH环境变量中")
+        print(f"  2. 或修改代码中的FIXED_FFMPEG_PATH为您的FFmpeg路径")
+        
+        return False
 
-    # 快速路径检查（优化的路径顺序）
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    candidate_paths = [
-        # 最可能的路径（优先级从高到低）
-        os.path.join(script_dir, "onnx_deps", "ffmpeg-master-latest-win64-gpl-shared", "bin"),
-        os.path.join(script_dir, "FunASR_Deployment", "dependencies", "ffmpeg-master-latest-win64-gpl-shared", "bin"),
-        "./onnx_deps/ffmpeg-master-latest-win64-gpl-shared/bin",
-    ]
-
-    for ffmpeg_path in candidate_paths:
-        if os.path.exists(ffmpeg_path):
-            # 设置环境变量
-            current_path = os.environ.get('PATH', '')
-            if ffmpeg_path not in current_path:
-                os.environ['PATH'] = ffmpeg_path + os.pathsep + current_path
-
-            # 缓存结果
-            FFmpegCache.set_cached_path(ffmpeg_path)
-            os.environ['FFMPEG_PATH_SET'] = '1'
-
-            print(f"✅ FFmpeg路径已设置: {ffmpeg_path}")
-            return True
-
-    # 缓存失败结果，避免重复检查
-    FFmpegCache.save_cache({'timestamp': time.time(), 'ffmpeg_path': None, 'path_set': False})
-
-    print("⚠️ 未找到FFmpeg，部分功能可能受限")
-    return False
+    except Exception:
+        # 静默失败，避免影响启动速度
+        return False
 
 # 立即执行FFmpeg环境设置
 setup_ffmpeg_environment()
 
 # ============================================================================
-# 📦 其他依赖已在上面导入
+# 📦 导入其他依赖
 # ============================================================================
+import io
+import time
+import numpy as np
+import pyaudio
+import threading
+from contextlib import contextmanager
+from typing import List, Dict, Optional, Callable, Union, Tuple, Any
+from dataclasses import dataclass
+from collections import deque
 
 # 使用统一的日志工具类
 from utils.logging_utils import LoggingManager
@@ -274,7 +215,7 @@ class FunASRVoiceRecognizer:
                  chunk_size: Optional[int] = None,
                  silent_mode: bool = True):
         """
-        初始化语音识别器（优化版）
+        初始化语音识别器
 
         Args:
             model_path: FunASR模型路径
@@ -283,8 +224,6 @@ class FunASRVoiceRecognizer:
             chunk_size: 音频块大小 (None时从配置读取)
             silent_mode: 静默模式，隐藏中间过程信息
         """
-        # 记录初始化开始时间（性能监控）
-        self._init_start_time = time.time()
         # 从配置加载音频参数（如果未指定）
         if sample_rate is None or chunk_size is None:
             try:
@@ -365,9 +304,6 @@ class FunASRVoiceRecognizer:
 
         # 后初始化
         self.__post_init__()
-
-        # 记录构造函数完成时间
-        self._construction_time = time.time() - self._init_start_time
 
     def __post_init__(self):
         """后初始化，设置VAD类型"""
@@ -503,7 +439,7 @@ class FunASRVoiceRecognizer:
             logger.info("✅ 识别器已初始化")
             return True
 
-        logger.info("🚀 初始化FunASR语音识别器（优化版）...")
+        logger.info("🚀 初始化FunASR语音识别器...")
         init_start_time = time.time()
 
         # 检查依赖 - 前置检查，避免后续失败
@@ -519,12 +455,7 @@ class FunASRVoiceRecognizer:
 
         self._is_initialized = True
         total_init_time = time.time() - init_start_time
-
-        # 性能日志
         logger.info(f"✅ FunASR语音识别器初始化完成 (总耗时: {total_init_time:.2f}秒)")
-        if hasattr(self, '_construction_time'):
-            logger.info(f"📊 性能统计 - 构造函数: {self._construction_time:.3f}秒, 初始化: {total_init_time:.3f}秒")
-
         return True
 
     def _load_model(self) -> bool:

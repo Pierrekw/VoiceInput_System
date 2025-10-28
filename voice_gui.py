@@ -618,8 +618,9 @@ class VoiceEnergyBar(QProgressBar):
 class WorkingSimpleMainWindow(QMainWindow):
     """工作简化版主窗口"""
 
-    def __init__(self):
+    def __init__(self, debug_mode=False):
         super().__init__()
+        self.debug_mode = debug_mode  # 保存调试模式标志
         self.worker = None
         self.current_mode = 'customized'  # 设置默认模式，必须在init_ui之前
         self.voice_energy_bar = None  # 语音能量条
@@ -634,9 +635,37 @@ class WorkingSimpleMainWindow(QMainWindow):
         self.init_ui()
         self.setup_timer()
 
+        # 如果是调试模式，自动填充验证信息
+        if self.debug_mode:
+            self.fill_debug_info()
+
+    def fill_debug_info(self):
+        """调试模式：自动填充验证信息"""
+        if self.part_no_input and self.batch_no_input and self.inspector_input:
+            # 使用延迟填充，确保界面完全初始化
+            from PySide6.QtCore import QTimer
+
+            def fill_values():
+                self.part_no_input.setText("PART-A001")
+                self.batch_no_input.setText("B202510")
+                self.inspector_input.setText("ZS")
+
+                # 在调试模式下显示提示信息
+                self.append_log("🐛 调试模式已启用：自动填充验证信息")
+                self.append_log("   零件号: PART-A001")
+                self.append_log("   批次号: B202510")
+                self.append_log("   检验员: ZS")
+                self.status_bar.showMessage("🐛 调试模式：验证信息已自动填充", 5000)
+
+            # 延迟100ms执行，确保所有UI组件都已初始化
+            QTimer.singleShot(100, fill_values)
+
     def init_ui(self):
         """初始化界面"""
-        self.setWindowTitle("FunASR语音识别系统 v2.4")
+        title = "FunASR语音识别系统 v2.4"
+        if self.debug_mode:
+            title += " (调试模式)"
+        self.setWindowTitle(title)
         self.setMinimumSize(700, 890)
 
         central_widget = QWidget()
@@ -1893,13 +1922,20 @@ class WorkingSimpleMainWindow(QMainWindow):
 
 def main():
     """主函数"""
+    import argparse
+
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='FunASR语音识别系统')
+    parser.add_argument('--debug', action='store_true', help='调试模式：自动填充验证信息')
+    args = parser.parse_args()
+
     app = QApplication(sys.argv)
-    app.setStyle("Fusion")    
+    app.setStyle("Fusion")
     app.setApplicationName("FunASR语音识别系统 (多模式版)")
 
-    window = WorkingSimpleMainWindow()
+    window = WorkingSimpleMainWindow(debug_mode=args.debug)
     window.show()
-    
+
     window.update()
     window.repaint()
 

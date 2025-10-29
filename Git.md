@@ -628,3 +628,10 @@ git push origin --delete merge-voice-and-excel
 你现在处于**理想状态**：冲突已解决、代码已合并、工作区干净。下一步就是**测试 + 决策是否集成到主干**。
 
 需要我帮你写一个“测试 checklist”或“汇报用的功能演示脚本”吗？
+
+同步Git
+
+git checkout -B develop origin/develop   # 确保本地 develop 与远程一致
+git pull origin develop                  # 再次拉取（虽然通常已最新）
+# 如果之前 stash 的内容有用：
+git stash pop

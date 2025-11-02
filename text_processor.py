@@ -220,10 +220,23 @@ class TextProcessor:
         # 如果主要是数字（>90%）或者是很短的纯数字，返回True
         return digit_ratio > 0.9 or (len(clean_text) <= 3 and digit_count == len(clean_text))
 
-    def extract_numbers(self, original_text: str, processed_text: Optional[str] = None) -> List[float]:
+    def extract_numbers(self, original_text: str, processed_text: Optional[str] = None,
+                       command_processor: Optional['VoiceCommandProcessor'] = None) -> List[float]:
         """
-        简化的数字提取逻辑
-        重构后优先从processed_text中提取阿拉伯数字
+        提取文本中的数字，支持中文数字和阿拉伯数字
+
+        严格验证规则：
+        - 只提取纯数字输入（如"200"、"1300"）
+        - 跳过出现在文本上下文中的100的倍数（≥2个周围字符）
+        - 验证结果不是语音命令
+
+        Args:
+            original_text: 原始语音文本
+            processed_text: 处理后的文本（可选）
+            command_processor: 语音命令处理器（用于外部验证）
+
+        Returns:
+            提取的数字列表
         """
         logger.debug(f"开始提取数字: '{original_text[:50]}...'，处理后文本: {processed_text[:50]+'...' if processed_text is not None else None}")
         if not original_text:
@@ -238,18 +251,31 @@ class TextProcessor:
             import re
             if CN2AN_AVAILABLE and processed_text:
                 # 提取阿拉伯数字（包括小数）
-                arabic_numbers = re.findall(r'\d+\.?\d*', text_to_extract)
-                if arabic_numbers:
-                    numbers = []
-                    for num_str in arabic_numbers:
-                        try:
-                            num = float(num_str)
-                            # 限制数字范围
-                            if -1000000 <= num <= 1000000000000:
-                                numbers.append(num)
-                        except ValueError:
+                arabic_numbers = re.finditer(r'\d+\.?\d*', text_to_extract)
+                numbers = []
+                for match in arabic_numbers:
+                    try:
+                        num_str = match.group()
+                        num = float(num_str)
+
+                        # 严格验证：检查是否为100的倍数且在文本上下文中
+                        if self._should_skip_number(num, match.start(), match.end(), text_to_extract):
+                            logger.debug(f"跳过100倍数（文本上下文）: {num} (位置: {match.start()}-{match.end()})")
                             continue
-                    return numbers
+
+                        # 严格验证：通过命令验证（如果提供了command_processor）
+                        # 只在数字是100倍数时进行命令验证，避免误杀非100倍数
+                        if command_processor and num % 100 == 0:
+                            if not command_processor.validate_command_result(original_text, int(num) if num.is_integer() else None):
+                                logger.debug(f"跳过语音命令匹配的数字: {num}")
+                                continue
+
+                        # 限制数字范围
+                        if -1000000 <= num <= 1000000000000:
+                            numbers.append(num)
+                    except ValueError:
+                        continue
+                return numbers
 
             # 如果没有阿拉伯数字，尝试转换中文数字
             if not CN2AN_AVAILABLE:
@@ -277,6 +303,14 @@ class TextProcessor:
                 try:
                     num = cn2an.cn2an(text_to_convert, "smart")
                     num_float = float(num)
+
+                    # 严格验证：通过命令验证（如果提供了command_processor）
+                    # 只在数字是100倍数时进行命令验证，避免误杀非100倍数
+                    if command_processor and num_float % 100 == 0:
+                        if not command_processor.validate_command_result(original_text, int(num_float) if num_float.is_integer() else None):
+                            logger.debug(f"跳过语音命令匹配的中文数字: {num_float}")
+                            return []
+
                     if -1000000 <= num_float <= 1000000000000:
                         return [num_float]
                 except:
@@ -287,6 +321,42 @@ class TextProcessor:
         except Exception as e:
             logger.error(f"数字提取过程出错: {str(e)}")
             return []
+
+    def _should_skip_number(self, number: float, start_pos: int, end_pos: int, text: str) -> bool:
+        """
+        检查是否应该跳过某个数字（严格验证规则）
+
+        跳过规则：
+        - 100的倍数（100, 200, 300, ...）
+        - 并且有≥2个周围字符（说明在文本上下文中）
+
+        Args:
+            number: 要检查的数字
+            start_pos: 数字在文本中的开始位置
+            end_pos: 数字在文本中的结束位置
+            text: 完整文本
+
+        Returns:
+            True if should skip, False otherwise
+        """
+        # 只跳过100的倍数
+        if number <= 0 or number % 100 != 0:
+            return False
+
+        # 计算周围字符数
+        # 左边的字符数
+        left_chars = start_pos
+        # 右边的字符数
+        right_chars = len(text) - end_pos
+        # 总周围字符数
+        total_surrounding_chars = left_chars + right_chars
+
+        # 如果总周围字符数≥2，认为在文本上下文中，跳过
+        if total_surrounding_chars >= 2:
+            logger.debug(f"检测到100倍数在文本上下文中: {number}, 左字符数: {left_chars}, 右字符数: {right_chars}, 总周围字符数: {total_surrounding_chars}, 文本: '{text}'")
+            return True
+
+        return False
 
     def process_text(self, text: str) -> str:
         """
@@ -542,9 +612,9 @@ class VoiceCommandProcessor:
 
                 logger.debug(f"命令前缀匹配: '{prefix}', 剩余文本: '{remaining_text}'")
 
-                # 从剩余文本中提取数字
+                # 从剩余文本中提取数字（严格验证）
                 if remaining_text:
-                    numbers = self.text_processor.extract_numbers(remaining_text)
+                    numbers = self.text_processor.extract_numbers(remaining_text, command_processor=self)
                     if numbers:
                         standard_id = int(numbers[0])
                         # 🔒 使用统一验证方法验证标准序号
@@ -556,7 +626,7 @@ class VoiceCommandProcessor:
                 try:
                     # 使用TextProcessor处理剩余文本
                     processed_remaining = self.text_processor.process_text(remaining_text)
-                    numbers = self.text_processor.extract_numbers(processed_remaining)
+                    numbers = self.text_processor.extract_numbers(processed_remaining, command_processor=self)
                     if numbers:
                         standard_id = int(numbers[0])
                         # 🔒 使用统一验证方法验证标准序号

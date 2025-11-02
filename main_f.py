@@ -688,7 +688,7 @@ class FunASRVoiceSystem:
             text_processing_start = time.time()
 
             processed = self.processor.process_text(result.text)
-            numbers = self.processor.extract_numbers(result.text, processed)
+            numbers = self.processor.extract_numbers(result.text, processed, self.command_processor)
 
             # 文本处理结束
             text_processing_time = time.time() - text_processing_start

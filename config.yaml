@@ -79,6 +79,12 @@ excel:
     memory_row_management: true  # 启用内存行号管理
     batch_size: 50  # 批量写入大小
 model:
+  # 外部模型路径配置 (支持独立挂载)
+  external_paths:
+    enabled: true
+    funasr_model_path: model/fun  # FunASR模型路径
+    onnx_deps_path: onnx_deps      # ONNX依赖库路径
+  # 默认路径 (向后兼容)
   default_path: model/fun
   device: cpu
   funasr:
@@ -91,6 +97,7 @@ model:
     decoder_chunk_look_back: 1
     disable_update: true
     encoder_chunk_look_back: 1  # 进一步减少内存使用
+    # 保持与external_paths.funasr_model_path相同的路径
     path: model/fun
     trust_remote_code: false
 recognition:

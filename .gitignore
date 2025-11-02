@@ -1,44 +1,56 @@
-# 忽略所有 .log 文件（根目录及子目录）
-*.log
+# Nuitka构建输出
+build/
+.nuitka-cache/
+*.build/
+*.c
+*.h
+*.obj
+*.pyd
 
-# 忽略 backup 目录及其所有内容
-backup/
-
-# 忽略 model 目录及其所有内容
-model/
-
-# 忽略所有 Excel 文件
-*.xlsx
-
-# 忽略 reports 目录及其所有内容（生成的Excel报告）
-reports/
-
-# 忽略 logs 目录及其所有内容（生成的日志文件）
-logs/
-
-# 忽略 FunASR 部署依赖文件（大文件）
-FunASR_Deployment/dependencies/
-FunASR_Deployment/*.zip
-FunASR_Deployment/*.tar.gz
-FunASR_Deployment/*.7z
-
-# 忽略 FFmpeg 相关大文件
-*.ffmpeg
-ffmpeg*.exe
-ffmpeg*.dll
-
-# 忽略 Python 编译产生的缓存目录
+# Python
 __pycache__/
-
-mypy_cache/
-
-pytest_cache/
-
-# 忽略虚拟环境目录（如 venv、.venv 等）
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
 .venv/
+pip-log.txt
+pip-delete-this-directory.txt
 
-# 忽略pytest-cov 的 coverage 临时文件（.coverage 缓存、htmlcov 目录等）
-.coverage
-htmlcov/
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-voice_input.egg-info/
+# PyInstaller
+*.manifest
+*.spec
+
+# Nuitka crash reports
+nuitka-crash-report.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

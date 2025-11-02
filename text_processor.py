@@ -250,29 +250,32 @@ class TextProcessor:
             # 如果处理后的文本包含阿拉伯数字，直接提取
             import re
             if CN2AN_AVAILABLE and processed_text:
-                # 提取阿拉伯数字（包括小数）
-                arabic_numbers = re.finditer(r'\d+\.?\d*', text_to_extract)
+                # 提取阿拉伯数字（包括小数，支持负数）
+                arabic_numbers = re.finditer(r'-?\d+\.?\d*', text_to_extract)
                 numbers = []
                 for match in arabic_numbers:
                     try:
                         num_str = match.group()
                         num = float(num_str)
 
-                        # 严格验证：检查是否为100的倍数且在文本上下文中
-                        if self._should_skip_number(num, match.start(), match.end(), text_to_extract):
-                            logger.debug(f"跳过100倍数（文本上下文）: {num} (位置: {match.start()}-{match.end()})")
+                        # 处理负数：提取绝对值
+                        abs_num = abs(num)
+
+                        # 严格验证：检查绝对值是否为100的倍数且在文本上下文中
+                        if self._should_skip_number(abs_num, match.start(), match.end(), text_to_extract):
+                            logger.debug(f"跳过100倍数（文本上下文）: {abs_num} (位置: {match.start()}-{match.end()})")
                             continue
 
                         # 严格验证：通过命令验证（如果提供了command_processor）
                         # 只在数字是100倍数时进行命令验证，避免误杀非100倍数
-                        if command_processor and num % 100 == 0:
-                            if not command_processor.validate_command_result(original_text, int(num) if num.is_integer() else None):
-                                logger.debug(f"跳过语音命令匹配的数字: {num}")
+                        if command_processor and abs_num % 100 == 0:
+                            if not command_processor.validate_command_result(original_text, int(abs_num) if abs_num.is_integer() else None):
+                                logger.debug(f"跳过语音命令匹配的数字: {abs_num}")
                                 continue
 
-                        # 限制数字范围
-                        if -1000000 <= num <= 1000000000000:
-                            numbers.append(num)
+                        # 限制数字范围（使用绝对值）
+                        if -1000000 <= abs_num <= 1000000000000:
+                            numbers.append(abs_num)
                     except ValueError:
                         continue
                 return numbers
@@ -328,10 +331,10 @@ class TextProcessor:
 
         跳过规则：
         - 100的倍数（100, 200, 300, ...）
-        - 并且有≥2个周围字符（说明在文本上下文中）
+        - 并且有周围字符（左边或右边≥1个字符，说明在文本上下文中）
 
         Args:
-            number: 要检查的数字
+            number: 要检查的数字（应该使用绝对值）
             start_pos: 数字在文本中的开始位置
             end_pos: 数字在文本中的结束位置
             text: 完整文本
@@ -339,7 +342,7 @@ class TextProcessor:
         Returns:
             True if should skip, False otherwise
         """
-        # 只跳过100的倍数
+        # 只跳过100的倍数（正数）
         if number <= 0 or number % 100 != 0:
             return False
 
@@ -348,12 +351,12 @@ class TextProcessor:
         left_chars = start_pos
         # 右边的字符数
         right_chars = len(text) - end_pos
-        # 总周围字符数
-        total_surrounding_chars = left_chars + right_chars
 
-        # 如果总周围字符数≥2，认为在文本上下文中，跳过
-        if total_surrounding_chars >= 2:
-            logger.debug(f"检测到100倍数在文本上下文中: {number}, 左字符数: {left_chars}, 右字符数: {right_chars}, 总周围字符数: {total_surrounding_chars}, 文本: '{text}'")
+        # 更严格的判断：只要左边或右边任何一个方向有字符（≥1），
+        # 就认为是文本上下文，应该跳过
+        # 例如："吃饭200"、"x200"、"200元" 都被视为文本上下文
+        if left_chars >= 1 or right_chars >= 1:
+            logger.debug(f"检测到100倍数在文本上下文中: {number}, 左字符数: {left_chars}, 右字符数: {right_chars}, 文本: '{text}'")
             return True
 
         return False

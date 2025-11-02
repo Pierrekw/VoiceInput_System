@@ -19,7 +19,7 @@ import io
 import threading
 import time
 from datetime import datetime
-from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type, Sequence
+from typing import Optional, List, Dict, Callable, Any, Tuple, Union, Type, Sequence, cast
 
 # 类型别名
 from enum import Enum
@@ -583,6 +583,8 @@ class FunASRVoiceSystem:
         command_type, standard_id = self.recognize_voice_command(processed_text)
         if command_type == VoiceCommandType.STANDARD_ID:
             # 处理标准序号命令（避免重复调用）
+            # 标准序号命令的 standard_id 不会是 None
+            assert standard_id is not None, "标准序号命令的 standard_id 不应为 None"
             self._handle_standard_id_command(processed_text, standard_id)
             return
         elif command_type != VoiceCommandType.UNKNOWN:
@@ -609,10 +611,13 @@ class FunASRVoiceSystem:
                 else:
                     # 特定文本结果
                     # 将特定文本直接写入Excel，而不是数值
+                    # 注意：在 reaches 这行代码之前，special_text_match 已经通过条件 (special_text_match and self.excel_exporter) 验证
+                    assert special_text_match is not None, "特定文本匹配结果不应为 None"
                     text_value = special_text_match  # 直接使用OK/Not OK文本
-                    excel_data.append((text_value, original_text, special_text_match))
+                    # 使用类型断言确保 mypy 正确识别类型
+                    excel_data.append((cast(str, text_value), original_text, cast(str, special_text_match)))
                     result_type = "特定文本"
-                    result_value = special_text_match  # type: ignore
+                    result_value = cast(str, special_text_match)
                 
                 # Excel写入开始
                 excel_start = time.time()
@@ -697,6 +702,8 @@ class FunASRVoiceSystem:
 
             if command_type == VoiceCommandType.STANDARD_ID:
                 # 直接处理标准序号命令（避免重复调用）
+                # 标准序号命令的 standard_id 不会是 None
+                assert standard_id is not None, "标准序号命令的 standard_id 不应为 None"
                 self._handle_standard_id_command(processed, standard_id)
             elif command_type != VoiceCommandType.UNKNOWN:
                 # 处理其他语音命令（暂停、继续、停止）

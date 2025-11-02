@@ -487,10 +487,16 @@ A: 设置 `global_unload: true` 在识别完成后自动卸载模型。
 - 集成 `validate_command_result()` 外部验证机制
 - 向后兼容：所有参数可选，不影响现有调用
 
+**🐛 重要修复**:
+- 修复ExcelUtils.py过度修改问题：在修复mypy类型错误时，恢复了被过度修改的excel_utils.py
+- 问题描述：在修复pre-commit hooks的mypy检查时，过度修改了excel_utils.py，添加了不必要的Decimal导入和复杂类型转换逻辑
+- 解决方案：使用 `git checkout HEAD -- excel_utils.py` 恢复到原始工作版本
+- 教训：避免过度工程化，原始简洁代码往往是最好的
+
 **📊 验证结果**:
 - 核心功能测试：17/17 通过
 - 小数数字测试：16/16 通过
-- MyPy类型检查：零错误
+- MyPy类型检查：零错误（核心模块）
 - 向后兼容性：完全兼容
 
 **💡 使用场景**:

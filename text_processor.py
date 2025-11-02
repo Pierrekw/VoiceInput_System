@@ -439,6 +439,29 @@ class VoiceCommandProcessor:
         self.min_match_length = min_match_length
         self.confidence_threshold = confidence_threshold
 
+    def validate_command_result(self, text: str, matched_number: Optional[int]) -> bool:
+        """
+        统一命令验证方法：防错机制
+        验证命令结果的有效性，确保只有真正的命令才被识别
+
+        Args:
+            text: 原始文本
+            matched_number: 匹配到的数字（标准序号等）
+
+        Returns:
+            True表示验证通过，False表示验证失败
+        """
+        # 情况1：如果是标准序号，验证是否为100的整数倍
+        if matched_number is not None:
+            if matched_number <= 0:
+                logger.warning(f"❌ 命令数字无效（小于等于0）: {matched_number}，文本: '{text}'")
+                return False
+            if matched_number % 100 != 0:
+                logger.warning(f"❌ 命令数字不是100的整数倍: {matched_number}，文本: '{text}'")
+                return False
+
+        return True
+
     def process_command_text(self, text: str) -> str:
         """处理命令文本"""
         result = self.text_processor.clean_text_for_command_matching(text)
@@ -524,12 +547,10 @@ class VoiceCommandProcessor:
                     numbers = self.text_processor.extract_numbers(remaining_text)
                     if numbers:
                         standard_id = int(numbers[0])
-                        # 验证是否为有效的标准序号（100的倍数）
-                        if standard_id > 0 and standard_id % 100 == 0:
-                            logger.info(f"匹配到标准序号命令: {prefix} -> {standard_id}")
+                        # 🔒 使用统一验证方法验证标准序号
+                        if self.validate_command_result(text, standard_id):
+                            logger.info(f"✅ 标准序号命令验证通过: '{prefix}' -> {standard_id}")
                             return standard_id
-                        else:
-                            logger.debug(f"提取的数字不是有效的标准序号: {standard_id}")
 
                 # 如果直接提取数字失败，尝试中文数字转换
                 try:
@@ -538,8 +559,9 @@ class VoiceCommandProcessor:
                     numbers = self.text_processor.extract_numbers(processed_remaining)
                     if numbers:
                         standard_id = int(numbers[0])
-                        if standard_id > 0 and standard_id % 100 == 0:
-                            logger.info(f"通过转换匹配到标准序号命令: {prefix} -> {standard_id}")
+                        # 🔒 使用统一验证方法验证标准序号
+                        if self.validate_command_result(text, standard_id):
+                            logger.info(f"✅ 通过转换匹配标准序号命令: '{prefix}' -> {standard_id}")
                             return standard_id
                 except Exception as e:
                     logger.debug(f"中文数字转换失败: {e}")

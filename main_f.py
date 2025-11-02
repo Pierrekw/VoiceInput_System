@@ -236,7 +236,17 @@ class FunASRVoiceSystem:
             min_match_length=min_match_length,
             confidence_threshold=confidence_threshold
         )
-        
+
+        # 🔥 优化：缓存命令字典和配置，避免重复转换和读取
+        # 缓存命令字典转换（避免每次重新创建）
+        self.command_dict = {
+            command_type.value: keywords
+            for command_type, keywords in self.voice_commands.items()
+        }
+
+        # 缓存标准序号命令前缀（避免重复读取配置）
+        self.standard_id_command_prefixes = config_loader.get_standard_id_command_prefixes()
+
         # 加载特定文本配置
         self.special_text_config = config_loader.get_special_texts_config()
         self.export_special_texts = config_loader.is_special_text_export_enabled()
@@ -413,78 +423,48 @@ class FunASRVoiceSystem:
             logger.error(f"❌ 系统初始化异常: {e}")
             return False
 
-    def recognize_voice_command(self, text: str) -> VoiceCommandType:
+    def recognize_voice_command(self, text: str) -> Tuple[VoiceCommandType, Optional[int]]:
         """
         识别语音命令，支持配置化的匹配模式
+        优化：返回标准序号，避免重复调用
 
         Args:
             text: 识别的文本
 
         Returns:
-            语音命令类型
+            Tuple[语音命令类型, 标准序号(如果有)]
         """
-        # 🔥 修复：优先检查标准序号命令
-        command_prefixes = config_loader.get_standard_id_command_prefixes()
-        standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
+        # 🔥 优化：优先检查标准序号命令
+        standard_id = self.command_processor.match_standard_id_command(text, self.standard_id_command_prefixes)
         if standard_id:
-            return VoiceCommandType.STANDARD_ID
+            return VoiceCommandType.STANDARD_ID, standard_id
 
-        # 转换命令字典格式以适配新的处理器
-        command_dict = {
-            command_type.value: keywords
-            for command_type, keywords in self.voice_commands.items()
-        }
-
-        # 使用新的语音命令处理器
-        result = self.command_processor.match_command(text, command_dict)
+        # 使用缓存的命令字典进行匹配
+        result = self.command_processor.match_command(text, self.command_dict)
 
         if result:
             # 将字符串结果转换回枚举类型
             for command_type in VoiceCommandType:
                 if command_type.value == result:
-                    return command_type
+                    return command_type, None
 
-        return VoiceCommandType.UNKNOWN
+        return VoiceCommandType.UNKNOWN, None
 
-    def _handle_standard_id_command(self, text: str):
+    def _handle_standard_id_command(self, text: str, standard_id: int):
         """
         处理标准序号命令（使用模式匹配）
+        优化：直接接收标准序号，避免重复调用match_standard_id_command
 
         Args:
             text: 识别的文本
+            standard_id: 已匹配到的标准序号
         """
-        # 获取标准序号命令前缀
-        command_prefixes = config_loader.get_standard_id_command_prefixes()
+        self.set_standard_id(standard_id)
+        logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
 
-        # 使用新的模式匹配方法
-        standard_id = self.command_processor.match_standard_id_command(text, command_prefixes)
-
-        if standard_id:
-            self.set_standard_id(standard_id)
-            logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
-
-            # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
-            command_display_text = f"[命令] 切换到标准序号 {standard_id}"
-            self._add_command_to_results(command_display_text, text, standard_id)
-        else:
-            # 回退到旧的逻辑（向后兼容）
-            logger.debug(f"模式匹配未成功，尝试回退逻辑")
-            # 提取数字
-            numbers = self.processor.extract_numbers(text)
-            if numbers:
-                standard_id = int(numbers[0])
-                # 检查是否为有效的标准序号（100的倍数）
-                if standard_id > 0 and standard_id % 100 == 0:
-                    self.set_standard_id(standard_id)
-                    logger.info(f"🎯 语音命令: 标准序号切换到 {standard_id}")
-
-                    # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
-                    command_display_text = f"[命令] 切换到标准序号 {standard_id}"
-                    self._add_command_to_results(command_display_text, text, standard_id)
-                else:
-                    logger.warning(f"不支持的标准序号: {standard_id}，标准序号必须是100的倍数")
-            else:
-                logger.warning(f"未能从命令中提取有效的标准序号: '{text}'")
+        # 🎯 修复：将语音命令也添加到结果列表，以便GUI显示
+        command_display_text = f"[命令] 切换到标准序号 {standard_id}"
+        self._add_command_to_results(command_display_text, text, standard_id)
 
     def _add_command_to_results(self, display_text: str, original_text: str, standard_id: int):
         """
@@ -600,10 +580,10 @@ class FunASRVoiceSystem:
             self.recognition_logger.info(log_message)
 
         # 检查语音命令
-        command_type = self.recognize_voice_command(processed_text)
+        command_type, standard_id = self.recognize_voice_command(processed_text)
         if command_type == VoiceCommandType.STANDARD_ID:
-            # 处理标准序号命令
-            self._handle_standard_id_command(processed_text)
+            # 处理标准序号命令（避免重复调用）
+            self._handle_standard_id_command(processed_text, standard_id)
             return
         elif command_type != VoiceCommandType.UNKNOWN:
             # 其他语音命令由现有逻辑处理
@@ -713,11 +693,11 @@ class FunASRVoiceSystem:
             logger.debug(f"[LATENCY] ASR结果: '{result.text}' | 文本处理: {text_processing_time*1000:.2f}ms")
 
             # 检查是否为语音命令
-            command_type = self.recognize_voice_command(processed)
+            command_type, standard_id = self.recognize_voice_command(processed)
 
             if command_type == VoiceCommandType.STANDARD_ID:
-                # 直接处理标准序号命令
-                self._handle_standard_id_command(processed)
+                # 直接处理标准序号命令（避免重复调用）
+                self._handle_standard_id_command(processed, standard_id)
             elif command_type != VoiceCommandType.UNKNOWN:
                 # 处理其他语音命令（暂停、继续、停止）
                 self.handle_voice_command(command_type)

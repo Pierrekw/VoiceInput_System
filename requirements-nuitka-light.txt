@@ -1,0 +1,13 @@
+# VoiceInput - Nuitka Light Dependencies
+# 仅包含Nuitka编译所需的最小依赖
+# 适用于已安装完整环境的开发环境
+
+# 构建工具 (必需)
+nuitka==1.9.2
+
+# 必需插件
+ordered-set==4.1.0
+zstandard==0.21.0
+
+# 可选优化
+# enable-cc=yes 需要C编译器 (如Visual Studio, GCC)

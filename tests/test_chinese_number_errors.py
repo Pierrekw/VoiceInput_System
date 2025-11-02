@@ -4,7 +4,7 @@
 测试中文数字识别错误的具体案例
 """
 
-from text_processor_clean import TextProcessor
+from text_processor import TextProcessor
 
 def test_chinese_number_errors():
     """测试中文数字识别错误的具体案例"""
@@ -56,10 +56,6 @@ def test_chinese_number_errors():
         # 测试extract_numbers
         numbers = processor.extract_numbers(test_case['input'], processed)
         print(f"extract_numbers结果: {numbers}")
-
-        # 测试chinese_to_arabic_number
-        direct_result = processor.chinese_to_arabic_number(test_case['input'])
-        print(f"chinese_to_arabic_number结果: '{direct_result}'")
 
         # 检查是否正确
         expected = test_case.get('expected')

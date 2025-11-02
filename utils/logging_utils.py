@@ -8,7 +8,7 @@
 import os
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
 # 创建一个过滤器，专门过滤DEBUG级别的日志
 class NoDebugFilter(logging.Filter):
@@ -245,7 +245,7 @@ def get_silent_logger(name: str) -> logging.Logger:
     return LoggingManager.get_silent_logger(name=name)
 
 
-def setup_logger(name: str, log_file: str = None) -> logging.Logger:
+def setup_logger(name: str, log_file: Optional[str] = None) -> logging.Logger:
     """
     便捷函数：设置标准日志记录器
 

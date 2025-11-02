@@ -53,6 +53,8 @@ class TextProcessor:
         - 序号、编号、页码等：转换为阿拉伯数字
         - 数字值大于9：转换为阿拉伯数字
         - 其他小数字：保留中文数字
+        - 包含特殊格式处理（如"点八四"开头加"零"）
+        - 包含特殊字符映射（两→2, 十→10等）
         """
         logger.debug(f"开始转换中文数字: {text[:50]}...")
         if not text or not CN2AN_AVAILABLE:
@@ -60,8 +62,14 @@ class TextProcessor:
             return text
 
         result = text
-        # 查找所有中文数字
-        matches = self.full_num_pattern.findall(text)
+
+        # 处理特殊格式如"点八四"
+        if result.startswith("点") and len(result) > 1:
+            logger.debug(f"处理特殊格式: 开头添加'零'")
+            result = "零" + result
+
+        # 使用扩展正则表达式查找所有中文数字表达式（包括负号）
+        matches = self.extended_num_pattern.findall(result)
 
         # 按长度排序，优先处理长的数字
         matches = sorted(set(matches), key=len, reverse=True)
@@ -92,30 +100,53 @@ class TextProcessor:
                 # 去除空格后转换
                 clean_match = re.sub(r'[\s　]', '', match)
                 logger.debug(f"转换中文数字: '{match}' -> '{clean_match}'")
+
+                # 首先尝试特殊情况处理（单个字符）
+                if len(clean_match) == 1:
+                    # 特殊字符映射
+                    char_mapping = {
+                        '两': '2',
+                        '十': '10',
+                        '百': '100',
+                        '千': '1000',
+                        '万': '10000',
+                        '百万': '1000000'
+                    }
+                    if clean_match in char_mapping:
+                        result = result.replace(match, char_mapping[clean_match], 1)
+                        logger.debug(f"特殊字符映射: '{match}' -> '{char_mapping[clean_match]}'")
+                        continue
+
+                # 使用cn2an进行转换
                 converted = cn2an.cn2an(clean_match, "smart")
-                num_value = float(converted)
-                logger.debug(f"转换结果: {num_value}")
+                converted_float = float(converted)
+                logger.debug(f"转换结果: {converted_float}")
 
-                should_convert = False
+                # 检查数值范围限制
+                if -1000000 <= converted_float <= 1000000:
+                    should_convert = False
 
-                # 规则1：序号上下文，总是转换
-                if is_sequence_context(match, result):
-                    should_convert = True
-                # 规则2：数字大于9，转换为阿拉伯数字
-                elif num_value > 9:
-                    should_convert = True
-                # 规则3：年份，总是转换
-                elif len(clean_match) >= 3 and any(keyword in result for keyword in ["年", "公元"]):
-                    should_convert = True
-                # 规则4：小数（包含点），总是转换
-                elif '点' in clean_match:
-                    should_convert = True
+                    # 规则1：序号上下文，总是转换
+                    if is_sequence_context(match, result):
+                        should_convert = True
+                    # 规则2：数字大于9，转换为阿拉伯数字
+                    elif converted_float > 9:
+                        should_convert = True
+                    # 规则3：年份，总是转换
+                    elif len(clean_match) >= 3 and any(keyword in result for keyword in ["年", "公元"]):
+                        should_convert = True
+                    # 规则4：小数（包含点），总是转换
+                    elif '点' in clean_match:
+                        should_convert = True
 
-                if should_convert:
-                    # 整数不显示小数点
-                    if num_value.is_integer():
-                        converted = str(int(num_value))
-                    result = result.replace(match, converted)
+                    if should_convert:
+                        # 格式化转换结果
+                        converted_str = str(converted_float)
+                        # 去除尾部的.0，除非是整数
+                        if converted_str.endswith('.0') and '.' not in converted_str[:-2]:
+                            converted_str = converted_str[:-2]
+                        result = result.replace(match, converted_str, 1)
+                        logger.debug(f"智能转换: '{match}' -> '{converted_str}'")
 
             except Exception as e:
                 # 转换失败，保持原样
@@ -124,97 +155,48 @@ class TextProcessor:
 
         return result
 
-    def chinese_to_arabic_number(self, text: str) -> str:
-        """将中文数字转换为阿拉伯数字"""
-        logger.debug(f"开始中文转阿拉伯数字: {text}")
-        if not text or not CN2AN_AVAILABLE:
-            logger.debug("文本为空或cn2an不可用，跳过转换")
+    def _fix_chinese_number_syntax(self, text: str) -> str:
+        """
+        修复中文数字语法错误（公共方法）
+        处理"一百十三" -> "一百一十三"等常见错误
+
+        Args:
+            text: 原始文本
+
+        Returns:
+            修复后的文本
+        """
+        if not text:
             return text
 
-        original_text = text
-        result_text = text
+        result = text
 
-        try:
-            # 预处理：修复中文数字语法错误（关键修复）
-            # 处理"一百十三" -> "一百一十三"的情况
-            if '一百十三' in result_text:
-                result_text = result_text.replace('一百十三', '一百一十三')
-            if '二百十三' in result_text:
-                result_text = result_text.replace('二百十三', '二百一十三')
-            if '三百十三' in result_text:
-                result_text = result_text.replace('三百十三', '三百一十三')
-            if '四百十三' in result_text:
-                result_text = result_text.replace('四百十三', '四百一十三')
-            if '五百十三' in result_text:
-                result_text = result_text.replace('五百十三', '五百一十三')
-            if '六百十三' in result_text:
-                result_text = result_text.replace('六百十三', '六百一十三')
-            if '七百十三' in result_text:
-                result_text = result_text.replace('七百十三', '七百一十三')
-            if '八百十三' in result_text:
-                result_text = result_text.replace('八百十三', '八百一十三')
-            if '九百十三' in result_text:
-                result_text = result_text.replace('九百十三', '九百一十三')
+        # 处理"一百十三" -> "一百一十三"的情况（逐一修复）
+        replacements = [
+            ('一百十三', '一百一十三'),
+            ('二百十三', '二百一十三'),
+            ('三百十三', '三百一十三'),
+            ('四百十三', '四百一十三'),
+            ('五百十三', '五百一十三'),
+            ('六百十三', '六百一十三'),
+            ('七百十三', '七百一十三'),
+            ('八百十三', '八百一十三'),
+            ('九百十三', '九百一十三')
+        ]
 
-            # 通用模式：处理"[X]百十三"的情况
-            import re
-            pattern = r'([一二三四五六七八九十])百十三'
-            def replace_hundred_thirteen(match: re.Match[str]) -> str:
-                first_digit = match.group(1)
-                return f'{first_digit}百一十三'
-            result_text = re.sub(pattern, replace_hundred_thirteen, result_text)
+        for wrong, correct in replacements:
+            if wrong in result:
+                result = result.replace(wrong, correct)
 
-            # 处理特殊格式如"点八四"
-            if result_text.startswith("点") and len(result_text) > 1:
-                result_text = "零" + result_text
+        # 通用模式：处理"[X]百十三"的情况
+        pattern = r'([一二三四五六七八九十])百十三'
+        def replace_hundred_thirteen(match: re.Match[str]) -> str:
+            first_digit = match.group(1)
+            return f'{first_digit}百一十三'
 
-            # 使用扩展正则表达式查找所有中文数字表达式（包括负号）
-            matches = self.extended_num_pattern.findall(result_text)
+        result = re.sub(pattern, replace_hundred_thirteen, result)
 
-            # 按长度排序，优先处理长匹配
-            matches = sorted(matches, key=len, reverse=True)
-
-            # 转换每个匹配的中文数字
-            for match in matches:
-                try:
-                    # 使用cn2an进行转换
-                    converted = cn2an.cn2an(match, "smart")
-                    converted_float = float(converted)
-
-                    # 检查数值范围
-                    if -1000000 <= converted_float <= 1000000:
-                        # 替换原文中的数字，保持小数格式
-                        converted_str = str(converted_float)
-                        # 去除尾部的.0，除非是整数
-                        if converted_str.endswith('.0') and '.' not in converted_str[:-2]:
-                            converted_str = converted_str[:-2]
-
-                        result_text = result_text.replace(match, converted_str, 1)
-
-                except Exception:
-                    # 如果cn2an转换失败，尝试特殊情况处理
-                    try:
-                        # 处理特殊情况：单个字符
-                        if match == '两':
-                            result_text = result_text.replace(match, '2', 1)
-                        elif match == '十':
-                            result_text = result_text.replace(match, '10', 1)
-                        elif match == '百':
-                            result_text = result_text.replace(match, '100', 1)
-                        elif match == '千':
-                            result_text = result_text.replace(match, '1000', 1)
-                        elif match == '万':
-                            result_text = result_text.replace(match, '10000', 1)
-                        elif match == '百万':
-                            result_text = result_text.replace(match, '1000000', 1)
-                    except Exception:
-                        continue
-
-        except Exception as e:
-            logger.error(f"中文数字转换过程出错: {str(e)}")
-            return original_text
-
-        return result_text
+        return result
 
     def is_pure_number_or_with_unit(self, text: str) -> bool:
         """
@@ -238,10 +220,23 @@ class TextProcessor:
         # 如果主要是数字（>90%）或者是很短的纯数字，返回True
         return digit_ratio > 0.9 or (len(clean_text) <= 3 and digit_count == len(clean_text))
 
-    def extract_numbers(self, original_text: str, processed_text: Optional[str] = None) -> List[float]:
+    def extract_numbers(self, original_text: str, processed_text: Optional[str] = None,
+                       command_processor: Optional['VoiceCommandProcessor'] = None) -> List[float]:
         """
-        简化的数字提取逻辑
-        重构后优先从processed_text中提取阿拉伯数字
+        提取文本中的数字，支持中文数字和阿拉伯数字
+
+        严格验证规则：
+        - 只提取纯数字输入（如"200"、"1300"）
+        - 跳过出现在文本上下文中的100的倍数（≥2个周围字符）
+        - 验证结果不是语音命令
+
+        Args:
+            original_text: 原始语音文本
+            processed_text: 处理后的文本（可选）
+            command_processor: 语音命令处理器（用于外部验证）
+
+        Returns:
+            提取的数字列表
         """
         logger.debug(f"开始提取数字: '{original_text[:50]}...'，处理后文本: {processed_text[:50]+'...' if processed_text is not None else None}")
         if not original_text:
@@ -256,18 +251,31 @@ class TextProcessor:
             import re
             if CN2AN_AVAILABLE and processed_text:
                 # 提取阿拉伯数字（包括小数）
-                arabic_numbers = re.findall(r'\d+\.?\d*', text_to_extract)
-                if arabic_numbers:
-                    numbers = []
-                    for num_str in arabic_numbers:
-                        try:
-                            num = float(num_str)
-                            # 限制数字范围
-                            if -1000000 <= num <= 1000000000000:
-                                numbers.append(num)
-                        except ValueError:
+                arabic_numbers = re.finditer(r'\d+\.?\d*', text_to_extract)
+                numbers = []
+                for match in arabic_numbers:
+                    try:
+                        num_str = match.group()
+                        num = float(num_str)
+
+                        # 严格验证：检查是否为100的倍数且在文本上下文中
+                        if self._should_skip_number(num, match.start(), match.end(), text_to_extract):
+                            logger.debug(f"跳过100倍数（文本上下文）: {num} (位置: {match.start()}-{match.end()})")
                             continue
-                    return numbers
+
+                        # 严格验证：通过命令验证（如果提供了command_processor）
+                        # 只在数字是100倍数时进行命令验证，避免误杀非100倍数
+                        if command_processor and num % 100 == 0:
+                            if not command_processor.validate_command_result(original_text, int(num) if num.is_integer() else None):
+                                logger.debug(f"跳过语音命令匹配的数字: {num}")
+                                continue
+
+                        # 限制数字范围
+                        if -1000000 <= num <= 1000000000000:
+                            numbers.append(num)
+                    except ValueError:
+                        continue
+                return numbers
 
             # 如果没有阿拉伯数字，尝试转换中文数字
             if not CN2AN_AVAILABLE:
@@ -286,44 +294,23 @@ class TextProcessor:
 
             # 检查是否为纯数字或数字+单位格式
                 # 应用与process_text相同的预处理逻辑（关键修复）
-                text_to_convert = self.remove_spaces(original_text)
-
-                # 特殊处理"幺"字符
-                text_to_convert = text_to_convert.replace('幺', '一')
-
-                # 修复中文数字语法错误（关键修复）
-                # 处理"一百十三" -> "一百一十三"的情况
-                if '一百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('一百十三', '一百一十三')
-                if '二百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('二百十三', '二百一十三')
-                if '三百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('三百十三', '三百一十三')
-                if '四百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('四百十三', '四百一十三')
-                if '五百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('五百十三', '五百一十三')
-                if '六百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('六百十三', '六百一十三')
-                if '七百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('七百十三', '七百一十三')
-                if '八百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('八百十三', '八百一十三')
-                if '九百十三' in text_to_convert:
-                    text_to_convert = text_to_convert.replace('九百十三', '九百一十三')
-
-                # 通用模式：处理"[X]百十三"的情况
-                pattern = r'([一二三四五六七八九十])百十三'
-                def replace_hundred_thirteen(match: re.Match[str]) -> str:
-                    first_digit = match.group(1)
-                    return f'{first_digit}百一十三'
-                import re
-                text_to_convert = re.sub(pattern, replace_hundred_thirteen, text_to_convert)
+                # 去除空格、替换"幺"字符、修复语法错误
+                text_to_convert = self._fix_chinese_number_syntax(
+                    self.remove_spaces(original_text).replace('幺', '一')
+                )
 
                 # 尝试转换预处理后的文本
                 try:
                     num = cn2an.cn2an(text_to_convert, "smart")
                     num_float = float(num)
+
+                    # 严格验证：通过命令验证（如果提供了command_processor）
+                    # 只在数字是100倍数时进行命令验证，避免误杀非100倍数
+                    if command_processor and num_float % 100 == 0:
+                        if not command_processor.validate_command_result(original_text, int(num_float) if num_float.is_integer() else None):
+                            logger.debug(f"跳过语音命令匹配的中文数字: {num_float}")
+                            return []
+
                     if -1000000 <= num_float <= 1000000000000:
                         return [num_float]
                 except:
@@ -334,6 +321,42 @@ class TextProcessor:
         except Exception as e:
             logger.error(f"数字提取过程出错: {str(e)}")
             return []
+
+    def _should_skip_number(self, number: float, start_pos: int, end_pos: int, text: str) -> bool:
+        """
+        检查是否应该跳过某个数字（严格验证规则）
+
+        跳过规则：
+        - 100的倍数（100, 200, 300, ...）
+        - 并且有≥2个周围字符（说明在文本上下文中）
+
+        Args:
+            number: 要检查的数字
+            start_pos: 数字在文本中的开始位置
+            end_pos: 数字在文本中的结束位置
+            text: 完整文本
+
+        Returns:
+            True if should skip, False otherwise
+        """
+        # 只跳过100的倍数
+        if number <= 0 or number % 100 != 0:
+            return False
+
+        # 计算周围字符数
+        # 左边的字符数
+        left_chars = start_pos
+        # 右边的字符数
+        right_chars = len(text) - end_pos
+        # 总周围字符数
+        total_surrounding_chars = left_chars + right_chars
+
+        # 如果总周围字符数≥2，认为在文本上下文中，跳过
+        if total_surrounding_chars >= 2:
+            logger.debug(f"检测到100倍数在文本上下文中: {number}, 左字符数: {left_chars}, 右字符数: {right_chars}, 总周围字符数: {total_surrounding_chars}, 文本: '{text}'")
+            return True
+
+        return False
 
     def process_text(self, text: str) -> str:
         """
@@ -354,34 +377,9 @@ class TextProcessor:
         logger.debug(f"替换'幺'后: {result[:100]}...")
 
         # 第三步：修复中文数字语法错误（关键修复）
-        # 处理"一百十三" -> "一百一十三"的情况
-        if '一百十三' in result:
-            result = result.replace('一百十三', '一百一十三')
+        result = self._fix_chinese_number_syntax(result)
+        if result != text:
             logger.debug(f"修复数字语法后: {result[:100]}...")
-        if '二百十三' in result:
-            result = result.replace('二百十三', '二百一十三')
-        if '三百十三' in result:
-            result = result.replace('三百十三', '三百一十三')
-        if '四百十三' in result:
-            result = result.replace('四百十三', '四百一十三')
-        if '五百十三' in result:
-            result = result.replace('五百十三', '五百一十三')
-        if '六百十三' in result:
-            result = result.replace('六百十三', '六百一十三')
-        if '七百十三' in result:
-            result = result.replace('七百十三', '七百一十三')
-        if '八百十三' in result:
-            result = result.replace('八百十三', '八百一十三')
-        if '九百十三' in result:
-            result = result.replace('九百十三', '九百一十三')
-
-        # 通用模式：处理"[X]百十三"的情况
-        import re
-        pattern = r'([一二三四五六七八九十])百十三'
-        def replace_hundred_thirteen(match: re.Match[str]) -> str:
-            first_digit = match.group(1)
-            return f'{first_digit}百一十三'
-        result = re.sub(pattern, replace_hundred_thirteen, result)
 
         # 第四步：应用新规则转换数字
         result = self.convert_chinese_numbers_in_text(result)
@@ -511,6 +509,29 @@ class VoiceCommandProcessor:
         self.min_match_length = min_match_length
         self.confidence_threshold = confidence_threshold
 
+    def validate_command_result(self, text: str, matched_number: Optional[int]) -> bool:
+        """
+        统一命令验证方法：防错机制
+        验证命令结果的有效性，确保只有真正的命令才被识别
+
+        Args:
+            text: 原始文本
+            matched_number: 匹配到的数字（标准序号等）
+
+        Returns:
+            True表示验证通过，False表示验证失败
+        """
+        # 情况1：如果是标准序号，验证是否为100的整数倍
+        if matched_number is not None:
+            if matched_number <= 0:
+                logger.warning(f"❌ 命令数字无效（小于等于0）: {matched_number}，文本: '{text}'")
+                return False
+            if matched_number % 100 != 0:
+                logger.warning(f"❌ 命令数字不是100的整数倍: {matched_number}，文本: '{text}'")
+                return False
+
+        return True
+
     def process_command_text(self, text: str) -> str:
         """处理命令文本"""
         result = self.text_processor.clean_text_for_command_matching(text)
@@ -591,27 +612,26 @@ class VoiceCommandProcessor:
 
                 logger.debug(f"命令前缀匹配: '{prefix}', 剩余文本: '{remaining_text}'")
 
-                # 从剩余文本中提取数字
+                # 从剩余文本中提取数字（严格验证）
                 if remaining_text:
-                    numbers = self.text_processor.extract_numbers(remaining_text)
+                    numbers = self.text_processor.extract_numbers(remaining_text, command_processor=self)
                     if numbers:
                         standard_id = int(numbers[0])
-                        # 验证是否为有效的标准序号（100的倍数）
-                        if standard_id > 0 and standard_id % 100 == 0:
-                            logger.info(f"匹配到标准序号命令: {prefix} -> {standard_id}")
+                        # 🔒 使用统一验证方法验证标准序号
+                        if self.validate_command_result(text, standard_id):
+                            logger.info(f"✅ 标准序号命令验证通过: '{prefix}' -> {standard_id}")
                             return standard_id
-                        else:
-                            logger.debug(f"提取的数字不是有效的标准序号: {standard_id}")
 
                 # 如果直接提取数字失败，尝试中文数字转换
                 try:
                     # 使用TextProcessor处理剩余文本
                     processed_remaining = self.text_processor.process_text(remaining_text)
-                    numbers = self.text_processor.extract_numbers(processed_remaining)
+                    numbers = self.text_processor.extract_numbers(processed_remaining, command_processor=self)
                     if numbers:
                         standard_id = int(numbers[0])
-                        if standard_id > 0 and standard_id % 100 == 0:
-                            logger.info(f"通过转换匹配到标准序号命令: {prefix} -> {standard_id}")
+                        # 🔒 使用统一验证方法验证标准序号
+                        if self.validate_command_result(text, standard_id):
+                            logger.info(f"✅ 通过转换匹配标准序号命令: '{prefix}' -> {standard_id}")
                             return standard_id
                 except Exception as e:
                     logger.debug(f"中文数字转换失败: {e}")

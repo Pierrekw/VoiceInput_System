@@ -40,9 +40,9 @@ from utils.performance_monitor import performance_monitor, PerformanceStep
 
 # 导入Debug性能追踪模块
 try:
-    from debug.debug_performance_tracker import debug_tracker
+    from debug.debug_performance_tracker import debug_tracker  # type: ignore
 except ImportError:
-    debug_tracker = None
+    debug_tracker = None  # type: ignore
 
 # TEN VAD相关
 TEN_VAD_AVAILABLE = False
@@ -50,7 +50,7 @@ ten_vad_model = None
 
 # 为了解决Pyright静态分析问题，我们添加类型注释
 # 在运行时动态导入TenVad类
-TenVad = None  # type: ignore
+TenVad = None  # type: ignore[assignment]
 
 try:
     # 导入本地TEN VAD
@@ -60,8 +60,8 @@ try:
 
         # 导入TEN VAD (基于真实的API)
         try:
-            from ten_vad import TenVad  # type: ignore
-            ten_vad_model = TenVad(hop_size=256, threshold=0.5)
+            from ten_vad import TenVad  # type: ignore[assignment, misc, no-redef]
+            ten_vad_model = TenVad(hop_size=256, threshold=0.5)  # type: ignore[misc]
             TEN_VAD_AVAILABLE = True
             print("✅ TEN VAD 加载成功 (hop_size=256, threshold=0.5)")
         except ImportError as e:
@@ -920,7 +920,7 @@ class FunASRVoiceRecognizer:
         if is_speech:
             # 记录语音输入开始（如果是新的语音段）
             if vad_event == "speech_start" and debug_tracker:
-                debug_tracker.record_voice_input_start(audio_energy)
+                debug_tracker.record_voice_input_start(audio_energy)  # type: ignore[union-attr]
 
             self._speech_buffer.extend(audio_data)
 
@@ -936,8 +936,8 @@ class FunASRVoiceRecognizer:
                 if len(self._speech_buffer) >= self.sample_rate * self.vad_config.min_speech_duration:
                     # 记录语音输入结束和ASR开始
                     if debug_tracker:
-                        debug_tracker.record_voice_input_end(len(self._speech_buffer) / self.sample_rate)
-                        debug_tracker.record_asr_start(len(self._speech_buffer))
+                        debug_tracker.record_voice_input_end(len(self._speech_buffer) / self.sample_rate)  # type: ignore[union-attr]
+                        debug_tracker.record_asr_start(len(self._speech_buffer))  # type: ignore[union-attr]
 
                     self._perform_final_recognition()
 

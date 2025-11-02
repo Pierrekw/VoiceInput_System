@@ -4,7 +4,7 @@
 测试用户指定的具体案例
 """
 
-from text_processor_clean import TextProcessor
+from text_processor import TextProcessor
 
 def test_specific_cases():
     """测试用户指定的具体案例"""
@@ -44,10 +44,6 @@ def test_specific_cases():
         else:
             display_result = processed
         print(f"显示结果: '{display_result}'")
-
-        # 使用chinese_to_arabic_number方法测试
-        direct_result = processor.chinese_to_arabic_number(test_case['input'])
-        print(f"chinese_to_arabic_number结果: '{direct_result}'")
 
 if __name__ == "__main__":
     test_specific_cases()

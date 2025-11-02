@@ -8,7 +8,7 @@
 import time
 import logging
 import threading
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
 from collections import defaultdict
 import statistics
@@ -49,7 +49,7 @@ class PerformanceMonitor:
         self._session_start_time = time.time()
         self._enabled = True
 
-    def start_timer(self, step_name: str, metadata: Dict[str, Any] = None) -> str:
+    def start_timer(self, step_name: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """开始计时"""
         if not self._enabled:
             return ""
@@ -72,7 +72,7 @@ class PerformanceMonitor:
 
         return operation_id
 
-    def end_timer(self, operation_id: str, additional_metadata: Dict[str, Any] = None) -> Optional[float]:
+    def end_timer(self, operation_id: str, additional_metadata: Optional[Dict[str, Any]] = None) -> Optional[float]:
         """结束计时并记录"""
         if not self._enabled or not operation_id:
             return None
@@ -112,7 +112,7 @@ class PerformanceMonitor:
 
             return duration
 
-    def record_step(self, step_name: str, metadata: Dict[str, Any] = None):
+    def record_step(self, step_name: str, metadata: Optional[Dict[str, Any]] = None):
         """记录单个步骤（自动计时）"""
         operation_id = self.start_timer(step_name, metadata)
         time.sleep(0)  # 确保时间戳有微小差异
@@ -321,7 +321,7 @@ class PerformanceMonitor:
 performance_monitor = PerformanceMonitor()
 
 # 装饰器版本，用于函数计时
-def performance_step(step_name: str = None):
+def performance_step(step_name: Optional[str] = None):
     """性能监控装饰器"""
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -343,7 +343,7 @@ def performance_step(step_name: str = None):
 class PerformanceStep:
     """性能监控上下文管理器"""
 
-    def __init__(self, step_name: str, metadata: Dict[str, Any] = None):
+    def __init__(self, step_name: str, metadata: Optional[Dict[str, Any]] = None):
         self.step_name = step_name
         self.metadata = metadata or {}
         self.operation_id = None

@@ -8,7 +8,7 @@ Debug性能追踪器
 import time
 import logging
 import threading
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from collections import defaultdict
 import statistics
@@ -24,7 +24,7 @@ class VoiceLatencyRecord:
     timestamp: float
     relative_time: float  # 相对于会话开始的时间
     text: str = ""
-    metadata: Dict[str, Any] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 class DebugPerformanceTracker:
     """Debug性能追踪器"""
@@ -38,7 +38,7 @@ class DebugPerformanceTracker:
         self._lock = threading.Lock()
         self._enabled = False
 
-    def start_debug_session(self, session_id: str = None):
+    def start_debug_session(self, session_id: Optional[str] = None):
         """开始调试会话"""
         with self._lock:
             self._session_start_time = time.time()
@@ -63,13 +63,16 @@ class DebugPerformanceTracker:
         # 生成延迟分析报告
         self._generate_latency_report()
 
-    def _record_step(self, step_name: str, description: str, text: str = "", metadata: Dict = None):
+    def _record_step(self, step_name: str, description: str, text: str = "", metadata: Optional[Dict[str, Any]] = None):
         """记录步骤"""
         if not self._enabled or not self._session_start_time:
             return
 
         current_time = time.time()
         relative_time = current_time - self._session_start_time
+
+        # 确保 session_id 不为 None
+        assert self._current_session_id is not None, "session_id should not be None"
 
         record = VoiceLatencyRecord(
             session_id=self._current_session_id,
@@ -263,7 +266,7 @@ class DebugPerformanceTracker:
 debug_tracker = DebugPerformanceTracker()
 
 # 装饰器版本
-def debug_latency_tracker(step_name: str = None, include_text: bool = False):
+def debug_latency_tracker(step_name: Optional[str] = None, include_text: bool = False):
     """调试延迟追踪装饰器"""
     def decorator(func):
         def wrapper(*args, **kwargs):

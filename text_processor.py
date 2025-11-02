@@ -53,6 +53,8 @@ class TextProcessor:
         - 序号、编号、页码等：转换为阿拉伯数字
         - 数字值大于9：转换为阿拉伯数字
         - 其他小数字：保留中文数字
+        - 包含特殊格式处理（如"点八四"开头加"零"）
+        - 包含特殊字符映射（两→2, 十→10等）
         """
         logger.debug(f"开始转换中文数字: {text[:50]}...")
         if not text or not CN2AN_AVAILABLE:
@@ -60,8 +62,14 @@ class TextProcessor:
             return text
 
         result = text
-        # 查找所有中文数字
-        matches = self.full_num_pattern.findall(text)
+
+        # 处理特殊格式如"点八四"
+        if result.startswith("点") and len(result) > 1:
+            logger.debug(f"处理特殊格式: 开头添加'零'")
+            result = "零" + result
+
+        # 使用扩展正则表达式查找所有中文数字表达式（包括负号）
+        matches = self.extended_num_pattern.findall(result)
 
         # 按长度排序，优先处理长的数字
         matches = sorted(set(matches), key=len, reverse=True)
@@ -92,30 +100,53 @@ class TextProcessor:
                 # 去除空格后转换
                 clean_match = re.sub(r'[\s　]', '', match)
                 logger.debug(f"转换中文数字: '{match}' -> '{clean_match}'")
+
+                # 首先尝试特殊情况处理（单个字符）
+                if len(clean_match) == 1:
+                    # 特殊字符映射
+                    char_mapping = {
+                        '两': '2',
+                        '十': '10',
+                        '百': '100',
+                        '千': '1000',
+                        '万': '10000',
+                        '百万': '1000000'
+                    }
+                    if clean_match in char_mapping:
+                        result = result.replace(match, char_mapping[clean_match], 1)
+                        logger.debug(f"特殊字符映射: '{match}' -> '{char_mapping[clean_match]}'")
+                        continue
+
+                # 使用cn2an进行转换
                 converted = cn2an.cn2an(clean_match, "smart")
-                num_value = float(converted)
-                logger.debug(f"转换结果: {num_value}")
+                converted_float = float(converted)
+                logger.debug(f"转换结果: {converted_float}")
 
-                should_convert = False
+                # 检查数值范围限制
+                if -1000000 <= converted_float <= 1000000:
+                    should_convert = False
 
-                # 规则1：序号上下文，总是转换
-                if is_sequence_context(match, result):
-                    should_convert = True
-                # 规则2：数字大于9，转换为阿拉伯数字
-                elif num_value > 9:
-                    should_convert = True
-                # 规则3：年份，总是转换
-                elif len(clean_match) >= 3 and any(keyword in result for keyword in ["年", "公元"]):
-                    should_convert = True
-                # 规则4：小数（包含点），总是转换
-                elif '点' in clean_match:
-                    should_convert = True
+                    # 规则1：序号上下文，总是转换
+                    if is_sequence_context(match, result):
+                        should_convert = True
+                    # 规则2：数字大于9，转换为阿拉伯数字
+                    elif converted_float > 9:
+                        should_convert = True
+                    # 规则3：年份，总是转换
+                    elif len(clean_match) >= 3 and any(keyword in result for keyword in ["年", "公元"]):
+                        should_convert = True
+                    # 规则4：小数（包含点），总是转换
+                    elif '点' in clean_match:
+                        should_convert = True
 
-                if should_convert:
-                    # 整数不显示小数点
-                    if num_value.is_integer():
-                        converted = str(int(num_value))
-                    result = result.replace(match, converted)
+                    if should_convert:
+                        # 格式化转换结果
+                        converted_str = str(converted_float)
+                        # 去除尾部的.0，除非是整数
+                        if converted_str.endswith('.0') and '.' not in converted_str[:-2]:
+                            converted_str = converted_str[:-2]
+                        result = result.replace(match, converted_str, 1)
+                        logger.debug(f"智能转换: '{match}' -> '{converted_str}'")
 
             except Exception as e:
                 # 转换失败，保持原样
@@ -124,97 +155,6 @@ class TextProcessor:
 
         return result
 
-    def chinese_to_arabic_number(self, text: str) -> str:
-        """将中文数字转换为阿拉伯数字"""
-        logger.debug(f"开始中文转阿拉伯数字: {text}")
-        if not text or not CN2AN_AVAILABLE:
-            logger.debug("文本为空或cn2an不可用，跳过转换")
-            return text
-
-        original_text = text
-        result_text = text
-
-        try:
-            # 预处理：修复中文数字语法错误（关键修复）
-            # 处理"一百十三" -> "一百一十三"的情况
-            if '一百十三' in result_text:
-                result_text = result_text.replace('一百十三', '一百一十三')
-            if '二百十三' in result_text:
-                result_text = result_text.replace('二百十三', '二百一十三')
-            if '三百十三' in result_text:
-                result_text = result_text.replace('三百十三', '三百一十三')
-            if '四百十三' in result_text:
-                result_text = result_text.replace('四百十三', '四百一十三')
-            if '五百十三' in result_text:
-                result_text = result_text.replace('五百十三', '五百一十三')
-            if '六百十三' in result_text:
-                result_text = result_text.replace('六百十三', '六百一十三')
-            if '七百十三' in result_text:
-                result_text = result_text.replace('七百十三', '七百一十三')
-            if '八百十三' in result_text:
-                result_text = result_text.replace('八百十三', '八百一十三')
-            if '九百十三' in result_text:
-                result_text = result_text.replace('九百十三', '九百一十三')
-
-            # 通用模式：处理"[X]百十三"的情况
-            import re
-            pattern = r'([一二三四五六七八九十])百十三'
-            def replace_hundred_thirteen(match: re.Match[str]) -> str:
-                first_digit = match.group(1)
-                return f'{first_digit}百一十三'
-            result_text = re.sub(pattern, replace_hundred_thirteen, result_text)
-
-            # 处理特殊格式如"点八四"
-            if result_text.startswith("点") and len(result_text) > 1:
-                result_text = "零" + result_text
-
-            # 使用扩展正则表达式查找所有中文数字表达式（包括负号）
-            matches = self.extended_num_pattern.findall(result_text)
-
-            # 按长度排序，优先处理长匹配
-            matches = sorted(matches, key=len, reverse=True)
-
-            # 转换每个匹配的中文数字
-            for match in matches:
-                try:
-                    # 使用cn2an进行转换
-                    converted = cn2an.cn2an(match, "smart")
-                    converted_float = float(converted)
-
-                    # 检查数值范围
-                    if -1000000 <= converted_float <= 1000000:
-                        # 替换原文中的数字，保持小数格式
-                        converted_str = str(converted_float)
-                        # 去除尾部的.0，除非是整数
-                        if converted_str.endswith('.0') and '.' not in converted_str[:-2]:
-                            converted_str = converted_str[:-2]
-
-                        result_text = result_text.replace(match, converted_str, 1)
-
-                except Exception:
-                    # 如果cn2an转换失败，尝试特殊情况处理
-                    try:
-                        # 处理特殊情况：单个字符
-                        if match == '两':
-                            result_text = result_text.replace(match, '2', 1)
-                        elif match == '十':
-                            result_text = result_text.replace(match, '10', 1)
-                        elif match == '百':
-                            result_text = result_text.replace(match, '100', 1)
-                        elif match == '千':
-                            result_text = result_text.replace(match, '1000', 1)
-                        elif match == '万':
-                            result_text = result_text.replace(match, '10000', 1)
-                        elif match == '百万':
-                            result_text = result_text.replace(match, '1000000', 1)
-                    except Exception:
-                        continue
-
-        except Exception as e:
-            logger.error(f"中文数字转换过程出错: {str(e)}")
-            return original_text
-
-        return result_text
 
     def is_pure_number_or_with_unit(self, text: str) -> bool:
         """

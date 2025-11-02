@@ -4,7 +4,7 @@
 测试原有文本处理方法的效果
 """
 
-from text_processor_clean import TextProcessor
+from text_processor import TextProcessor
 
 def test_original_methods():
     """测试原有的文本处理方法"""
@@ -27,10 +27,6 @@ def test_original_methods():
     for test_input in test_cases:
         print(f"\n📝 测试输入: '{test_input}'")
         print("-" * 30)
-
-        # 测试原有的 chinese_to_arabic_number 方法
-        result1 = processor.chinese_to_arabic_number(test_input)
-        print(f"chinese_to_arabic_number: '{result1}'")
 
         # 测试新增的 convert_chinese_numbers_in_text 方法
         result2 = processor.convert_chinese_numbers_in_text(test_input)

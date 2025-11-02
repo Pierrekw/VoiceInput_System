@@ -43,7 +43,8 @@
       "Bash(cp:*)",
       "Read(//f/04_AI/01_Workplace/ten-vad/**)",
       "Read(//f/04_AI/01_Workplace/silero-vad/**)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(awk '{print $9, $5}')"
     ],
     "deny": []
   }
